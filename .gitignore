@@ -1,0 +1,53 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# Next.js
+.next/
+out/
+.vercel/
+dist/
+
+# Build output
+build/
+coverage/
+*.tsbuildinfo
+
+# Supabase local dev
+supabase/.temp/
+supabase/.branches/
+supabase/volumes/
+supabase/config.toml.lock
+
+# Environment files (sensitive)
+.env
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+
+# VSCode settings
+.vscode/
+*.code-workspace
+
+# Logs
+logs
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Misc
+.idea/
+*.swp
+*.swo
+*.bak
+*.tmp

@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-gray-900;
+  }
+
+  label {
+    @apply text-black font-semibold tracking-wide;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-700 rounded;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+  }
+
+  /* Focus styles */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+  }
+}
+
+@layer components {
+  /* Button styles */
+  .btn-primary {
+    @apply bg-white text-black font-medium py-3 px-6 rounded-lg hover:bg-gray-200 transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-900 text-white font-medium py-3 px-6 rounded-lg border border-gray-800 hover:bg-gray-800 transition-colors;
+  }
+
+  /* Input styles */
+  .input-primary {
+    @apply w-full px-4 py-3 rounded-lg 
+          bg-[#EFEDFF] border border-transparent
+          text-gray-900 placeholder-gray-500 
+          focus:outline-none focus:ring-2 focus:ring-purple-500;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-gray-900 border border-gray-800 rounded-lg p-6;
+  }
+
+  /* Animation for page transitions */
+  .fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer utilities {
+  /* Text gradients */
+  .text-gradient {
+    @apply bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent;
+  }
+
+  /* Glassmorphism effect */
+  .glass {
+    @apply bg-white/5 backdrop-blur-lg border border-white/10;
+  }
+
+  /* Hover glow effect */
+  .hover-glow {
+    @apply transition-all duration-300 hover:shadow-[0_0_30px_rgba(168,85,247,0.3)];
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn { animation: fadeIn 0.2s ease-in-out; }
