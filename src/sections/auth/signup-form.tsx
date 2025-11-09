@@ -211,7 +211,7 @@ export default function SignupForm() {
       <div className="hidden lg:block lg:w-1/2 relative">
         <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
           <Image
-            src="/images/auth-hero.png"
+            src="/images/auth-hero.svg"
             alt="Fashion model"
             fill
             priority

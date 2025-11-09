@@ -18,7 +18,7 @@ export default function AuthLayout({ children, showHeroImage = true }: AuthLayou
         <div className="hidden lg:block lg:w-1/2 relative">
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent z-10"></div>
           <img
-            src="../../images/public/auth-hero.png"
+            src="../../images/public/auth-hero.svg"
             alt="Fashion model"
             className="w-full h-full object-cover"
           />

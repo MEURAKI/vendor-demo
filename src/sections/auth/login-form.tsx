@@ -169,7 +169,7 @@ export default function LoginForm() {
         {/* rounded card feel */}
         <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
           <Image
-            src="/images/auth-hero.png"   // NOTE: path from /public
+            src="/images/auth-hero.svg"   // NOTE: path from /public
             alt="Fashion model"
             fill
             priority

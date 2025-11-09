@@ -13,7 +13,7 @@ export default function LoginPageModal() {
     e.preventDefault();
     // TODO: call /api/auth/login
     console.log("Login data:", formData);
-    router.push("/dashboard");
+    router.push("/pages/dashboard");
   };
 
   const handleGoogleLogin = () => {
@@ -99,7 +99,7 @@ export default function LoginPageModal() {
         {/* Footer Logo */}
         <div className="mt-8 flex justify-center">
         <Image
-          src="/images/auth-hero.png"
+          src="/images/auth-hero.svg"
           alt="Hero"
           width={800}
           height={600}

@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+.font-poppins { font-family: var(--font-poppins), system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
+
+.tracking-tight-lg { letter-spacing: -1px; }
+
 @layer base {
   body {
     @apply bg-white text-gray-900;
@@ -99,3 +103,16 @@
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fadeIn { animation: fadeIn 0.2s ease-in-out; }
+
+
+.input {
+  @apply w-full h-12 px-4 rounded-xl border border-gray-200 bg-purple-50/40 focus:outline-none focus:ring-2 focus:ring-purple-500;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE, Edge */
+  scrollbar-width: none; /* Firefox */
+}
