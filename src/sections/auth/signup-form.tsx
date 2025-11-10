@@ -280,7 +280,7 @@ export default function SignupForm() {
             className="object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
-          <div className="absolute bottom-10 left-10 right-10 text-white">
+          {/* <div className="absolute bottom-10 left-10 right-10 text-white">
             <p className="text-lg leading-relaxed font-medium max-w-[480px]">
               “Untitled Laboratory: a haven of avant-garde. With unceasing
               innovation, we transform abstract ideas into tangible reality.”
@@ -290,7 +290,7 @@ export default function SignupForm() {
               <br />
               <span className="text-white/60">Founder, Elevatar</span>
             </p>
-          </div>
+          </div> */}
         </div>
       </aside>
     </div>

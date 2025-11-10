@@ -22,7 +22,7 @@ export default function AuthLayout({ children, showHeroImage = true }: AuthLayou
             alt="Fashion model"
             className="w-full h-full object-cover"
           />
-          <div className="absolute bottom-8 left-8 right-8 z-20">
+          {/* <div className="absolute bottom-8 left-8 right-8 z-20">
             <p className="text-white text-lg leading-relaxed">
               Untitled Laboratory: A haven of avant-garde, we craft 
               exceptional business craft. With unceasing innovation, we can
@@ -32,7 +32,7 @@ export default function AuthLayout({ children, showHeroImage = true }: AuthLayou
               Amelia Laurent<br />
               <span className="text-white/60 text-sm">Founder, Elevatar</span>
             </p>
-          </div>
+          </div> */}
         </div>
       )}
     </div>
