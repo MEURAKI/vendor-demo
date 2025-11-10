@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase/client"; // keep your path
 
-const redirectTo = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || "";
+const redirectTo = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || "https://vendor.meuraki.com.sg/pages/auth/callback";
 
 export default function SignupForm() {
   const router = useRouter();
