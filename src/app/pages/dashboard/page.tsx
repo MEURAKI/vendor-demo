@@ -274,7 +274,7 @@ export default function DashboardPage() {
           id: "orders",
           label: "Orders & Bookings",
           items: [
-            { id: "orders", label: "Orders", href: "/pages/orders", icon: "ShoppingBasket" },
+            { id: "orders", label: "Orders", href: "/pages/orderss", icon: "ShoppingBasket" },
             { id: "bookings", label: "Bookings", href: "/pages/bookings", icon: "CalendarDays" },
             { id: "customers", label: "Customers", href: "/pages/customers", icon: "Users" },
           ],
