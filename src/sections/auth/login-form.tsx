@@ -6,6 +6,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase/client";
 
+const redirectTo = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || "http://localhost:3000/api/auth/callback/google";
+
 
 export default function LoginForm() {
   const router = useRouter();
@@ -36,7 +38,7 @@ export default function LoginForm() {
   const handleGoogleLogin = async () => {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: "http://localhost:3000/pages/auth/callback" },
+    options: { redirectTo: redirectTo },
   });
   if (error) alert(error.message);
 };
