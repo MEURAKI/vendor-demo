@@ -52,49 +52,113 @@ type SidebarConfig = {
 
 function Sidebar({ config }: { config: SidebarConfig }) {
   return (
-    <aside className="w-72 shrink-0 border-r bg-white">
+    <aside className="w-[300px] shrink-0 bg-ink-800 text-neu-200 shadow-panel rounded-2xl p-16 pb-8
+                      border border-ink-line">
       {/* Profile */}
-      <div className="border-b p-4">
+      <div className="mb-5">
         <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-full bg-zinc-900 text-sm font-semibold text-white">
+          <div className="h-10 w-10 rounded-full bg-accent-600 text-white grid place-items-center
+                          text-sm font-semibold">
             {config.profile.initials}
           </div>
           <div className="leading-tight">
-            <div className="font-semibold">{config.profile.name}</div>
-            <div className="text-xs text-zinc-500">{config.profile.role}</div>
+            <div className="font-semibold text-neu-50">{config.profile.name}</div>
+            <div className="text-xs text-neu-500 uppercase tracking-wide">{config.profile.role}</div>
           </div>
+        </div>
+
+        {/* Status pill: Incomplete Registration */}
+        <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#2A1212] text-danger
+                        px-3 py-1 text-xs font-medium border border-danger/20">
+          <span className="inline-block h-2 w-2 rounded-full bg-danger" />
+          Incomplete Registration
+        </div>
+
+        {/* Purple CTA card */}
+        <div className="mt-4 rounded-2xl p-4 text-neu-50
+                        bg-gradient-to-b from-accent-500 to-accent-600">
+          <div className="font-semibold leading-snug">Complete Your{" "}
+            <br/>Business Setup</div>
+          <p className="mt-2 text-[13px] text-white/80">
+            Fill out the onboarding form with your business details to activate your shop.
+          </p>
+          <button
+            className="mt-3 inline-flex items-center rounded-full bg-black/80 hover:bg-black
+                       text-white text-sm px-4 py-2 transition">
+            Open Form
+          </button>
         </div>
       </div>
 
       {/* Sections */}
-      <div className="py-3">
+      <nav className="pt-2">
         {config.sections.map((section) => (
-          <div key={section.id} className="px-3 py-2">
-            <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+          <div key={section.id} className="mb-3">
+            <div className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-wider text-neu-600">
               {section.label}
             </div>
+
             <ul className="space-y-1.5">
               {section.items.map((item) => {
                 const Icon = item.icon ? ICONS[item.icon] : undefined;
+                const active = false; // wire with router
                 return (
                   <li key={item.id}>
                     <Link
                       href={item.href}
-                      className="flex items-center gap-2 rounded-md px-2 py-2 text-zinc-800 hover:bg-zinc-50"
+                      className={[
+                        "flex items-center gap-3 rounded-xl px-3 py-2.5 border",
+                        active
+                          ? "bg-accent-600/10 border-accent-600/30 text-neu-50"
+                          : "bg-transparent border-transparent hover:bg-ink-700 text-neu-200 hover:text-neu-50",
+                      ].join(" ")}
                     >
-                      {Icon ? <Icon className="h-4 w-4" /> : null}
-                      <span>{item.label}</span>
+                      {Icon ? (
+                        <Icon className={active ? "h-4 w-4 text-accent-400"
+                                                : "h-4 w-4 text-neu-500"} />
+                      ) : null}
+                      <span className="text-[14px]">{item.label}</span>
+                      {/* Right chevron for expandable groups – optional */}
+                      {/* <ChevronDown className="ml-auto h-4 w-4 text-neu-600" /> */}
                     </Link>
                   </li>
                 );
               })}
             </ul>
+
+            {/* Divider */}
+            <div className="my-4 h-px bg-ink-line" />
           </div>
         ))}
-      </div>
+
+        {/* Settings & Help */}
+        <div className="space-y-1.5">
+          <Link href="/settings"
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-ink-700 text-neu-200">
+            <span className="h-4 w-4 rounded border border-neu-600" />
+            <span>Settings</span>
+          </Link>
+
+          <Link href="/help"
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-ink-700 text-neu-200">
+            <span className="h-4 w-4 rounded-full border border-neu-600" />
+            <span>Help</span>
+          </Link>
+        </div>
+
+        {/* Logout */}
+        <button
+          className="mt-6 inline-flex items-center gap-2 text-accent-400 hover:text-accent-300
+                     px-3 py-2 rounded-lg"
+        >
+          <span className="h-4 w-4 rounded-sm border border-accent-400" />
+          Logout Account
+        </button>
+      </nav>
     </aside>
   );
 }
+
 
 /* ---------- Dashboard page (client) ---------- */
 
