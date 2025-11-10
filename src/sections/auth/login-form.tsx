@@ -43,7 +43,7 @@ export default function LoginForm() {
 
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="h-screen bg-white flex overflow-hidden">
       {/* Left – form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-10 lg:px-16 py-10">
         <div className="w-full max-w-md">
@@ -179,7 +179,7 @@ export default function LoginForm() {
         </div>
 
         {/* Quote text */}
-        <div className="absolute bottom-10 left-10 right-10 text-white">
+        {/* <div className="absolute bottom-10 left-10 right-10 text-white">
           <p className="text-lg leading-relaxed font-medium max-w-[480px]">
             “Untitled Labs were a breeze to work alongside, we can’t recommend them enough.
             We launched 6 months earlier than expected and are growing 30% MoM.”
@@ -188,7 +188,7 @@ export default function LoginForm() {
             Amélie Laurent<br />
             <span className="text-white/60">Founder, Sisyphus</span>
           </p>
-        </div>
+        </div> */}
       </div>
     </div>
   );
