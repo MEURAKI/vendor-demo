@@ -6,6 +6,7 @@ import Image from "next/image";
 import { supabase } from "../../../../lib/supabase/client";
 import WizardHeader from "../../../../components/auth/onboarding/WizardHeader";
 import Field from "../../../../components/auth/onboarding/Field";
+import { useToast } from "../../../../components/toast/ToastProvider";
 
 type Step1 = {
   fullName: string;
@@ -37,6 +38,7 @@ export default function OnboardingForm() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Step1>(EMPTY);
+  const { successToast, errorToast } = useToast();
 
   /** Prefill from Supabase **/
   useEffect(() => {
@@ -82,7 +84,7 @@ export default function OnboardingForm() {
       router.push("/pages/onboarding/brand");
     } catch (err) {
       console.error(err);
-      alert("Error saving your details");
+      errorToast({ title: "Error", description: "Error saving your details." });
     } finally {
       setSaving(false);
     }

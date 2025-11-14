@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "../../../../lib/supabase/client";
 import WizardHeader from "../../../../components/auth/onboarding/WizardHeader";
+import { useToast } from "../../../../components/toast/ToastProvider";
 
 /** ----------------- Constants ----------------- */
 
@@ -108,6 +109,8 @@ export default function BrandStoryOfferingsPage() {
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState<Step2>(EMPTY);
 
+  const { successToast, errorToast } = useToast();
+
   const descCount = useMemo(() => `${state.desc.length}/${MAX_DESC}`, [state.desc]);
 
   /** ---------- Prefill from Supabase ---------- */
@@ -186,7 +189,7 @@ export default function BrandStoryOfferingsPage() {
       router.push(to);
     } catch (e) {
       console.error(e);
-      alert("Error saving your details.");
+      errorToast({ title: "Error", description: "Error saving your details." });
     } finally {
       setSaving(false);
     }

@@ -5,11 +5,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase/client"; // keep your path
+import { useToast } from "../../components/toast/ToastProvider";
 
 const redirectTo = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || "https://vendor.meuraki.com.sg/pages/auth/callback";
 
 export default function SignupForm() {
   const router = useRouter();
+  const { successToast, errorToast } = useToast();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -40,7 +42,7 @@ export default function SignupForm() {
     e.preventDefault();
 
     if (!formData.acceptTerms) {
-      alert("Please accept the terms and conditions");
+      errorToast({ title: "Error", description: "Please accept the terms and conditions" });
       return;
     }
 
@@ -56,7 +58,7 @@ export default function SignupForm() {
 
     if (error) {
       console.error("Signup error:", error.message);
-      alert(error.message);
+      errorToast({ title: "Error", description: error.message });
     } else {
       router.push("/pages/auth/verify-email");
     }
@@ -67,7 +69,7 @@ export default function SignupForm() {
       provider: "google",
       options: { redirectTo: redirectTo },
     });
-    if (error) alert(error.message);
+    if (error) errorToast({ title: "Error", description: error.message });
   };
 
   return (

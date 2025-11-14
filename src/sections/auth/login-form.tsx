@@ -5,44 +5,90 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase/client";
+import { useToast } from "../../components/toast/ToastProvider";
 
-const redirectTo = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || "https://vendor.meuraki.com.sg/pages/auth/callback";
+const redirectTo =
+  process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI ||
+  "https://vendor.meuraki.com.sg/pages/auth/callback";
 
+type Errors = { email?: string; password?: string; form?: string };
 
 export default function LoginForm() {
   const router = useRouter();
+  const { successToast, errorToast } = useToast();
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     rememberMe: false,
   });
+  const [errors, setErrors] = useState<Errors>({});
+  const [loading, setLoading] = useState(false);
+
+  function validate(): boolean {
+    const next: Errors = {};
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!formData.email.trim()) next.email = "Email is required.";
+    else if (!emailRe.test(formData.email.trim())) next.email = "Enter a valid email address.";
+
+    if (!formData.password) next.password = "Password is required.";
+    else if (formData.password.length < 6) next.password = "Must be at least 6 characters.";
+
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  const { email, password } = formData;
+    e.preventDefault();
+    setErrors({});
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+    if (!validate()) {
+      errorToast({ title: "Check the form", description: "Please fix the highlighted fields." });
+      return;
+    }
 
-  if (error) {
-    console.error("Login error:", error.message);
-    alert(error.message);
-  } else {
-    // Redirect to dashboard
-    router.push("/pages/dashboard");
-  }
-};
+    try {
+      setLoading(true);
+
+      // Optional "remember me": keep email locally
+      try {
+        if (formData.rememberMe) localStorage.setItem("remember:email", formData.email);
+        else localStorage.removeItem("remember:email");
+      } catch {}
+
+      const { error: signErr } = await supabase.auth.signInWithPassword({
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+
+      if (signErr) {
+        // Map Supabase auth errors to friendly message
+        const msg =
+          signErr.message?.toLowerCase().includes("invalid login credentials") ||
+          signErr.message?.toLowerCase().includes("invalid credentials")
+            ? "Invalid email or password."
+            : signErr.message || "Unable to sign in.";
+
+        setErrors((p) => ({ ...p, password: msg })); // show under password
+        errorToast({ title: "Login failed", description: msg });
+        return;
+      }
+
+      successToast({ title: "Welcome back", description: "You’re signed in." });
+      router.push("/pages/dashboard");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: redirectTo },
-  });
-  if (error) alert(error.message);
-};
-
+    const { error: oAuthErr } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+    if (oAuthErr) errorToast({ title: "Google sign-in failed", description: oAuthErr.message });
+  };
 
   return (
     <div className="h-screen bg-white flex overflow-hidden">
@@ -52,7 +98,8 @@ export default function LoginForm() {
           {/* Logo + Heading */}
           <div className="mb-8">
             <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight text-black">
-              MEURAKI<br />Vendor Portal
+              MEURAKI
+              <br /> Vendor Portal
             </h1>
             <p className="mt-3 text-base text-gray-500">
               Welcome back! Please sign in to access your account.
@@ -60,7 +107,7 @@ export default function LoginForm() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} noValidate className="space-y-6">
             {/* Email */}
             <div>
               <label className="text-black font-semibold tracking-wide text-sm">
@@ -70,13 +117,23 @@ export default function LoginForm() {
                 type="email"
                 placeholder="Email Address"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="mt-2 w-full h-14 rounded-2xl px-4
-                           bg-[#EFEDFF] border border-transparent
-                           text-gray-900 placeholder-gray-500
-                           focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+                }}
+                className={[
+                  "mt-2 w-full h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
+                  errors.email ? "border-rose-500" : "border-transparent",
+                ].join(" ")}
                 required
+                aria-invalid={!!errors.email}
+                aria-describedby={errors.email ? "email-error" : undefined}
               />
+              {errors.email && (
+                <p id="email-error" className="mt-1 text-xs text-rose-600">
+                  {errors.email}
+                </p>
+              )}
             </div>
 
             {/* Password */}
@@ -88,40 +145,59 @@ export default function LoginForm() {
                 type="password"
                 placeholder="••••••••"
                 value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="mt-2 w-full h-14 rounded-2xl px-4
-                           bg-[#EFEDFF] border border-transparent
-                           text-gray-900 placeholder-gray-500
-                           focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onChange={(e) => {
+                  setFormData({ ...formData, password: e.target.value });
+                  if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+                }}
+                className={[
+                  "mt-2 w-full h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
+                  errors.password ? "border-rose-500" : "border-transparent",
+                ].join(" ")}
                 required
+                aria-invalid={!!errors.password}
+                aria-describedby={errors.password ? "password-error" : undefined}
               />
+              {errors.password && (
+                <p id="password-error" className="mt-1 text-xs text-rose-600">
+                  {errors.password}
+                </p>
+              )}
             </div>
 
-            {/* Row: remember + forgot */}
+            {/* Remember me */}
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm text-gray-500">
                 <input
                   type="checkbox"
                   checked={formData.rememberMe}
-                  onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, rememberMe: e.target.checked })
+                  }
                   className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                 />
                 Remember me
               </label>
-
-              <Link href="/auth/forgot-password" className="text-sm font-medium text-purple-600 hover:text-purple-700">
-                Forgot password?
-              </Link>
+              <span />
             </div>
 
             {/* Login button */}
             <button
               type="submit"
-              className="w-full h-14 rounded-full bg-black text-white text-base font-medium
-                         shadow-lg shadow-black/10 hover:bg-gray-900 transition-colors"
+              disabled={loading}
+              className="w-full h-14 rounded-full bg-black text-white text-base font-medium shadow-lg shadow-black/10 hover:bg-gray-900 transition-colors disabled:opacity-70"
             >
-              Login
+              {loading ? "Signing in…" : "Login"}
             </button>
+
+            {/* Forgot password */}
+            <div className="text-center -mt-2">
+              <Link
+                href="/pages/auth/forgot-password"
+                className="text-sm font-medium text-purple-600 hover:text-purple-700"
+              >
+                Forgot your password?
+              </Link>
+            </div>
 
             {/* Divider */}
             <div className="relative my-6">
@@ -137,9 +213,7 @@ export default function LoginForm() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="w-full h-14 rounded-2xl bg-white border border-gray-200
-                         flex items-center justify-center gap-3 text-gray-700 font-medium
-                         shadow-sm hover:shadow transition-shadow"
+              className="w-full h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center gap-3 text-gray-700 font-medium shadow-sm hover:shadow transition-shadow"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -150,47 +224,47 @@ export default function LoginForm() {
               Continue with Google
             </button>
 
-            {/* Subtext */}
-            <p className="text-center text-sm text-gray-500">
-              Don&apos;t have an account?{" "}
-              <Link href="/pages/auth/register" className="text-purple-600 hover:text-purple-700 font-medium">
-                Register your brand
-              </Link>
-            </p>
+            {/* Subtext + register link */}
+            <div className="text-center">
+              <p className="text-sm text-gray-500">
+                Don&apos;t have an account?{" "}
+                <Link
+                  href="/pages/auth/register"
+                  className="text-purple-600 hover:text-purple-700 font-medium"
+                >
+                  Register your brand
+                </Link>
+              </p>
+              <div className="mt-4 flex justify-center">
+                <Image
+                  src="/images/register-doodle.svg"
+                  alt="Register doodle"
+                  width={152}
+                  height={60}
+                />
+              </div>
+            </div>
           </form>
 
           {/* Footer Logo */}
           <div className="mt-10 flex justify-center">
-            <Image src="/images/logo-meuraki.svg" alt="Meuraki" width={120} height={28} className="opacity-60" />
+            <Image
+              src="/images/logo-meuraki.svg"
+              alt="Meuraki"
+              width={120}
+              height={28}
+              className="opacity-60"
+            />
           </div>
         </div>
       </div>
 
       {/* Right – hero panel */}
       <div className="hidden lg:block lg:w-1/2 relative">
-        {/* rounded card feel */}
         <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
-          <Image
-            src="/images/auth-hero.svg"   // NOTE: path from /public
-            alt="Fashion model"
-            fill
-            priority
-            className="object-cover"
-          />
+          <Image src="/images/auth-hero.svg" alt="Fashion model" fill priority className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
         </div>
-
-        {/* Quote text */}
-        {/* <div className="absolute bottom-10 left-10 right-10 text-white">
-          <p className="text-lg leading-relaxed font-medium max-w-[480px]">
-            “Untitled Labs were a breeze to work alongside, we can’t recommend them enough.
-            We launched 6 months earlier than expected and are growing 30% MoM.”
-          </p>
-          <p className="mt-4 text-white/80 text-sm">
-            Amélie Laurent<br />
-            <span className="text-white/60">Founder, Sisyphus</span>
-          </p>
-        </div> */}
       </div>
     </div>
   );

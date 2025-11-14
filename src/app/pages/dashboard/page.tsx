@@ -7,69 +7,41 @@ import {
   BarChart3,
   CalendarDays,
   Package,
-  Tags,           // <- use Tags (plural)
+  Tag,                 // ✅ singular
   ShoppingBasket,
   Users,
   PiggyBank,
-  Boxes,          // <- for Orders
+  Boxes,
   ChevronDown,
   MoreHorizontal,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabase/client";
 
-/* ----------------------------- Types & Icons ----------------------------- */
+/* ------------------------------------------------------------------ */
+/* Types & helpers                                                     */
+/* ------------------------------------------------------------------ */
 
 const ICONS = {
   BarChart3,
   CalendarDays,
   Package,
-  Tags,
+  Tag,
   ShoppingBasket,
   Users,
   PiggyBank,
   Boxes,
-};
+} as const;
 type IconName = keyof typeof ICONS;
 
-type SidebarItem = {
-  id: string;
-  label: string;
-  href: string;
-  badge?: number;
-};
-
-type SidebarGroup = {
-  id: string;
-  label: string;
-  icon: IconName;
-  items: SidebarItem[];
-};
-
-type SidebarSection = {
-  id: string;
-  label: string;
-  groups: SidebarGroup[];
-};
-
+type SidebarItem = { id: string; label: string; href: string; badge?: number };
+type SidebarGroup = { id: string; label: string; icon: IconName; items: SidebarItem[] };
+type SidebarSection = { id: string; label: string; groups: SidebarGroup[] };
 type SidebarConfig = {
-  profile: {
-    initials: string;
-    name: string;
-    role: string;
-    status: string;
-  };
+  profile: { initials: string; name: string; role: string; status: string };
   sections: SidebarSection[];
 };
 
-/* ------------------------------ Utilities -------------------------------- */
-
-type UserStatus =
-  | "pending_admin_approval"
-  | "approved"
-  | "active"
-  | "rejected"
-  | "suspended";
-
+type UserStatus = "pending_admin_approval" | "approved" | "active" | "rejected" | "suspended";
 type Profile = {
   id: string;
   email: string | null;
@@ -86,25 +58,26 @@ function getInitials(nameOrEmail?: string | null) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-/* ----------------------------- Sidebar UI -------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Sidebar                                                             */
+/* ------------------------------------------------------------------ */
 
 function Sidebar({ config }: { config: SidebarConfig }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [flyoutFor, setFlyoutFor] = useState<string | null>(null);
   const flyoutAnchorRef = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  const toggleGroup = (id: string) =>
-    setOpenGroups((p) => ({ ...p, [id]: !p[id] }));
-
+  const toggleGroup = (id: string) => setOpenGroups((p) => ({ ...p, [id]: !p[id] }));
   const isActiveHref = (href: string) => pathname?.startsWith(href);
 
   return (
     <aside
       className={[
-        "relative shrink-0 border border-ink-line bg-ink-800 text-neu-200 shadow-panel",
-        "rounded-2xl transition-[width,padding] duration-200",
+        "relative shrink-0 rounded-2xl border border-ink-line bg-ink-800 text-neu-200 shadow-panel",
+        "transition-[width,padding] duration-200",
         collapsed ? "w-[68px] p-3" : "w-[300px] p-5",
       ].join(" ")}
     >
@@ -115,19 +88,13 @@ function Sidebar({ config }: { config: SidebarConfig }) {
           setFlyoutFor(null);
           setCollapsed((v) => !v);
         }}
-        className="absolute -right-3 top-4 grid h-7 w-7 place-items-center rounded-full
-                   bg-ink-700 text-neu-300 hover:text-neu-50 shadow border border-ink-line"
+        className="absolute -right-3 top-4 grid h-7 w-7 place-items-center rounded-full border border-ink-line bg-ink-700 text-neu-300 shadow hover:text-neu-50"
         title={collapsed ? "Expand" : "Collapse"}
       >
-        <ChevronDown
-          className={[
-            "h-4 w-4 transition-transform",
-            collapsed ? "-rotate-90" : "rotate-0",
-          ].join(" ")}
-        />
+        <ChevronDown className={["h-4 w-4 transition-transform", collapsed ? "-rotate-90" : "rotate-0"].join(" ")} />
       </button>
 
-      {/* Profile */}
+      {/* Profile card */}
       <div className="mb-5">
         <div className="flex items-center gap-3">
           <div
@@ -142,16 +109,13 @@ function Sidebar({ config }: { config: SidebarConfig }) {
           {!collapsed && (
             <div className="leading-tight">
               <div className="font-semibold text-neu-50">{config.profile.name}</div>
-              <div className="text-xs uppercase tracking-wide text-neu-500">
-                {config.profile.role}
-              </div>
+              <div className="text-xs uppercase tracking-wide text-neu-500">{config.profile.role}</div>
             </div>
           )}
         </div>
 
         {!collapsed && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#2A1212] text-danger
-                          px-3 py-1 text-xs font-medium border border-danger/20">
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-danger/20 bg-[#2A1212] px-3 py-1 text-xs font-medium text-danger">
             <span className="inline-block h-2 w-2 rounded-full bg-danger" />
             {config.profile.status}
           </div>
@@ -160,15 +124,17 @@ function Sidebar({ config }: { config: SidebarConfig }) {
         {!collapsed && (
           <div className="mt-4 rounded-2xl bg-gradient-to-b from-accent-500 to-accent-600 p-4 text-neu-50">
             <div className="font-semibold leading-snug">
-              Complete Your <br />
-              Business Setup
+              Complete Your <br /> Business Setup
             </div>
             <p className="mt-2 text-[13px] text-white/80">
               Fill out the onboarding form with your business details to activate your shop.
             </p>
-            <button className="mt-3 inline-flex items-center rounded-full bg-black/80 px-4 py-2 text-sm text-white transition hover:bg-black">
+            <Link
+              href="/pages/setting/business"
+              className="mt-3 inline-flex items-center rounded-full bg-black/80 px-4 py-2 text-sm text-white transition hover:bg-black"
+            >
               Open Form
-            </button>
+            </Link>
           </div>
         )}
       </div>
@@ -185,12 +151,11 @@ function Sidebar({ config }: { config: SidebarConfig }) {
 
             <ul className="space-y-1.5">
               {section.groups.map((group) => {
-                const Icon = ICONS[group.icon];
+                const IconCmp = ICONS[group.icon] ?? Boxes; // ✅ fallback icon
                 const expanded = !!openGroups[group.id];
 
                 return (
                   <li key={group.id} className="relative">
-                    {/* Group button */}
                     <button
                       ref={(el) => {
                         flyoutAnchorRef.current[group.id] = el;
@@ -204,8 +169,7 @@ function Sidebar({ config }: { config: SidebarConfig }) {
                       }}
                       title={collapsed ? group.label : undefined}
                       className={[
-                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left",
-                        "transition-colors",
+                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
                         collapsed
                           ? "justify-center border-transparent hover:bg-ink-700"
                           : expanded
@@ -213,21 +177,18 @@ function Sidebar({ config }: { config: SidebarConfig }) {
                           : "border-transparent bg-transparent text-neu-200 hover:bg-ink-700 hover:text-neu-50",
                       ].join(" ")}
                     >
-                      <Icon className={collapsed ? "h-5 w-5" : "h-4 w-4 text-neu-400"} />
+                      <IconCmp className={collapsed ? "h-5 w-5 text-white/90" : "h-4 w-4 text-neu-400"} />
                       {!collapsed && (
                         <>
                           <span className="text-[14px]">{group.label}</span>
                           <ChevronDown
-                            className={[
-                              "ml-auto h-4 w-4 text-neu-600 transition-transform",
-                              expanded ? "rotate-180" : "rotate-0",
-                            ].join(" ")}
+                            className={["ml-auto h-4 w-4 text-neu-600 transition-transform", expanded ? "rotate-180" : ""].join(" ")}
                           />
                         </>
                       )}
                     </button>
 
-                    {/* Items: expanded (full) */}
+                    {/* Expanded submenu */}
                     {!collapsed && expanded && (
                       <div className="mt-2 pl-4">
                         <div className="ml-2 h-px w-[1px] bg-ink-line" />
@@ -238,14 +199,12 @@ function Sidebar({ config }: { config: SidebarConfig }) {
                                 href={it.href}
                                 className={[
                                   "flex items-center justify-between rounded-lg px-3 py-2 text-[14px]",
-                                  isActiveHref(it.href)
-                                    ? "bg-ink-700 text-neu-50"
-                                    : "text-neu-300 hover:bg-ink-700 hover:text-neu-50",
+                                  isActiveHref(it.href) ? "bg-ink-700 text-neu-50" : "text-neu-300 hover:bg-ink-700 hover:text-neu-50",
                                 ].join(" ")}
                               >
                                 <span>{it.label}</span>
                                 <div className="flex items-center gap-2">
-                                  {typeof it.badge === "number" && it.badge > 0 && (
+                                  {!!it.badge && (
                                     <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-accent-600 px-1.5 text-[11px] font-semibold text-white">
                                       {it.badge}
                                     </span>
@@ -259,17 +218,12 @@ function Sidebar({ config }: { config: SidebarConfig }) {
                       </div>
                     )}
 
-                    {/* Items: flyout (collapsed) */}
+                    {/* Flyout when collapsed */}
                     {collapsed && flyoutFor === group.id && (
                       <div
                         className="absolute left-[60px] top-0 z-50 min-w-[240px] translate-x-2 rounded-2xl border border-ink-line bg-ink-700 p-2 text-neu-200 shadow-xl"
                         onMouseLeave={() => setFlyoutFor(null)}
                       >
-                        {!collapsed && (
-                          <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-neu-600">
-                            {section.label}
-                          </div>
-                        )}
                         <div className="px-2 pb-1 text-[12px] font-semibold uppercase tracking-wider text-neu-500">
                           {group.label}
                         </div>
@@ -280,14 +234,12 @@ function Sidebar({ config }: { config: SidebarConfig }) {
                                 href={it.href}
                                 className={[
                                   "flex items-center justify-between rounded-lg px-3 py-2 text-sm",
-                                  isActiveHref(it.href)
-                                    ? "bg-ink-600 text-neu-50"
-                                    : "hover:bg-ink-600 hover:text-neu-50",
+                                  isActiveHref(it.href) ? "bg-ink-600 text-neu-50" : "hover:bg-ink-600 hover:text-neu-50",
                                 ].join(" ")}
                                 onClick={() => setFlyoutFor(null)}
                               >
                                 <span>{it.label}</span>
-                                {typeof it.badge === "number" && it.badge > 0 && (
+                                {!!it.badge && (
                                   <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-accent-600 px-1.5 text-[11px] font-semibold text-white">
                                     {it.badge}
                                   </span>
@@ -303,19 +255,17 @@ function Sidebar({ config }: { config: SidebarConfig }) {
               })}
             </ul>
 
-            {/* Divider */}
             <div className="my-4 h-px bg-ink-line" />
           </div>
         ))}
 
-        {/* Footer items */}
+        {/* Footer */}
         <div className="space-y-1.5">
           <Link
-            href="/settings"
-            className={[
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700",
-              collapsed ? "justify-center" : "",
-            ].join(" ")}
+            href="/pages/setting/profile"
+            className={["flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700", collapsed ? "justify-center" : ""].join(
+              " "
+            )}
             title={collapsed ? "Settings" : undefined}
           >
             <span className="h-4 w-4 rounded border border-neu-600" />
@@ -324,10 +274,9 @@ function Sidebar({ config }: { config: SidebarConfig }) {
 
           <Link
             href="/help"
-            className={[
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700",
-              collapsed ? "justify-center" : "",
-            ].join(" ")}
+            className={["flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700", collapsed ? "justify-center" : ""].join(
+              " "
+            )}
             title={collapsed ? "Help" : undefined}
           >
             <span className="h-4 w-4 rounded-full border border-neu-600" />
@@ -335,11 +284,13 @@ function Sidebar({ config }: { config: SidebarConfig }) {
           </Link>
 
           <button
-            onClick={() => supabase.auth.signOut()}
-            className={[
-              "mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-accent-400 hover:text-accent-300",
-              collapsed ? "mx-auto" : "",
-            ].join(" ")}
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.replace("/pages/auth/login");
+            }}
+            className={["mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-accent-400 hover:text-accent-300", collapsed ? "mx-auto" : ""].join(
+              " "
+            )}
             title={collapsed ? "Logout" : undefined}
           >
             <span className="h-4 w-4 rounded-sm border border-accent-400" />
@@ -351,7 +302,9 @@ function Sidebar({ config }: { config: SidebarConfig }) {
   );
 }
 
-/* ------------------------------ Page Logic ------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Page                                                                */
+/* ------------------------------------------------------------------ */
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -361,14 +314,12 @@ export default function DashboardPage() {
   const redirectPath = useMemo(() => {
     if (!profile) return null;
     if (profile.status === "pending_admin_approval") return "/pages/auth/pending";
-    if (profile.status === "approved" && !profile.onboarding_completed)
-      return "/pages/onboarding/start";
+    if (profile.status === "approved" && !profile.onboarding_completed) return "/pages/onboarding/start";
     return null;
   }, [profile]);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
-
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
       const user = auth.user;
@@ -419,18 +370,8 @@ export default function DashboardPage() {
           id: "overview",
           label: "Overview",
           groups: [
-            {
-              id: "dashboard",
-              label: "Dashboard",
-              icon: "BarChart3",
-              items: [{ id: "dash-home", label: "Home", href: "/pages/dashboard" }],
-            },
-            {
-              id: "calendar",
-              label: "Calendar",
-              icon: "CalendarDays",
-              items: [{ id: "cal-home", label: "View Calendar", href: "/pages/calendar" }],
-            },
+            { id: "dashboard", label: "Dashboard", icon: "BarChart3", items: [{ id: "dash-home", label: "Home", href: "/pages/dashboard" }] },
+            { id: "calendar", label: "Calendar", icon: "CalendarDays", items: [{ id: "cal-home", label: "View Calendar", href: "/pages/calendar" }] },
           ],
         },
         {
@@ -463,7 +404,7 @@ export default function DashboardPage() {
             {
               id: "discounts",
               label: "Discounts",
-              icon: "Tags", // <- correct icon name
+              icon: "Tag", // ✅ singular here too
               items: [
                 { id: "d-store", label: "Store Discounts", href: "/pages/discounts/store" },
                 { id: "d-item", label: "Item Discounts", href: "/pages/discounts/item" },
@@ -497,12 +438,7 @@ export default function DashboardPage() {
                 { id: "b-cancelled", label: "Cancelled", href: "/pages/bookings/cancelled" },
               ],
             },
-            {
-              id: "customers",
-              label: "Customers",
-              icon: "Users",
-              items: [{ id: "c-all", label: "Customers", href: "/pages/customers" }],
-            },
+            { id: "customers", label: "Customers", icon: "Users", items: [{ id: "c-all", label: "Customers", href: "/pages/customers" }] },
           ],
         },
         {
@@ -538,12 +474,8 @@ export default function DashboardPage() {
       <Sidebar config={sidebarConfig} />
 
       <main className="min-h-screen flex-1 bg-zinc-50 p-10 text-gray-900">
-        <h1 className="mb-2 text-3xl font-bold">
-          Welcome{profile.full_name ? `, ${profile.full_name}` : ""} 👋
-        </h1>
-        <p className="mb-8 text-gray-600">
-          You’re successfully logged in to the Meuraki Vendor Portal.
-        </p>
+        <h1 className="mb-2 text-3xl font-bold">Welcome{profile.full_name ? `, ${profile.full_name}` : ""} 👋</h1>
+        <p className="mb-8 text-gray-600">You’re successfully logged in to the Meuraki Vendor Portal.</p>
 
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="rounded-2xl bg-white p-6 shadow">
@@ -558,9 +490,7 @@ export default function DashboardPage() {
 
           <div className="rounded-2xl bg-white p-6 shadow">
             <h2 className="mb-2 font-semibold">Getting started</h2>
-            <p className="text-sm text-gray-600">
-              Explore your vendor tools and manage your listings.
-            </p>
+            <p className="text-sm text-gray-600">Explore your vendor tools and manage your listings.</p>
           </div>
         </div>
 

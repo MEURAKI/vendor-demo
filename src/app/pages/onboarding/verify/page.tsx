@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase/client";
 import WizardHeader from "../../../../components/auth/onboarding/WizardHeader";
+import { useToast } from "../../../../components/toast/ToastProvider";
 
 /* -------------------------------------------------------
    Types & helpers
@@ -83,6 +84,8 @@ export default function VerifyBusinessPage() {
   const [form, setForm] = useState<Step3>(EMPTY);
   const [logo, setLogo] = useState<File | null>(null);
   const [certs, setCerts] = useState<File | null>(null);
+
+  const { successToast, errorToast } = useToast();
 
   // Prefill from Supabase (onboarding.data.step3)
   useEffect(() => {
@@ -173,7 +176,7 @@ export default function VerifyBusinessPage() {
       router.push("/pages/auth/pending");
     } catch (err) {
       console.error(err);
-      alert("Error saving details");
+      errorToast({ title: "Error", description: "Error saving your details." });
     } finally {
       setSaving(false);
     }
@@ -186,7 +189,7 @@ export default function VerifyBusinessPage() {
       router.push("/pages/dashboard");
     } catch (e) {
       console.error(e);
-      alert("Could not save status");
+      errorToast({ title: "Error", description: "Error updating your status." });
     }
   };
 

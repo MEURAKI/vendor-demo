@@ -1,370 +1,242 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  BarChart3,
-  CalendarDays,
-  Package,
-  Tag,       // 'Tags' icon is `Tag` in lucide-react
-  ShoppingBasket,
-  Users,
-  PiggyBank,
-  ChevronRight,
-  ChevronDown,
-  ChevronLeft,
-  MoreHorizontal,
-  Circle,
-  Boxes,
-} from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { ICONS, SidebarConfig } from "./sidebar.config"; // <- your file
+import { supabase } from "../../lib/supabase/client";
 
-/* ----------------------------- Types & Icons ----------------------------- */
-
-const ICONS = {
-  BarChart3,
-  CalendarDays,
-  Package,
-  Tag,
-  ShoppingBasket,
-  Users,
-  PiggyBank,
-  Boxes,
-} as const;
-
-type IconName = keyof typeof ICONS;
-
-export type SidebarLeaf = {
-  id: string;
-  label: string;
-  href: string;
-  badge?: number;
-};
-
-export type SidebarGroup = {
-  id: string;
-  label: string;
-  icon: IconName;
-  items: SidebarLeaf[];
-};
-
-export type SidebarSection = {
-  id: string;
-  label: string;
-  groups: SidebarGroup[];
-};
-
-export type SidebarConfig = {
-  profile: {
-    initials: string;
-    name: string;
-    role: string;
-    status?: string;
-  };
-  sections: SidebarSection[];
-};
-
-/* --------------------------------- Hook --------------------------------- */
-
-function useLocalStorageFlag(key: string, initial = false) {
-  const [val, setVal] = useState<boolean>(initial);
-  useEffect(() => {
-    const raw = window.localStorage.getItem(key);
-    if (raw === "1") setVal(true);
-    if (raw === "0") setVal(false);
-  }, [key]);
-  useEffect(() => {
-    window.localStorage.setItem(key, val ? "1" : "0");
-  }, [key, val]);
-  return [val, setVal] as const;
-}
-
-/* ------------------------------ Flyout menu ----------------------------- */
-
-function useClickAway<T extends HTMLElement>(onAway: () => void) {
-  const ref = useRef<T | null>(null);
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!ref.current) return;
-      if (!ref.current.contains(e.target as Node)) onAway();
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [onAway]);
-  return ref;
-}
-
-/* -------------------------------- Sidebar -------------------------------- */
-
-export default function Sidebar({ config }: { config: SidebarConfig }) {
+export default function Sidebar({
+  config,
+  initialCollapsed = false,
+}: {
+  config: SidebarConfig;
+  initialCollapsed?: boolean;
+}) {
   const pathname = usePathname();
+  const router = useRouter();
 
-  // collapsed rail state
-  const [collapsed, setCollapsed] = useLocalStorageFlag("sidebar:collapsed", false);
-
-  // which groups are open (expanded mode)
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-
-  // which rail icon is showing a flyout (collapsed mode)
   const [flyout, setFlyout] = useState<string | null>(null);
+  const anchorRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  // close flyout on route change
-  useEffect(() => setFlyout(null), [pathname]);
-
-  // remember open group that contains current route (expanded mode)
-  useEffect(() => {
-    if (collapsed) return;
-    const next: Record<string, boolean> = {};
-    config.sections.forEach((s) =>
-      s.groups.forEach((g) => {
-        next[g.id] = g.items.some((i) => pathname?.startsWith(i.href));
-      }),
-    );
-    setOpen((prev) => ({ ...prev, ...next }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, collapsed]);
-
-  const railWidth = collapsed ? "w-16" : "w-[300px]";
-  const textHide = collapsed ? "opacity-0 pointer-events-none select-none" : "opacity-100";
+  const active = (href: string) => pathname?.startsWith(href);
 
   return (
     <aside
       className={[
-        "relative shrink-0 transition-all duration-200",
-        railWidth,
+        "relative shrink-0 rounded-2xl border border-ink-line bg-ink-800 text-neu-200 shadow-panel",
+        "transition-[width,padding] duration-200",
+        collapsed ? "w-[68px] p-3" : "w-[300px] p-5",
       ].join(" ")}
     >
-      {/* Panel */}
-      <div
-        className={[
-          "h-screen sticky top-0",
-          "bg-ink-800 text-neu-200 shadow-panel",
-          "border border-ink-line",
-          "rounded-2xl",
-          collapsed ? "px-2 pt-4 pb-6" : "px-4 pt-5 pb-6",
-        ].join(" ")}
+      {/* Collapse */}
+      <button
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        onClick={() => {
+          setFlyout(null);
+          setCollapsed((v) => !v);
+        }}
+        className="absolute -right-3 top-4 grid h-7 w-7 place-items-center rounded-full border border-ink-line bg-ink-700 text-neu-300 shadow hover:text-neu-50"
+        title={collapsed ? "Expand" : "Collapse"}
       >
-        {/* Header / Profile */}
-        <div className={["flex items-center", collapsed ? "justify-center" : "justify-between", "mb-4"].join(" ")}>
+        <ChevronDown className={["h-4 w-4 transition-transform", collapsed ? "-rotate-90" : ""].join(" ")} />
+      </button>
+
+      {/* Profile */}
+      <div className="mb-5">
+        <div className="flex items-center gap-3">
+          <div
+            className={[
+              "grid place-items-center rounded-full bg-accent-600 text-white",
+              collapsed ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm",
+            ].join(" ")}
+            title={collapsed ? config.profile.name : undefined}
+          >
+            {config.profile.initials}
+          </div>
           {!collapsed && (
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full grid place-items-center text-sm font-semibold text-white bg-accent-600">
-                {config.profile.initials}
-              </div>
-              <div className="leading-tight">
-                <div className="font-semibold text-neu-50">{config.profile.name}</div>
-                <div className="text-[11px] text-neu-500 uppercase tracking-wider">{config.profile.role}</div>
-              </div>
+            <div className="leading-tight">
+              <div className="font-semibold text-neu-50">{config.profile.name}</div>
+              <div className="text-xs uppercase tracking-wide text-neu-500">{config.profile.role}</div>
             </div>
           )}
-          <button
-            onClick={() => setCollapsed((v) => !v)}
-            className={[
-              "rounded-full border border-ink-line/80 bg-ink-700 hover:bg-ink-600",
-              "p-2 text-neu-300 hover:text-neu-50 transition",
-            ].join(" ")}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand" : "Collapse"}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </button>
         </div>
 
-        {/* Status pill (optional) */}
         {!collapsed && config.profile.status && (
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#2A1212] text-danger px-3 py-1 text-xs font-medium border border-danger/20">
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-danger/20 bg-[#2A1212] px-3 py-1 text-xs font-medium text-danger">
             <span className="inline-block h-2 w-2 rounded-full bg-danger" />
             {config.profile.status}
           </div>
         )}
+      </div>
 
-        {/* Sections */}
-        <nav className="mt-2 space-y-6">
-          {config.sections.map((section) => (
-            <div key={section.id}>
-              <div
-                className={[
-                  "px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-neu-600",
-                  collapsed && "sr-only",
-                ].join(" ")}
-              >
+      {/* Sections */}
+      <nav className="pt-2">
+        {config.sections.map((section) => (
+          <div key={section.id} className="mb-3">
+            {!collapsed && (
+              <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-neu-600">
                 {section.label}
               </div>
+            )}
 
-              <ul className="space-y-1">
-                {section.groups.map((group) => {
-                  const Icon = ICONS[group.icon];
-                  const isOpen = !!open[group.id];
-                  const inGroup = group.items.some((i) => pathname?.startsWith(i.href));
-                  return (
-                    <li key={group.id} className="relative">
-                      {/* Group Row */}
-                      <button
-                        onClick={() => {
-                          if (collapsed) {
-                            // open flyout
-                            setFlyout((f) => (f === group.id ? null : group.id));
-                          } else {
-                            setOpen((o) => ({ ...o, [group.id]: !o[group.id] }));
-                          }
-                        }}
-                        onMouseEnter={() => collapsed && setFlyout(group.id)}
-                        onMouseLeave={() => collapsed && setFlyout(null)}
-                        className={[
-                          "w-full flex items-center gap-3 rounded-xl border",
-                          "px-3 py-2.5 transition",
-                          inGroup
-                            ? "bg-accent-600/10 border-accent-600/30 text-neu-50"
-                            : "bg-transparent border-transparent hover:bg-ink-700 text-neu-200 hover:text-neu-50",
-                        ].join(" ")}
-                      >
-                        <Icon className={["h-4 w-4", inGroup ? "text-accent-400" : "text-neu-500"].join(" ")} />
-                        <span className={["text-[14px] transition", textHide].join(" ")}>{group.label}</span>
-                        {!collapsed && (
-                          <span className="ml-auto text-neu-500">
-                            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </span>
-                        )}
-                      </button>
+            <ul className="space-y-1.5">
+              {section.groups.map((group) => {
+                const Icon = ICONS[group.icon] ?? ICONS.Boxes;
+                const expanded = !!open[group.id];
 
-                      {/* Expanded submenu (expanded mode) */}
-                      {!collapsed && isOpen && (
-                        <ul className="mt-2 pl-4 border-l border-ink-line/60 space-y-1">
-                          {group.items.map((item) => {
-                            const active = pathname?.startsWith(item.href);
-                            return (
-                              <li key={item.id}>
-                                <Link
-                                  href={item.href}
-                                  className={[
-                                    "flex items-center gap-3 rounded-lg px-3 py-2 transition",
-                                    active
-                                      ? "bg-ink-700 text-neu-50"
-                                      : "text-neu-300 hover:text-neu-50 hover:bg-ink-700",
-                                  ].join(" ")}
-                                >
-                                  <Circle className="h-2.5 w-2.5 text-neu-600" />
-                                  <span className="text-[14px]">{item.label}</span>
-                                  {!!item.badge && (
-                                    <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-600/20 text-accent-300 text-[11px] px-1">
-                                      {item.badge}
+                return (
+                  <li key={group.id} className="relative">
+                    <button
+                      // ref={(el) => (anchorRefs.current[group.id] = el)}
+                      onClick={() => {
+                        if (collapsed) setFlyout((f) => (f === group.id ? null : group.id));
+                        else setOpen((o) => ({ ...o, [group.id]: !o[group.id] }));
+                      }}
+                      onMouseEnter={() => collapsed && setFlyout(group.id)}
+                      onMouseLeave={() => collapsed && setFlyout(null)}
+                      title={collapsed ? group.label : undefined}
+                      className={[
+                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                        collapsed
+                          ? "justify-center border-transparent hover:bg-ink-700"
+                          : expanded
+                          ? "border-accent-600/30 bg-accent-600/10 text-neu-50"
+                          : "border-transparent bg-transparent text-neu-200 hover:bg-ink-700 hover:text-neu-50",
+                      ].join(" ")}
+                    >
+                      {/* 👇 force bright icon in collapsed rail so it’s always visible */}
+                      <Icon className={collapsed ? "h-5 w-5 text-white/90" : "h-4 w-4 text-neu-400"} />
+                      {!collapsed && (
+                        <>
+                          <span className="text-[14px]">{group.label}</span>
+                          <ChevronDown
+                            className={[
+                              "ml-auto h-4 w-4 text-neu-600 transition-transform",
+                              expanded ? "rotate-180" : "",
+                            ].join(" ")}
+                          />
+                        </>
+                      )}
+                    </button>
+
+                    {/* Expanded list */}
+                    {!collapsed && expanded && (
+                      <div className="mt-2 pl-4">
+                        <div className="ml-2 h-px w-[1px] bg-ink-line" />
+                        <ul className="mt-2 space-y-1.5">
+                          {group.items.map((it) => (
+                            <li key={it.id}>
+                              <Link
+                                href={it.href}
+                                className={[
+                                  "flex items-center justify-between rounded-lg px-3 py-2 text-[14px]",
+                                  active(it.href) ? "bg-ink-700 text-neu-50" : "text-neu-300 hover:bg-ink-700 hover:text-neu-50",
+                                ].join(" ")}
+                              >
+                                <span>{it.label}</span>
+                                <div className="flex items-center gap-2">
+                                  {!!it.badge && (
+                                    <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-accent-600 px-1.5 text-[11px] font-semibold text-white">
+                                      {it.badge}
                                     </span>
                                   )}
-                                  {/* Example trailing action (three dots) */}
-                                  <MoreHorizontal className="ml-2 h-4 w-4 text-neu-600" />
-                                </Link>
-                              </li>
-                            );
-                          })}
+                                  <MoreHorizontal className="h-4 w-4 text-neu-600" />
+                                </div>
+                              </Link>
+                            </li>
+                          ))}
                         </ul>
-                      )}
+                      </div>
+                    )}
 
-                      {/* Flyout (collapsed mode) */}
-                      {collapsed && flyout === group.id && (
-                        <FlyoutMenu
-                          title={group.label}
-                          items={group.items}
-                          onClose={() => setFlyout(null)}
-                        />
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+                    {/* Flyout when collapsed */}
+                    {collapsed && flyout === group.id && (
+                      <div
+                        className="absolute left-[60px] top-0 z-50 min-w-[240px] translate-x-2 rounded-2xl border border-ink-line bg-ink-700 p-2 text-neu-200 shadow-xl"
+                        onMouseLeave={() => setFlyout(null)}
+                      >
+                        <div className="px-2 pb-1 text-[12px] font-semibold uppercase tracking-wider text-neu-500">
+                          {group.label}
+                        </div>
+                        <ul className="space-y-1">
+                          {group.items.map((it) => (
+                            <li key={it.id}>
+                              <Link
+                                href={it.href}
+                                className={[
+                                  "flex items-center justify-between rounded-lg px-3 py-2 text-sm",
+                                  active(it.href) ? "bg-ink-600 text-neu-50" : "hover:bg-ink-600 hover:text-neu-50",
+                                ].join(" ")}
+                                onClick={() => setFlyout(null)}
+                              >
+                                <span>{it.label}</span>
+                                {!!it.badge && (
+                                  <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-accent-600 px-1.5 text-[11px] font-semibold text-white">
+                                    {it.badge}
+                                  </span>
+                                )}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
 
-              {/* Divider */}
-              <div className="my-4 h-px bg-ink-line" />
-            </div>
-          ))}
-
-          {/* Settings & Help */}
-          <div className="space-y-1">
-            <Link
-              href="/settings"
-              className={[
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:text-neu-50 hover:bg-ink-700 transition",
-                collapsed && "justify-center",
-              ].join(" ")}
-            >
-              <Boxes className="h-4 w-4 text-neu-500" />
-              <span className={textHide}>Settings</span>
-            </Link>
-
-            <Link
-              href="/help"
-              className={[
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:text-neu-50 hover:bg-ink-700 transition",
-                collapsed && "justify-center",
-              ].join(" ")}
-            >
-              <Circle className="h-4 w-4 text-neu-500" />
-              <span className={textHide}>Help</span>
-            </Link>
+            <div className="my-4 h-px bg-ink-line" />
           </div>
+        ))}
 
-          {/* Logout */}
-          <button
+        {/* Footer / Settings / Help / Logout */}
+        <div className="space-y-1.5">
+          <Link
+            href="/pages/setting/profile"
             className={[
-              "mt-6 inline-flex items-center gap-2 text-accent-400 hover:text-accent-300 px-3 py-2 rounded-lg transition",
-              collapsed && "justify-center w-full",
+              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700",
+              collapsed ? "justify-center" : "",
             ].join(" ")}
-            onClick={() => {
-              // hook up to your sign out flow if you want from here
-              document.dispatchEvent(new CustomEvent("sidebar:logout"));
+            title={collapsed ? "Settings" : undefined}
+          >
+            <span className="h-4 w-4 rounded border border-neu-600" />
+            {!collapsed && <span>Settings</span>}
+          </Link>
+
+          <Link
+            href="/help"
+            className={[
+              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700",
+              collapsed ? "justify-center" : "",
+            ].join(" ")}
+            title={collapsed ? "Help" : undefined}
+          >
+            <span className="h-4 w-4 rounded-full border border-neu-600" />
+            {!collapsed && <span>Help</span>}
+          </Link>
+
+          {/* ✅ Logout present in all states */}
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.replace("/pages/auth/login");
             }}
+            className={[
+              "mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-accent-400 hover:text-accent-300",
+              collapsed ? "mx-auto" : "",
+            ].join(" ")}
+            title={collapsed ? "Logout" : undefined}
           >
             <span className="h-4 w-4 rounded-sm border border-accent-400" />
-            <span className={textHide}>Logout Account</span>
+            {!collapsed && <span>Logout Account</span>}
           </button>
-        </nav>
-      </div>
+        </div>
+      </nav>
     </aside>
-  );
-}
-
-/* -------------------------------- Flyout UI ------------------------------- */
-
-function FlyoutMenu({
-  title,
-  items,
-  onClose,
-}: {
-  title: string;
-  items: SidebarLeaf[];
-  onClose: () => void;
-}) {
-  const ref = useClickAway<HTMLDivElement>(onClose);
-  const pathname = usePathname();
-
-  return (
-    <div
-      ref={ref}
-      className="absolute left-[68px] top-0 z-50 w-72 rounded-2xl border border-ink-line bg-ink-800 shadow-panel p-3"
-    >
-      <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-neu-600">{title}</div>
-      <ul className="space-y-1">
-        {items.map((it) => {
-          const active = pathname?.startsWith(it.href);
-          return (
-            <li key={it.id}>
-              <Link
-                href={it.href}
-                className={[
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 transition",
-                  active ? "bg-ink-700 text-neu-50" : "text-neu-300 hover:text-neu-50 hover:bg-ink-700",
-                ].join(" ")}
-              >
-                <span className="text-[14px]">{it.label}</span>
-                {!!it.badge && (
-                  <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-600/20 text-accent-300 text-[11px] px-1">
-                    {it.badge}
-                  </span>
-                )}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
   );
 }

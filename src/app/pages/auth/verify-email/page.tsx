@@ -1,45 +1,56 @@
 "use client";
-
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { useToast } from "../../../../components/toast/ToastProvider";
 
 export default function VerifyEmailPage() {
+  const { successToast, errorToast } = useToast();
+  const params = useSearchParams();
+  const email = params.get("email") || "";
+
+  async function resend() {
+    if (!email) return;
+    const r = await fetch("/api/auth/send-verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, userName: email.split("@")[0] }),
+    });
+    if (r.ok) successToast({ title: "Sent", description: "Check your inbox again." });
+    else {
+      const j = await r.json().catch(() => ({}));
+      errorToast({ title: "Error", description: j.error || "Couldn’t send email." });
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 py-16 text-center">
-      <Image
-        src="/images/logo-meuraki.svg"
-        alt="Meuraki"
-        width={140}
-        height={40}
-        className="mb-10 opacity-70"
-      />
+    <div className="h-screen bg-white flex overflow-hidden">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-10 lg:px-16 py-10">
+        <div className="w-full max-w-md">
+          <div className="mt-2 h-14 w-14 grid place-items-center rounded-full bg-[#EFEDFF] text-purple-600">✉️</div>
+          <h2 className="mt-4 text-2xl font-semibold">Confirm your email</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            We sent a confirmation link to {email || "your inbox"}. Click it to continue.
+          </p>
 
-      <h1 className="text-3xl font-extrabold text-black mb-4">Verify your email</h1>
-      <p className="text-gray-600 max-w-md mb-8">
-        We’ve sent a verification link to your email address. Please check your inbox and click the link to activate your account.
-      </p>
-
-      <div className="flex flex-col items-center gap-4">
-        <Link
-          href="/pages/auth/login"
-          className="bg-black text-white px-6 py-3 rounded-full font-medium hover:bg-gray-900 transition"
-        >
-          Go to Login
-        </Link>
-        <p className="text-gray-400 text-sm">
-          Didn’t receive the email?{" "}
           <button
-            onClick={() => window.location.reload()}
-            className="text-purple-600 hover:text-purple-700 font-medium"
+            onClick={resend}
+            className="mt-6 w-full h-12 rounded-full border bg-white hover:bg-gray-50"
           >
-            Resend
+            Resend email
           </button>
-        </p>
+
+          <p className="mt-6 text-xs text-gray-500">
+            Didn’t get it? Check Spam/Promotions. Link is single-use; if it’s expired, click Resend.
+          </p>
+        </div>
       </div>
 
-      <footer className="mt-16 text-xs text-gray-400">
-        &copy; {new Date().getFullYear()} Meuraki Vendor Portal. All rights reserved.
-      </footer>
+      <div className="hidden lg:block lg:w-1/2 relative">
+        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
+          <Image src="/images/auth-hero.svg" alt="" fill priority className="object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
+        </div>
+      </div>
     </div>
   );
 }
