@@ -7,11 +7,15 @@ import { useRouter } from "next/navigation";
 import Sidebar from "../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
-import { error } from "console";
 
 /* ---------- Types ---------- */
 
-type ProductStatus = "draft" | "active" | "out_of_stock" | "published" | "inactive";
+type ProductStatus =
+  | "draft"
+  | "active"
+  | "out_of_stock"
+  | "published"
+  | "inactive";
 
 type ProductRow = {
   id: string;
@@ -104,7 +108,6 @@ function BulkEditModal({
 
   useEffect(() => {
     if (open) {
-      // reset when opened
       setForm({
         price: "",
         discountType: null,
@@ -460,7 +463,7 @@ function BulkEditModal({
   );
 }
 
-/* ---------- Variants modal from before (unchanged) ---------- */
+/* ---------- Variants modal ---------- */
 
 interface ProductVariantsModalProps {
   open: boolean;
@@ -505,7 +508,6 @@ function ProductVariantsModal({
       onClose();
     } catch (e) {
       console.error("Failed to save variants", e);
-      
     }
   };
 
@@ -650,11 +652,357 @@ function ProductVariantsModal({
   );
 }
 
-/* ---------- Main page ---------- */
+/* ---------- Helper components for add + bulk upload ---------- */
 
 function formatMoney(value: number) {
   return `$${value.toFixed(2)}`;
 }
+
+interface AddProductChoiceModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSingleProduct: () => void;
+  onBulkUpload: () => void;
+}
+
+function AddProductChoiceModal({
+  open,
+  onClose,
+  onSingleProduct,
+  onBulkUpload,
+}: AddProductChoiceModalProps) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+        <div className="flex items-start justify-between">
+          <h2 className="text-lg font-semibold">
+            Choose how you’d like to add your product
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-4 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-4">
+          {/* Single Product */}
+          <button
+            type="button"
+            onClick={onSingleProduct}
+            className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-[#F8F7FF] px-4 py-3 text-left shadow-sm hover:border-black"
+          >
+            <div>
+              <div className="text-sm font-semibold">Single Product</div>
+              <div className="text-xs text-gray-500">
+                Add one product manually
+              </div>
+            </div>
+            <div className="h-10 w-10 rounded-2xl bg-white text-center text-xl">
+              🧾
+            </div>
+          </button>
+
+          {/* Bulk Upload */}
+          <button
+            type="button"
+            onClick={onBulkUpload}
+            className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-[#F8F7FF] px-4 py-3 text-left shadow-sm hover:border-black"
+          >
+            <div>
+              <div className="text-sm font-semibold">Bulk Upload</div>
+              <div className="text-xs text-gray-500">
+                Import multiple products at once
+              </div>
+            </div>
+            <div className="flex h-10 w-14 items-center justify-center">
+              <span className="inline-block h-9 w-7 rounded-2xl bg-white" />
+              <span className="inline-block h-9 w-7 -ml-3 rounded-2xl bg-white" />
+              <span className="inline-block h-9 w-7 -ml-3 rounded-2xl bg-white" />
+            </div>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-gray-700 underline"
+          onClick={() => {
+            window.location.href = "/templates/products-bulk-template.csv";
+          }}
+        >
+          ⬇ Download CSV Template
+        </button>
+      </div>
+    </div>
+  );
+}
+
+type CsvMappingKey =
+  | "productUniqueCode"
+  | "sku"
+  | "name"
+  | "type"
+  | "category"
+  | "wellness"
+  | "price"
+  | "inventory";
+
+interface BulkUploadModalProps {
+  open: boolean;
+  onClose: () => void;
+  onUploaded: () => Promise<void> | void;
+}
+
+function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<Record<CsvMappingKey, string>>({
+    productUniqueCode: "",
+    sku: "",
+    name: "",
+    type: "",
+    category: "",
+    wellness: "",
+    price: "",
+    inventory: "",
+  });
+  const [uploading, setUploading] = useState(false);
+
+  if (!open) return null;
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = (reader.result as string) || "";
+      const firstLine = text.split(/\r?\n/)[0] || "";
+      const cols = firstLine
+        .split(",")
+        .map((c) => c.trim().replace(/^"|"$/g, ""));
+      setHeaders(cols);
+    };
+    reader.readAsText(f);
+  }
+
+  function handleChangeMapping(key: CsvMappingKey, value: string) {
+    setMapping((m) => ({ ...m, [key]: value }));
+  }
+
+  async function handleUpload() {
+    if (!file) {
+      alert("Please choose a CSV file first.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("mapping", JSON.stringify(mapping));
+
+      const res = await fetch("/api/products/bulk-upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Bulk upload failed");
+      }
+
+      await onUploaded();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const headerOptions = (
+    <>
+      <option value="">Choose a field to match</option>
+      {headers.map((h) => (
+        <option key={h} value={h}>
+          {h}
+        </option>
+      ))}
+    </>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-5xl rounded-3xl bg-white p-8 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">CSV Bulk Upload</h2>
+          <button
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm"
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Upload control */}
+        <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-[#F8F7FF] px-4 py-3">
+          <div className="text-xs text-gray-600">
+            <div className="font-semibold">Upload your CSV file</div>
+            <div>We’ll read the first row and show the columns here.</div>
+          </div>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileChange}
+            className="text-xs"
+          />
+        </div>
+
+        {/* Mapping UI */}
+        <div className="mt-6 grid grid-cols-1 gap-4 text-xs md:grid-cols-2">
+          <div>
+            <div className="mb-2 text-[11px] font-semibold text-gray-500">
+              Import to Products (Vendor Portal)
+            </div>
+            <div className="space-y-2">
+              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                Product Unique Code (used later for variants)
+              </div>
+              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                Product SKU (Single Item Code)
+              </div>
+              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                Product Name
+              </div>
+              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                Product Type (Single / Variant)
+              </div>
+              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                Category
+              </div>
+              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                Wellness Dimension
+              </div>
+              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                Price (SGD)
+              </div>
+              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                Inventory Stock
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 text-[11px] font-semibold text-gray-500">
+              What (CSV) column field matches best?
+            </div>
+            <div className="space-y-2">
+              <select
+                value={mapping.productUniqueCode}
+                onChange={(e) =>
+                  handleChangeMapping("productUniqueCode", e.target.value)
+                }
+                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+              >
+                {headerOptions}
+              </select>
+
+              <select
+                value={mapping.sku}
+                onChange={(e) => handleChangeMapping("sku", e.target.value)}
+                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+              >
+                {headerOptions}
+              </select>
+
+              <select
+                value={mapping.name}
+                onChange={(e) => handleChangeMapping("name", e.target.value)}
+                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+              >
+                {headerOptions}
+              </select>
+
+              <select
+                value={mapping.type}
+                onChange={(e) => handleChangeMapping("type", e.target.value)}
+                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+              >
+                {headerOptions}
+              </select>
+
+              <select
+                value={mapping.category}
+                onChange={(e) =>
+                  handleChangeMapping("category", e.target.value)
+                }
+                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+              >
+                {headerOptions}
+              </select>
+
+              <select
+                value={mapping.wellness}
+                onChange={(e) =>
+                  handleChangeMapping("wellness", e.target.value)
+                }
+                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+              >
+                {headerOptions}
+              </select>
+
+              <select
+                value={mapping.price}
+                onChange={(e) => handleChangeMapping("price", e.target.value)}
+                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+              >
+                {headerOptions}
+              </select>
+
+              <select
+                value={mapping.inventory}
+                onChange={(e) =>
+                  handleChangeMapping("inventory", e.target.value)
+                }
+                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+              >
+                {headerOptions}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2 text-xs">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-gray-300 px-4 py-2"
+            disabled={uploading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={uploading || !file}
+            className="rounded-full bg-black px-6 py-2 font-semibold text-white disabled:opacity-60"
+          >
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Main page ---------- */
 
 export default function AllProductsPage() {
   const router = useRouter();
@@ -678,6 +1026,16 @@ export default function AllProductsPage() {
   // bulk edit
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
+
+  // add product choice modal
+  const [addChoiceOpen, setAddChoiceOpen] = useState(false);
+
+  // bulk CSV upload modal
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
+
+  // pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   useEffect(() => {
     let isMounted = true;
@@ -709,35 +1067,28 @@ export default function AllProductsPage() {
     }
 
     async function loadProducts(isStillMounted: boolean) {
-  const res = await fetch("/api/products");
-  const data = await res.json();
+      const res = await fetch("/api/products");
+      const data = await res.json();
 
-  console.log("API /api/products raw:", data);
+      const mapped: ProductRow[] = (data.products ?? data ?? []).map(
+        (p: any): ProductRow => ({
+          id: String(p.id),
+          name: p.name,
+          type: p.type === "Variant" ? "Variant" : "Single",
+          category: p.categoryName ?? "—",
+          price: typeof p.priceCents === "number" ? p.priceCents / 100 : 0,
+          stock: p.stock ?? p.totalStock ?? p.inventoryQty ?? 0,
+          sku: p.baseSku ?? p.sku ?? "",
+          status: p.status as ProductStatus,
+          variantCount: p.variantCount ?? 0,
+          imageUrl: p.imageUrl ?? null,
+        })
+      );
 
-  const mapped: ProductRow[] = (data.products ?? data ?? []).map(
-    (p: any): ProductRow => ({
-      id: String(p.id),
-      name: p.name,
-      // API already has "Variant"/"Single" as a string
-      type: p.type === "Variant" ? "Variant" : "Single",
-      // you don't have category in this payload yet
-      category: p.categoryName ?? "—",
-      price: typeof p.priceCents === "number" ? p.priceCents / 100 : 0,
-      // 👇 use stock from the response
-      stock: p.stock ?? p.totalStock ?? p.inventoryQty ?? 0,
-      sku: p.baseSku ?? p.sku ?? "",
-      status: p.status as ProductStatus,
-      variantCount: p.variantCount ?? 0,
-      imageUrl: p.imageUrl ?? null,
-    })
-  );
-
-  console.log("mapped products:", mapped);
-
-  if (isStillMounted) {
-    setProducts(mapped);
-  }
-}
+      if (isStillMounted) {
+        setProducts(mapped);
+      }
+    }
 
     void init();
 
@@ -777,6 +1128,20 @@ export default function AllProductsPage() {
     p.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const currentRows = filtered.slice(startIndex, startIndex + pageSize);
+  const fromItem = filtered.length === 0 ? 0 : startIndex + 1;
+  const toItem = startIndex + currentRows.length;
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const sidebarConfig = useMemo(
     () =>
       buildSidebarConfig({
@@ -788,7 +1153,7 @@ export default function AllProductsPage() {
     [profile]
   );
 
-  const allVisibleIds = filtered.map((p) => p.id);
+  const allVisibleIds = currentRows.map((p) => p.id);
   const allSelectedOnPage =
     allVisibleIds.length > 0 &&
     allVisibleIds.every((id) => selectedIds.includes(id));
@@ -817,7 +1182,6 @@ export default function AllProductsPage() {
       const res = await fetch("/api/products");
       const data = await res.json();
       const mapped: ProductRow[] = (data.products ?? data ?? []).map(
-        // console.log(data.products),
         (p: any): ProductRow => ({
           id: String(p.id),
           name: p.name,
@@ -838,291 +1202,386 @@ export default function AllProductsPage() {
     }
   }
 
-return (
-  <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
-    {/* Left sidebar stays fixed on the left */}
-    <Sidebar config={sidebarConfig} />
+  async function handleTrash(productId: string) {
+    try {
+      await fetch("/api/products/bulk-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productIds: [productId],
+          status: "draft",
+          trash: true, // backend should treat this as soft delete
+        }),
+      });
 
-    {/* Black bezel + inner tablet */}
-    <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-      {/* This is the big rounded tablet container */}
-      <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-        {/* Sticky top bar INSIDE the tablet */}
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-[#1B1529]">
-              All Products
-            </h1>
-            <span className="inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
-              {products.length}
-            </span>
-          </div>
+      await reloadAfterBulk();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to move product to trash");
+    }
+  }
 
-          <div className="flex items-center gap-3">
-            {/* Bulk Actions */}
-            <button
-              type="button"
-              onClick={() => selectedProducts.length && setBulkOpen(true)}
-              className={clsx(
-                "inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[11px] font-semibold shadow-sm",
-                selectedProducts.length
-                  ? "border-black bg-black text-white"
-                  : "border-gray-200 bg-white text-gray-700"
-              )}
-            >
-              Bulk Actions
-              {selectedProducts.length > 0 && (
-                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white text-[10px] font-bold text-black">
-                  {selectedProducts.length}
-                </span>
-              )}
-              <span>▾</span>
-            </button>
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
+      {/* Left sidebar */}
+      <Sidebar config={sidebarConfig} />
 
-            {/* Filter dropdown */}
-            <div className="relative">
+      {/* Black bezel + inner tablet */}
+      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
+        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+          {/* Sticky top bar */}
+          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-semibold text-[#1B1529]">
+                All Products
+              </h1>
+              <span className="inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
+                {products.length}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Bulk Actions */}
               <button
                 type="button"
-                onClick={() => setFilterOpen((o) => !o)}
-                className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-[11px] font-semibold text-gray-700 shadow-sm"
+                onClick={() => selectedProducts.length && setBulkOpen(true)}
+                className={clsx(
+                  "inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[11px] font-semibold shadow-sm",
+                  selectedProducts.length
+                    ? "border-black bg-black text-white"
+                    : "border-gray-200 bg-white text-gray-700"
+                )}
               >
-                Filter by ▾
+                Bulk Actions
+                {selectedProducts.length > 0 && (
+                  <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white text-[10px] font-bold text-black">
+                    {selectedProducts.length}
+                  </span>
+                )}
+                <span>▾</span>
               </button>
 
-              {filterOpen && (
-                <div className="absolute right-0 z-40 mt-2 w-60 rounded-2xl border border-gray-200 bg-white p-3 text-[11px] shadow-xl">
-                  {/* filter content here */}
-                </div>
-              )}
-            </div>
+              {/* Filter dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setFilterOpen((o) => !o)}
+                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-[11px] font-semibold text-gray-700 shadow-sm"
+                >
+                  Filter by ▾
+                </button>
 
-            {/* Search */}
-            <div className="flex items-center rounded-full border border-gray-200 bg-[#F5F5F8] px-3 py-1">
-              <span className="mr-1 text-xs text-gray-400">🔍</span>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search Product"
-                className="w-48 bg-transparent text-xs text-gray-700 focus:outline-none"
-              />
-            </div>
-
-            <button className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white">
-              Search
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push("/pages/products/new")}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-lg font-semibold text-white shadow-md hover:bg-gray-900"
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        {/* Scrollable body INSIDE tablet */}
-        <div className="flex-1 overflow-auto p-6">
-          <div className="min-h-0 overflow-auto rounded-2xl border border-[#ECECFB] bg-white">
-            <table className="min-w-full text-xs">
-              <thead className="sticky top-0 z-20 bg-[#F6F5FF] text-[11px] font-semibold text-gray-500 shadow-sm">
-                <tr>
-                  <th className="w-8 px-3 py-3">
-                    <input
-                      type="checkbox"
-                      className="h-3 w-3"
-                      checked={allSelectedOnPage}
-                      onChange={toggleSelectAllPage}
-                    />
-                  </th>
-                  <th className="px-3 py-3 text-left">Product Name</th>
-                  <th className="px-3 py-3 text-left">Type</th>
-                  <th className="px-3 py-3 text-left">Category</th>
-                  <th className="px-3 py-3 text-right">Price</th>
-                  <th className="px-3 py-3 text-center">Variants</th>
-                  <th className="px-3 py-3 text-right">Stock</th>
-                  <th className="px-3 py-3 text-left">SKU</th>
-                  <th className="px-3 py-3 text-center">Status</th>
-                  <th className="px-3 py-3 text-center">Action</th>
-                </tr>
-              </thead>
-
-            <tbody>
-  {loading ? (
-    <tr>
-      <td
-        colSpan={10}
-        className="px-4 py-10 text-center text-xs text-gray-500"
-      >
-        Loading products…
-      </td>
-    </tr>
-  ) : filtered.length === 0 ? (
-    <tr>
-      <td
-        colSpan={10}
-        className="px-4 py-16 text-center text-xs text-gray-500"
-      >
-        {/* empty state */}
-        ...
-      </td>
-    </tr>
-  ) : (
-    filtered.map((p, idx) => {
-      const checked = selectedIds.includes(p.id);
-      return (
-        <tr
-          key={p.id}
-          className={clsx(
-            "border-t border-gray-100",
-            idx % 2 === 1 && "bg-[#FBFBFE]"
-          )}
-        >
-          <td className="px-3 py-3">
-            <input
-              type="checkbox"
-              className="h-3 w-3"
-              checked={checked}
-              onChange={() => toggleRow(p.id)}
-            />
-          </td>
-
-          <td className="px-3 py-3">
-            <div className="flex items-center gap-3">
-              <div className="relative h-9 w-9 overflow-hidden rounded-xl bg-gray-200">
-                {p.imageUrl && (
-                  <Image
-                    src={p.imageUrl}
-                    alt={p.name}
-                    fill
-                    className="object-cover"
-                  />
+                {filterOpen && (
+                  <div className="absolute right-0 z-40 mt-2 w-60 rounded-2xl border border-gray-200 bg-white p-3 text-[11px] shadow-xl">
+                    {/* filter content here */}
+                  </div>
                 )}
               </div>
-              <div className="text-xs font-semibold text-gray-900">
-                {p.name}
+
+              {/* Search */}
+              <div className="flex items-center rounded-full border border-gray-200 bg-[#F5F5F8] px-3 py-1">
+                <span className="mr-1 text-xs text-gray-400">🔍</span>
+                <input
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Search Product"
+                  className="w-48 bg-transparent text-xs text-gray-700 focus:outline-none"
+                />
               </div>
-            </div>
-          </td>
 
-          <td className="px-3 py-3 text-[11px] text-gray-600">
-            {p.type}
-          </td>
+              <button className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white">
+                Search
+              </button>
 
-          <td className="px-3 py-3 text-[11px] text-gray-600">
-            {p.category}
-          </td>
-
-          <td className="px-3 py-3 text-right text-[11px] text-gray-800">
-            {formatMoney(p.price)}
-          </td>
-
-          <td className="px-3 py-3 text-center">
-            {p.type === "Variant" ? (
               <button
                 type="button"
-                onClick={() => handleOpenVariants(p)}
-                className="inline-flex h-7 min-w-[32px] items-center justify-center rounded-full bg-[#F3E8FF] px-2 text-[11px] font-semibold text-[#6D28D9] hover:bg-[#EDE0FF]"
+                onClick={() => setAddChoiceOpen(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-lg font-semibold text-white shadow-md hover:bg-gray-900"
               >
-                {p.variantCount}
-              </button>
-            ) : (
-              <span className="text-[11px] text-gray-400">
-                {p.variantCount}
-              </span>
-            )}
-          </td>
-
-          <td className="px-3 py-3 text-right text-[11px] text-gray-800">
-            {p.stock}
-          </td>
-
-          <td className="px-3 py-3 text-[11px] text-gray-600">
-            {p.sku}
-          </td>
-
-          <td className="px-3 py-3 text-center">
-            <span
-              className={clsx(
-                "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-semibold",
-                p.status === "active" && "bg-[#DCFCE7] text-[#166534]",
-                p.status === "draft" && "bg-gray-200 text-gray-700",
-                p.status === "out_of_stock" && "bg-[#FEE2E2] text-[#B91C1C]"
-              )}
-            >
-              {p.status === "out_of_stock"
-                ? "Out of Stock"
-                : p.status === "active"
-                ? "Active"
-                : "Draft"}
-            </span>
-          </td>
-
-          <td className="px-3 py-3 text-center">
-            <div className="flex items-center justify-center gap-2">
-              <button
-                className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
-                onClick={() => router.push(`/pages/products/${p.id}/edit`)}
-              >
-                Edit
-              </button>
-              <button className="rounded-full border border-gray-300 px-4 py-1.5 text-[11px] text-gray-700">
-                Trash
+                +
               </button>
             </div>
-          </td>
-        </tr>
-      );
-    })
-  )}
-</tbody>
-            </table>
           </div>
 
-          {/* Pagination */}
-          <div className="mt-4 flex items-center justify-between text-[11px] text-gray-500">
-            <span>Showing {filtered.length} products</span>
-            <div className="space-x-2">
-              <button className="rounded-full border border-gray-300 px-3 py-1">
-                &lt; Back
-              </button>
-              <button className="rounded-full border border-gray-300 px-3 py-1">
-                1
-              </button>
-              <button className="rounded-full border border-gray-300 px-3 py-1">
-                Next &gt;
-              </button>
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-auto p-6">
+            <div className="min-h-0 overflow-auto rounded-2xl border border-[#ECECFB] bg-white">
+              <table className="min-w-full text-xs">
+                <thead className="sticky top-0 z-20 bg-[#F6F5FF] text-[11px] font-semibold text-gray-500 shadow-sm">
+                  <tr>
+                    <th className="w-8 px-3 py-3">
+                      <input
+                        type="checkbox"
+                        className="h-3 w-3"
+                        checked={allSelectedOnPage}
+                        onChange={toggleSelectAllPage}
+                      />
+                    </th>
+                    <th className="px-3 py-3 text-left">Product Name</th>
+                    <th className="px-3 py-3 text-left">Type</th>
+                    <th className="px-3 py-3 text-left">Category</th>
+                    <th className="px-3 py-3 text-right">Price</th>
+                    <th className="px-3 py-3 text-center">Variants</th>
+                    <th className="px-3 py-3 text-right">Stock</th>
+                    <th className="px-3 py-3 text-left">SKU</th>
+                    <th className="px-3 py-3 text-center">Status</th>
+                    <th className="px-3 py-3 text-center">Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={10}
+                        className="px-4 py-10 text-center text-xs text-gray-500"
+                      >
+                        Loading products…
+                      </td>
+                    </tr>
+                  ) : filtered.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={10}
+                        className="px-4 py-16 text-center text-xs text-gray-500"
+                      >
+                        No products found.
+                      </td>
+                    </tr>
+                  ) : (
+                    currentRows.map((p, idx) => {
+                      const checked = selectedIds.includes(p.id);
+                      return (
+                        <tr
+                          key={p.id}
+                          className={clsx(
+                            "border-t border-gray-100",
+                            idx % 2 === 1 && "bg-[#FBFBFE]"
+                          )}
+                        >
+                          <td className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              className="h-3 w-3"
+                              checked={checked}
+                              onChange={() => toggleRow(p.id)}
+                            />
+                          </td>
+
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="relative h-9 w-9 overflow-hidden rounded-xl bg-gray-200">
+                                {p.imageUrl && (
+                                  <Image
+                                    src={p.imageUrl}
+                                    alt={p.name}
+                                    fill
+                                    className="object-cover"
+                                  />
+                                )}
+                              </div>
+                              <div className="text-xs font-semibold text-gray-900">
+                                {p.name}
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-3 py-3 text-[11px] text-gray-600">
+                            {p.type}
+                          </td>
+
+                          <td className="px-3 py-3 text-[11px] text-gray-600">
+                            {p.category}
+                          </td>
+
+                          <td className="px-3 py-3 text-right text-[11px] text-gray-800">
+                            {formatMoney(p.price)}
+                          </td>
+
+                          <td className="px-3 py-3 text-center">
+                            {p.type === "Variant" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenVariants(p)}
+                                className="inline-flex h-7 min-w-[32px] items-center justify-center rounded-full bg-[#F3E8FF] px-2 text-[11px] font-semibold text-[#6D28D9] hover:bg-[#EDE0FF]"
+                              >
+                                {p.variantCount}
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-gray-400">
+                                {p.variantCount}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-3 py-3 text-right text-[11px] text-gray-800">
+                            {p.stock}
+                          </td>
+
+                          <td className="px-3 py-3 text-[11px] text-gray-600">
+                            {p.sku}
+                          </td>
+
+                          <td className="px-3 py-3 text-center">
+                            <span
+                              className={clsx(
+                                "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-semibold",
+                                p.status === "active" &&
+                                  "bg-[#DCFCE7] text-[#166534]",
+                                p.status === "draft" &&
+                                  "bg-gray-200 text-gray-700",
+                                p.status === "out_of_stock" &&
+                                  "bg-[#FEE2E2] text-[#B91C1C]"
+                              )}
+                            >
+                              {p.status === "out_of_stock"
+                                ? "Out of Stock"
+                                : p.status === "active"
+                                ? "Active"
+                                : "Draft"}
+                            </span>
+                          </td>
+
+                          <td className="px-3 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
+                                onClick={() =>
+                                  router.push(`/pages/products/${p.id}/edit`)
+                                }
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="rounded-full border border-gray-300 px-4 py-1.5 text-[11px] text-gray-700"
+                                onClick={() => handleTrash(p.id)}
+                              >
+                                Trash
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
+              <span>
+                Showing {fromItem}-{toItem} of {filtered.length} products
+              </span>
+
+              <div className="flex items-center gap-3">
+                <button
+                  className="rounded-full border border-gray-300 px-3 py-1 disabled:opacity-40"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.max(1, p - 1))
+                  }
+                  disabled={safePage === 1}
+                >
+                  &lt; Back
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                  (page) => (
+                    <button
+                      key={page}
+                      className={clsx(
+                        "min-w-[28px] rounded-md border px-2 py-1",
+                        page === safePage
+                          ? "border-black bg-black text-white"
+                          : "border-gray-300 bg-white text-gray-700"
+                      )}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  className="rounded-full border border-gray-300 px-3 py-1 disabled:opacity-40"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={safePage === totalPages}
+                >
+                  Next &gt;
+                </button>
+
+                <div className="ml-3 flex items-center gap-1">
+                  <span>Result per page</span>
+                  <select
+                    className="rounded-md border border-gray-300 bg-white px-2 py-1"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    {/* Modals live outside tablet but still above everything */}
-    <ProductVariantsModal
-  open={variantsModalOpen}
-  onClose={() => setVariantsModalOpen(false)}
-  productName={selectedProduct?.name ?? ""}
-  optionGroups={variantOptionGroups}
-  variants={productVariants}
-  loading={variantsLoading}
-  onChangeVariant={(rows) => setProductVariants(rows)}
-  onSave={async (rows) => {
-    if (!selectedProduct) return;
-    await fetch(`/api/products/${selectedProduct.id}/variants`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ variants: rows }),
-    });
-    // optional: reload product list or show toast
-  }}
-/>
-    <BulkEditModal
-      open={bulkOpen}
-      onClose={() => setBulkOpen(false)}
-      selectedProducts={selectedProducts}
-      onSaved={reloadAfterBulk}
-    />
-  </div>
-);
+      {/* Modals */}
+      <ProductVariantsModal
+        open={variantsModalOpen}
+        onClose={() => setVariantsModalOpen(false)}
+        productName={selectedProduct?.name ?? ""}
+        optionGroups={variantOptionGroups}
+        variants={productVariants}
+        loading={variantsLoading}
+        onChangeVariant={(rows) => setProductVariants(rows)}
+        onSave={async (rows) => {
+          if (!selectedProduct) return;
+          await fetch(`/api/products/${selectedProduct.id}/variants`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ variants: rows }),
+          });
+        }}
+      />
+
+      <AddProductChoiceModal
+        open={addChoiceOpen}
+        onClose={() => setAddChoiceOpen(false)}
+        onSingleProduct={() => {
+          setAddChoiceOpen(false);
+          router.push("/pages/products/new");
+        }}
+        onBulkUpload={() => {
+          setAddChoiceOpen(false);
+          setBulkUploadOpen(true);
+        }}
+      />
+
+      <BulkUploadModal
+        open={bulkUploadOpen}
+        onClose={() => setBulkUploadOpen(false)}
+        onUploaded={async () => {
+          await reloadAfterBulk();
+        }}
+      />
+
+      <BulkEditModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        selectedProducts={selectedProducts}
+        onSaved={reloadAfterBulk}
+      />
+    </div>
+  );
 }
