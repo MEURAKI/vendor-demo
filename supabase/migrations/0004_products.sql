@@ -141,3 +141,43 @@ create index vov_variant_idx on variant_option_values (variant_id);
 create index vov_value_idx   on variant_option_values (value_id);
 
 commit;
+
+-- Allow users to read their own profile
+create policy "Users can read own profile"
+on profiles
+for select
+using ( auth.uid() = id );
+
+-- Allow users to create their own profile row
+create policy "Users can insert own profile"
+on profiles
+for insert
+with check ( auth.uid() = id );
+
+-- Allow users to update their own profile
+create policy "Users can update own profile"
+on profiles
+for update
+using ( auth.uid() = id );
+
+drop policy if exists "Users can read own profile" on profiles;
+drop policy if exists "Users can update own profile" on profiles;
+drop policy if exists "Users can insert own profile" on profiles;
+
+
+-- Allow authenticated users to upload files into the avatars bucket
+create policy "Authenticated users can upload avatars"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'avatars'
+);
+
+-- Allow everyone to read from the avatars bucket (if you want public avatars)
+create policy "Anyone can read avatars"
+on storage.objects
+for select
+using (
+  bucket_id = 'avatars'
+);

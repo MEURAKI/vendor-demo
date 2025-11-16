@@ -1,0 +1,121 @@
+"use client";
+
+import clsx from "clsx";
+import React from "react";
+
+interface ProductGeneralInfoProps {
+  name: string;
+  description: string;
+  baseSku: string;
+  isCustomSku: boolean;
+  isVariant: boolean;
+
+  onNameChange: (v: string) => void;
+  onDescriptionChange: (v: string) => void;
+  onBaseSkuChange: (v: string) => void;
+  onToggleCustomSku: (v: boolean) => void;
+  onToggleVariant: (v: boolean) => void;
+}
+
+export function ProductGeneralInfo(props: ProductGeneralInfoProps) {
+  const {
+    name,
+    description,
+    baseSku,
+    isCustomSku,
+    isVariant,
+    onNameChange,
+    onDescriptionChange,
+    onBaseSkuChange,
+    onToggleCustomSku,
+    onToggleVariant,
+  } = props;
+
+  return (
+    <section className="rounded-2xl border border-[#ECECFB] bg-[#FBFBFE] p-6 md:p-7">
+      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
+        General Information
+      </h2>
+
+      <div className="space-y-4">
+        {/* Product name */}
+        <div>
+          <label className="text-xs font-semibold text-gray-800">
+            Product Name
+          </label>
+          <input
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+            placeholder="INNERDRIVE™ Grunge Tee"
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="text-xs font-semibold text-gray-800">
+            Product Description
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            rows={5}
+            className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+            placeholder="Describe the product, materials, fit, etc."
+          />
+        </div>
+
+        {/* Base SKU + variant toggle */}
+        <div className="grid items-end gap-3 md:grid-cols-[2fr_minmax(0,1fr)]">
+          {/* Base SKU */}
+          <div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-gray-800">Base SKU</span>
+              <label className="flex items-center gap-2 text-[11px] text-gray-500">
+                <input
+                  type="checkbox"
+                  checked={isCustomSku}
+                  onChange={(e) => onToggleCustomSku(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                />
+                Customise SKU
+              </label>
+            </div>
+            <input
+              value={baseSku}
+              onChange={(e) => onBaseSkuChange(e.target.value)}
+              className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm uppercase tracking-wide text-gray-900 focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Variant toggle */}
+          <div className="text-xs">
+            <label className="font-semibold text-gray-800">
+              Product has variants
+            </label>
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1">
+              <span className="text-[11px] text-gray-500">
+                Single / Variant
+              </span>
+              <button
+                type="button"
+                onClick={() => onToggleVariant(!isVariant)}
+                className={clsx(
+                  "relative h-6 w-11 rounded-full transition-colors",
+                  isVariant ? "bg-purple-500" : "bg-gray-300"
+                )}
+              >
+                <span
+                  className={clsx(
+                    "absolute top-[3px] h-4 w-4 rounded-full bg-white shadow transition-transform",
+                    isVariant ? "translate-x-[22px]" : "translate-x-[2px]"
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

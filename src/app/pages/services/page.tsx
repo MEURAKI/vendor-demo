@@ -1,0 +1,423 @@
+// app/pages/services/page.tsx
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import clsx from "clsx";
+
+import Sidebar from "../../../components/sidebar/Sidebar";
+import { buildSidebarConfig } from "../../../components/sidebar/sidebar.config";
+import { supabase } from "../../../lib/supabase/client";
+
+type ServiceStatus = "draft" | "active" | "unavailable";
+type LocationType = "online" | "in_person";
+
+type Profile = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+};
+
+type ProviderSummary = {
+  id: string;
+  name: string;
+};
+
+type ServiceRow = {
+  id: string;
+  name: string;
+  typeLabel: string | null; // "1-1", "Group", "Private (At Home)" etc.
+  locations: LocationType[]; // ["online", "in_person"]
+  expiry: "fixed" | "anytime" | null; // Fixed Dates / ANYTIME
+  price: number | null;
+  durationMinutes: number | null;
+  maxParticipants: number | null;
+  ticketsSold: number | null;
+  ticketsAvailable: number | null;
+  status: ServiceStatus;
+  coverImageUrl: string | null;
+  providers: ProviderSummary[];
+};
+
+export default function ServicesPage() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [rows, setRows] = useState<ServiceRow[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // load profile for sidebar
+  useEffect(() => {
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("id,email,full_name")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+      if (data) setProfile(data as Profile);
+    })();
+  }, []);
+
+  const sidebarConfig = useMemo(
+    () =>
+      buildSidebarConfig({
+        fullName: profile?.full_name ?? "",
+        email: profile?.email ?? "",
+        role: "Vendor",
+        status: "Incomplete Registration",
+      }),
+    [profile]
+  );
+
+  // load services from API
+  useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/services");
+        const json = await res.json();
+        if (!res.ok) {
+          console.error("Failed to load services", json);
+          return;
+        }
+
+        const raw = json.services ?? json;
+
+        const mapped: ServiceRow[] = (raw as any[]).map((s) => ({
+          id: s.id,
+          name: s.name,
+          typeLabel:
+            (s.type_label as string | null) ??
+            (Array.isArray(s.service_types) && s.service_types[0]) ??
+            null,
+          locations:
+            (s.location_types as LocationType[]) ??
+            (Array.isArray(s.locations) ? s.locations : []),
+          expiry: (s.expiry as "fixed" | "anytime" | null) ?? null,
+          price: s.price ?? null,
+          durationMinutes: s.duration_minutes ?? null,
+          maxParticipants: s.max_participants ?? null,
+          ticketsSold: s.tickets_sold ?? null,
+          ticketsAvailable: s.tickets_available ?? null,
+          status: s.status as ServiceStatus,
+          coverImageUrl: s.cover_image_url ?? null,
+          providers:
+            (s.providers as ProviderSummary[]) ??
+            (Array.isArray(s.provider_names)
+              ? s.provider_names.map((name: string, idx: number) => ({
+                  id: `p-${idx}`,
+                  name,
+                }))
+              : []),
+        }));
+
+        if (mounted) setRows(mapped);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredRows = rows.filter((r) => {
+    const q = search.toLowerCase();
+    if (!q) return true;
+    const providerNames = r.providers.map((p) => p.name).join(" ").toLowerCase();
+    return (
+      r.name.toLowerCase().includes(q) ||
+      (r.typeLabel ?? "").toLowerCase().includes(q) ||
+      providerNames.includes(q)
+    );
+  });
+
+  function renderStatusChip(status: ServiceStatus) {
+    if (status === "active") {
+      return (
+        <span className="inline-flex h-7 items-center rounded-full bg-[#DCFCE7] px-3 text-[11px] font-semibold text-[#166534]">
+          Active
+        </span>
+      );
+    }
+    if (status === "unavailable") {
+      return (
+        <span className="inline-flex h-7 items-center rounded-full bg-[#FEE2E2] px-3 text-[11px] font-semibold text-[#B91C1C]">
+          Unavailable
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex h-7 items-center rounded-full bg-[#E5E7EB] px-3 text-[11px] font-semibold text-gray-700">
+        Draft
+      </span>
+    );
+  }
+
+  function renderLocations(locations: LocationType[]) {
+    if (!locations?.length) return <span className="text-[11px] text-gray-400">—</span>;
+    return (
+      <div className="flex flex-col gap-0.5 text-[11px]">
+        {locations.map((loc) => (
+          <button
+            key={loc}
+            type="button"
+            className={clsx(
+              "text-xs font-semibold underline",
+              loc === "online" ? "text-[#6D28D9]" : "text-[#0EA5E9]"
+            )}
+          >
+            {loc === "online" ? "Online" : "In-person"}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  function renderExpiry(expiry: ServiceRow["expiry"]) {
+    if (!expiry) return "—";
+    return expiry === "fixed" ? "Fixed Dates" : "ANYTIME";
+  }
+
+  function renderDuration(minutes: number | null) {
+    if (!minutes) return "—";
+    if (minutes < 60) return `${minutes} mins`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (!mins) return `${hours} Hour${hours > 1 ? "s" : ""}`;
+    return `${hours}h ${mins}m`;
+  }
+
+  function handleEdit(id: string) {
+    window.location.href = `/pages/services/${id}/edit`;
+  }
+
+  function handleTrash(id: string) {
+    // you can replace with real delete later
+    if (window.confirm("Move this service to trash?")) {
+      console.log("TODO: delete service", id);
+    }
+  }
+
+  return (
+    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
+      <Sidebar config={sidebarConfig} />
+
+      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
+        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+          {/* TOP BAR */}
+          <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-semibold text-[#1B1529]">
+                All Services
+              </h1>
+              <span className="inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
+                {rows.length}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-700"
+              >
+                Bulk Actions
+                <span>▾</span>
+              </button>
+
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-700"
+              >
+                Filter by
+                <span>▾</span>
+              </button>
+
+              <div className="flex items-center rounded-full border border-gray-200 bg-[#F5F5F8] px-3 py-1">
+                <span className="mr-1 text-xs text-gray-400">🔍</span>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search Service"
+                  className="w-64 bg-transparent text-xs text-gray-700 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => (window.location.href = "/pages/services/new")}
+                className="ml-2 flex h-10 w-10 items-center justify-center rounded-full bg-black text-xl text-white"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* TABLE */}
+          <div className="flex-1 overflow-auto p-6">
+            <div className="min-h-0 overflow-auto rounded-2xl border border-[#ECECFB] bg-white">
+              <table className="min-w-full text-xs">
+                <thead className="sticky top-0 z-10 bg-[#F6F5FF] text-[11px] font-semibold text-gray-500 shadow-sm">
+                  <tr>
+                    <th className="px-3 py-3 text-left">Service Name</th>
+                    <th className="px-3 py-3 text-left">Type</th>
+                    <th className="px-3 py-3 text-left">Locations</th>
+                    <th className="px-3 py-3 text-left">Expiry</th>
+                    <th className="px-3 py-3 text-left">Price</th>
+                    <th className="px-3 py-3 text-left">Duration</th>
+                    <th className="px-3 py-3 text-left">Max Participants</th>
+                    <th className="px-3 py-3 text-left">Tickets Sold</th>
+                    <th className="px-3 py-3 text-left">Tickets Available</th>
+                    <th className="px-3 py-3 text-center">Availability</th>
+                    <th className="px-3 py-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="px-4 py-10 text-center text-xs text-gray-500"
+                      >
+                        Loading services…
+                      </td>
+                    </tr>
+                  ) : filteredRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="px-4 py-16 text-center text-xs text-gray-500"
+                      >
+                        No services found. Try adjusting your search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((row, idx) => (
+                      <tr
+                        key={row.id}
+                        className={clsx(
+                          "border-t border-gray-100",
+                          idx % 2 === 1 && "bg-[#FBFBFE]"
+                        )}
+                      >
+                        {/* NAME + PROVIDERS + IMAGE */}
+                        <td className="px-3 py-3">
+                          <div className="flex items-start gap-3">
+                            <div className="relative mt-0.5 h-10 w-10 overflow-hidden rounded-xl bg-gray-200">
+                              {row.coverImageUrl && (
+                                <Image
+                                  src={row.coverImageUrl}
+                                  alt={row.name}
+                                  fill
+                                  className="object-cover"
+                                />
+                              )}
+                            </div>
+                            <div className="space-y-1">
+                              <div className="text-xs font-semibold text-gray-900">
+                                {row.name}
+                              </div>
+                              <div className="space-y-0.5">
+                                {row.providers.map((p) => (
+                                  <div
+                                    key={p.id}
+                                    className="text-[11px] font-semibold text-[#6B21A8]"
+                                  >
+                                    By {p.name}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* TYPE */}
+                        <td className="px-3 py-3 text-[11px] text-gray-700">
+                          {row.typeLabel ?? "—"}
+                        </td>
+
+                        {/* LOCATIONS */}
+                        <td className="px-3 py-3">{renderLocations(row.locations)}</td>
+
+                        {/* EXPIRY */}
+                        <td className="px-3 py-3 text-[11px] text-gray-700">
+                          {renderExpiry(row.expiry)}
+                        </td>
+
+                        {/* PRICE */}
+                        <td className="px-3 py-3 text-[11px] text-gray-700">
+                          {row.price != null ? `$${row.price.toFixed(2)}` : "—"}
+                        </td>
+
+                        {/* DURATION */}
+                        <td className="px-3 py-3 text-[11px] text-gray-700">
+                          {renderDuration(row.durationMinutes)}
+                        </td>
+
+                        {/* MAX PARTICIPANTS */}
+                        <td className="px-3 py-3 text-[11px] text-gray-700">
+                          {row.maxParticipants != null
+                            ? `${row.maxParticipants} Slot${
+                                row.maxParticipants === 1 ? "" : "s"
+                              }`
+                            : "—"}
+                        </td>
+
+                        {/* TICKETS SOLD */}
+                        <td className="px-3 py-3 text-[11px] text-gray-700">
+                          {row.ticketsSold != null ? row.ticketsSold : "—"}
+                        </td>
+
+                        {/* TICKETS AVAILABLE */}
+                        <td className="px-3 py-3 text-[11px] text-gray-700">
+                          {row.ticketsAvailable != null ? row.ticketsAvailable : "—"}
+                        </td>
+
+                        {/* STATUS */}
+                        <td className="px-3 py-3 text-center">
+                          {renderStatusChip(row.status)}
+                        </td>
+
+                        {/* ACTIONS */}
+                        <td className="px-3 py-3 text-center">
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(row.id)}
+                              className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleTrash(row.id)}
+                              className="rounded-full border border-gray-300 bg-white px-4 py-1.5 text-[11px] text-gray-700"
+                            >
+                              Trash
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* FOOTER SUMMARY (simple text – pagination can be added later) */}
+            <div className="mt-4 text-[11px] text-gray-500">
+              Showing {filteredRows.length} of {rows.length} services
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
