@@ -12,11 +12,12 @@ import { useToast } from "../../../../components/toast/ToastProvider";
 ------------------------------------------------------- */
 type VendorStatus =
   | "incomplete_registration"
-  | "under_review"
+  | "pending_admin_approval"
   | "agreement_pending"
   | "active"
   | "inactive"
   | "draft"
+  | "under_review"
   | "suspended";
 
 type Step3 = {
@@ -185,7 +186,7 @@ export default function VerifyBusinessPage() {
   // Finish later (mark incomplete_registration + not completed)
   const finishLater = async () => {
     try {
-      await setVendorStatus("incomplete_registration", false);
+      await setVendorStatus("pending_admin_approval", false);
       router.push("/pages/dashboard");
     } catch (e) {
       console.error(e);

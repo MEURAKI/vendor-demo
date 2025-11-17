@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+// app/api/products/[productId]/route.ts
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supa = () =>
@@ -12,17 +13,32 @@ const supa = () =>
  * Load full product for editing
  */
 export async function GET(
-  _req: Request,
-  context: { params: { productId: string } }
+  _req: NextRequest,
+  { params }: { params: { productId: string } }
 ) {
-  const { productId } = context.params;
-  const client = supa();
+  const { productId } = params;
+  const client = supa(); // service role, like your PUT
 
   // 1) main product
   const { data: product, error } = await client
     .from("products")
     .select(
-      "id, name, description, base_sku, is_variant, price_cents, inventory_qty, status, discount_type, discount_value, discount_start_at, discount_end_at, discount_all_variants"
+      [
+        "id",
+        "name",
+        "description",
+        "base_sku",
+        "is_variant",
+        "price_cents",
+        "inventory_qty",
+        "status",
+        "discount_type",
+        "discount_value",
+        "discount_start_at",
+        "discount_end_at",
+        "discount_all_variants",
+        "image_url",
+      ].join(",")
     )
     .eq("id", productId)
     .maybeSingle();
@@ -49,7 +65,7 @@ export async function GET(
       sortOrder: s.sort_order ?? 0,
     })) ?? [];
 
-  // 3) option groups + values (for variants)
+  // 3) option groups + values
   const { data: groups, error: gErr } = await client
     .from("product_option_groups")
     .select("id, name, kind")
@@ -80,7 +96,7 @@ export async function GET(
     (groups ?? []).map((g) => ({
       id: g.id,
       name: g.name,
-      kind: g.kind, // "size" | "color" | "volume" | "weight" | "custom"
+      kind: g.kind,
       values: values
         .filter((v) => v.group_id === g.id)
         .map((v) => ({
@@ -111,38 +127,47 @@ export async function GET(
       options: v.options_json ?? {},
     })) ?? [];
 
-  // (These you can wire up later if actually stored)
+  // 5) gallery images (from product_images)
+  const { data: galleryRows } = await client
+    .from("product_images")
+    .select("url, sort_order")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: true });
+
+  const galleryImageUrls = galleryRows?.map((r) => r.url) ?? [];
+
   return NextResponse.json({
-    id: product.id,
-    name: product.name,
-    description: product.description ?? "",
-    baseSku: product.base_sku ?? "",
-    isVariant: product.is_variant,
-    status: product.status,
-    priceCents: product.price_cents,
-    inventoryQty: product.inventory_qty,
-    discount: product.discount_type
+    id: (product as any).id || "",
+    name: (product as any).name,
+    description: (product as any).description ?? "",
+    baseSku: (product as any).base_sku ?? "",
+    isVariant: (product as any).is_variant,
+    status: (product as any).status,
+    priceCents: (product as any).price_cents,
+    inventoryQty: (product as any).inventory_qty,
+    discount: (product as any).discount_type
       ? {
-          type: product.discount_type,
-          value: product.discount_value,
-          start: product.discount_start_at,
-          end: product.discount_end_at,
-          applyToVariants: product.discount_all_variants,
+          type: (product as any).discount_type,
+          value: (product as any).discount_value,
+          start: (product as any).discount_start_at,
+          end: (product as any).discount_end_at,
+          applyToVariants: (product as any).discount_all_variants,
         }
       : null,
     sections,
     optionGroups,
     variants,
-    wellnessIds: [],
-    categoryIds: [],
-    tags: [],
-    productImageUrl: null,
+    galleryImageUrls,
+    wellnessIds: [], // fill from product_wellness_dimensions if you want
+    categoryIds: [], // fill from product_categories if you want
+    tags: [], // if you later add tags
+    productImageUrl: (product as any).image_url ?? null,
   });
 }
 
 /**
  * PUT /api/products/[productId]
- * Update an existing product (mirrors POST /api/products logic)
+ * Update product (your existing logic, slightly cleaned)
  */
 export async function PUT(
   req: Request,
@@ -152,7 +177,7 @@ export async function PUT(
   const body = await req.json();
   const client = supa();
 
-  // 1) Update main product row
+  // 1) Update main product
   const { data: product, error } = await client
     .from("products")
     .update({
@@ -168,6 +193,7 @@ export async function PUT(
       discount_all_variants: !!body.discount?.applyToVariants,
       inventory_qty: body.isVariant ? null : body.inventoryQty,
       status: body.status,
+      image_url: body.productImageUrl ?? null,
     })
     .eq("id", productId)
     .select()
@@ -180,65 +206,73 @@ export async function PUT(
     );
   }
 
-  // 2) Clear related tables and reinsert from body
-  // (simple and keeps logic aligned with your POST)
-
-  // description sections
+  // 2) Clear related tables
   await client
     .from("product_description_sections")
     .delete()
     .eq("product_id", productId);
+  await client
+    .from("product_wellness_dimensions")
+    .delete()
+    .eq("product_id", productId);
+  await client.from("product_categories").delete().eq("product_id", productId);
+  await client.from("product_images").delete().eq("product_id", productId);
+  await client.from("product_variants").delete().eq("product_id", productId);
+  await client
+    .from("product_option_groups")
+    .delete()
+    .eq("product_id", productId);
+  // variant_option_values rows should be cascade-deleted if FK is set up that way
 
+  // 3) Reinsert sections
   if (Array.isArray(body.sections) && body.sections.length) {
     await client.from("product_description_sections").insert(
       body.sections.map((s: any, idx: number) => ({
         product_id: productId,
-        sort_order: idx,
+        sort_order: s.sortOrder ?? idx,
         title: s.title,
         body: s.body,
       }))
     );
   }
 
-  // wellness / categories
-  await client
-    .from("product_wellness_dimensions")
-    .delete()
-    .eq("product_id", productId);
-
+  // 4) wellness / categories
   if (Array.isArray(body.wellnessIds) && body.wellnessIds.length) {
     await client.from("product_wellness_dimensions").insert(
-      body.wellnessIds.map((id: number) => ({
+      body.wellnessIds.map((id: number | string) => ({
         product_id: productId,
         dimension_id: id,
       }))
     );
   }
 
-  await client.from("product_categories").delete().eq("product_id", productId);
-
   if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
     await client.from("product_categories").insert(
-      body.categoryIds.map((id: number) => ({
+      body.categoryIds.map((id: number | string) => ({
         product_id: productId,
         category_id: id,
       }))
     );
   }
 
-  // variants & options: delete old and recreate
-  await client.from("product_variants").delete().eq("product_id", productId);
-  await client
-    .from("product_option_groups")
-    .delete()
-    .eq("product_id", productId);
+  // 5) gallery images
+  if (Array.isArray(body.galleryImageUrls) && body.galleryImageUrls.length) {
+    await client.from("product_images").insert(
+      body.galleryImageUrls.map((url: string, idx: number) => ({
+        product_id: productId,
+        url,
+        sort_order: idx,
+      }))
+    );
+  }
 
+  // 6) variants & options
   if (body.isVariant) {
-    // --- option groups ---
+    // groups
     const { data: groups, error: gErr } = await client
       .from("product_option_groups")
       .insert(
-        body.optionGroups.map((g: any, idx: number) => ({
+        (body.optionGroups ?? []).map((g: any, idx: number) => ({
           product_id: productId,
           name: g.name,
           kind: g.kind,
@@ -252,16 +286,16 @@ export async function PUT(
     }
 
     const groupIdByName: Record<string, string> = {};
-    groups.forEach((g) => {
+    (groups ?? []).forEach((g: any) => {
       groupIdByName[g.name] = g.id;
     });
 
-    // --- option values ---
+    // values
     const allValueRows: any[] = [];
-    body.optionGroups.forEach((g: any) => {
-      const dbGroupId =
-        groupIdByName[g.name as keyof typeof groupIdByName];
-      g.values.forEach((v: any, idx: number) => {
+    (body.optionGroups ?? []).forEach((g: any) => {
+      const dbGroupId = groupIdByName[g.name];
+      if (!dbGroupId) return;
+      (g.values ?? []).forEach((v: any, idx: number) => {
         allValueRows.push({
           group_id: dbGroupId,
           label: v.label,
@@ -271,48 +305,40 @@ export async function PUT(
       });
     });
 
-    const { data: values, error: vErr } = await client
-      .from("product_option_values")
-      .insert(allValueRows)
-      .select();
+    let values: any[] = [];
+    if (allValueRows.length) {
+      const { data: valueData, error: vErr } = await client
+        .from("product_option_values")
+        .insert(allValueRows)
+        .select();
 
-    if (vErr) {
-      return NextResponse.json({ error: vErr.message }, { status: 400 });
+      if (vErr) {
+        return NextResponse.json({ error: vErr.message }, { status: 400 });
+      }
+      values = valueData ?? [];
     }
 
     const valueIdByKey: Record<string, string> = {};
-    values.forEach((v) => {
+    values.forEach((v: any) => {
       valueIdByKey[`${v.group_id}:${v.label}`] = v.id;
     });
 
-    // --- variants ---
-    const rawVariants = body.variants ?? body; // depending on whether you send { variants: [...] } or just [...]
+    const rawVariants: any[] = Array.isArray(body.variants)
+      ? body.variants
+      : [];
 
-const variantRows = (rawVariants as any[]).map((vr, idx) => {
-  // IMPORTANT: always ensure options is at least {}
-  const options = vr.options ?? vr.optionsJson ?? {};
+    const variantRows = rawVariants.map((vr, idx: number) => ({
+      product_id: productId,
+      sku: vr.sku,
+      price_cents: vr.priceCents ?? null,
+      inventory_qty: vr.inventoryQty ?? 0,
+      image_url: vr.imageUrl ?? null,
+      position: idx,
+      is_active: (vr.inventoryQty ?? 0) > 0,
+      options_json: vr.optionsJson ?? vr.options ?? {},
+    }));
 
-  return {
-    product_id: productId,
-    sku: vr.sku,
-    // your payload sends `price` in dollars, so convert to cents:
-    price_cents:
-      typeof vr.price === "number"
-        ? Math.round(vr.price * 100)
-        : vr.priceCents ?? null,
-    // your payload sends `inventory`
-    inventory_qty:
-      typeof vr.inventory === "number"
-        ? vr.inventory
-        : vr.inventoryQty ?? 0,
-    image_url: vr.imageUrl ?? null,
-    position: idx,
-    is_active: (vr.inventory ?? vr.inventoryQty ?? 0) > 0,
-    options_json: options, // ✅ NEVER NULL
-  };
-});
-
-    const { data: variants, error: varErr } = await client
+    const { data: createdVariants, error: varErr } = await client
       .from("product_variants")
       .insert(variantRows)
       .select();
@@ -321,24 +347,27 @@ const variantRows = (rawVariants as any[]).map((vr, idx) => {
       return NextResponse.json({ error: varErr.message }, { status: 400 });
     }
 
-    // --- variant_option_values (optional, if you use this relation) ---
     const vovRows: any[] = [];
-    variants.forEach((v, idx) => {
-      const formVariant = body.variants[idx];
-      if (!formVariant.options) return;
+    (createdVariants ?? []).forEach((v: any, idx: number) => {
+      const formVariant = rawVariants[idx];
+      if (!formVariant?.options) return;
 
-      Object.entries(formVariant.options).forEach(([groupName, valueLabel]) => {
-        const group = groups.find((g: any) => g.name === groupName);
-        if (!group) return;
-        const key = `${group.id}:${valueLabel}`;
-        const dbValueId = valueIdByKey[key];
-        if (dbValueId) {
-          vovRows.push({
-            variant_id: v.id,
-            value_id: dbValueId,
-          });
+      Object.entries(formVariant.options).forEach(
+        ([groupName, valueLabel]) => {
+          const group = (groups ?? []).find(
+            (g: any) => g.name === groupName
+          );
+          if (!group) return;
+          const key = `${group.id}:${valueLabel}`;
+          const dbValueId = valueIdByKey[key];
+          if (dbValueId) {
+            vovRows.push({
+              variant_id: v.id,
+              value_id: dbValueId,
+            });
+          }
         }
-      });
+      );
     });
 
     if (vovRows.length) {

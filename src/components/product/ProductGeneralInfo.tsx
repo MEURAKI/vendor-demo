@@ -89,7 +89,7 @@ export function ProductGeneralInfo(props: ProductGeneralInfoProps) {
           </div>
 
           {/* Variant toggle */}
-          <div className="text-xs">
+          {/* <div className="text-xs">
             <label className="font-semibold text-gray-800">
               Product has variants
             </label>
@@ -113,7 +113,7 @@ export function ProductGeneralInfo(props: ProductGeneralInfoProps) {
                 />
               </button>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </section>

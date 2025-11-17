@@ -22,21 +22,28 @@ const mch = mailchimp(process.env.MAILCHIMP_TRANSACTIONAL_KEY!);
 export async function POST(req: Request) {
   try {
     const { email, userName } = await req.json();
-    if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: "Email required" }, { status: 400 });
+    }
 
-    const redirectTo = `${SITE}/pages/auth/verify-email`;
-
-    // ✅ TS requires password for 'signup'. Provide a throwaway value.
+    const redirectTo = `${SITE}/pages/auth/callback`;
+    
     const { data, error } = await supaAdmin().auth.admin.generateLink({
-      type: "signup",
-      email,
-      password: crypto.randomUUID(), // dummy; ignored if user already exists
-      options: { redirectTo },
-    });
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        type: "magiclink",
+        email,
+        options: { redirectTo },
+      });
 
-    const verifyUrl = data.properties?.action_link ?? data.properties.action_link;
-    if (!verifyUrl) return NextResponse.json({ error: "No action link returned" }, { status: 500 });
+    if (error) {
+      console.error("generateLink error:", error);
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    const verifyUrl = (data as any)?.properties?.action_link;
+    if (!verifyUrl) {
+      console.error("No action_link in generateLink response:", data);
+      return NextResponse.json({ error: "No action link returned" }, { status: 500 });
+    }
 
     const filePath = path.join(process.cwd(), "emails", "verify.html");
     let html = await fs.readFile(filePath, "utf8");
@@ -44,21 +51,24 @@ export async function POST(req: Request) {
       .replace(/{{\s*verifyUrl\s*}}/g, verifyUrl)
       .replace(/{{\s*userName\s*}}/g, userName || "there");
 
-    await mch.messages.send({
+    const resp = await mch.messages.send({
       message: {
         from_email: "no-reply@meuraki.com.sg",
         from_name: "MEURAKI",
         to: [{ email, type: "to" }],
         subject: "Confirm your MEURAKI email",
         html,
-        // Mandrill flags (avoid click-wrapping so the URL hash survives)
         track_opens: true,
-        track_clicks: false,
+        track_clicks: false, // avoid hash-breaking click wrapping
       },
     });
 
+    // Optional debug:
+    console.log("Mandrill send response:", resp);
+
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("send-verify route error:", e);
     return NextResponse.json({ error: e?.message || "Unexpected error" }, { status: 500 });
   }
 }

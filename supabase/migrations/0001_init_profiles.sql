@@ -237,3 +237,7 @@ drop policy if exists "admins read onboarding" on public.onboarding;
 create policy "admins read onboarding"
 on public.onboarding for select
 using (public.is_admin());
+
+
+ALTER TABLE profiles
+ADD COLUMN email_verified boolean NOT NULL DEFAULT false;

@@ -39,30 +39,68 @@ export default function SignupForm() {
     formData.acceptTerms;
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!formData.acceptTerms) {
-      errorToast({ title: "Error", description: "Please accept the terms and conditions" });
-      return;
-    }
+  if (!formData.acceptTerms) {
+    errorToast({ title: "Error", description: "Please accept the terms and conditions" });
+    return;
+  }
 
-    const { email, password } = formData;
+  const { email, password } = formData;
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/verify-email`,
-      },
+  // 1) Create the user in Supabase (no need for emailRedirectTo anymore)
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+  });
+
+  if (error) {
+    console.error("Signup error:", error.message);
+    errorToast({ title: "Error", description: error.message });
+    return;
+  }
+
+  // 2) Send verification email via your Mandrill endpoint
+  try {
+    const r = await fetch("/api/auth/send-verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, userName: email.split("@")[0] }),
     });
 
-    if (error) {
-      console.error("Signup error:", error.message);
-      errorToast({ title: "Error", description: error.message });
-    } else {
-      router.push("/pages/auth/verify-email");
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      console.error("send-verify error:", j);
+      errorToast({
+        title: "Error",
+        description: j.error || "Couldn’t send verification email.",
+      });
+      return; // don't redirect if email didn't send
     }
-  };
+
+    // Optional: toast to confirm we sent it
+    successToast({
+      title: "Check your email",
+      description: "We’ve sent a verification link to your inbox.",
+    });
+
+    // 3) Clear form
+    setFormData({
+      email: "",
+      password: "",
+      acceptTerms: false,
+    });
+
+    // 4) Redirect, pass email so Verify page can display & resend
+    router.push(`/pages/auth/verify-email?email=${encodeURIComponent(email)}`);
+  } catch (err) {
+    console.error("Network error sending verify email:", err);
+    errorToast({
+      title: "Error",
+      description: "Network error. Please try again.",
+    });
+  }
+};
 
   const handleGoogleSignup = async () => {
     const { error } = await supabase.auth.signInWithOAuth({

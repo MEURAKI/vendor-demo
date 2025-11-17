@@ -22,8 +22,8 @@ type Business = {
 
 type Payout = {
   vendor_id: string;
-  stripe_account_id?: string | null; // or your own bank fields
-  bank_holder_name?: string | null;
+  account_number?: string | null; // or your own bank fields
+  account_holder_name?: string | null;
 };
 
 export default function VerificationStatusPage() {
@@ -61,7 +61,7 @@ export default function VerificationStatusPage() {
       docs.filter((d) => d.kind === "product_certificate" || d.kind === "service_certificate").length > 0;
 
     const hasPayout =
-      !!payout?.stripe_account_id || !!payout?.bank_holder_name; // tweak to your schema
+      !!payout?.account_number || !!payout?.account_holder_name; 
 
     const missing = {
       logo: !hasLogo,

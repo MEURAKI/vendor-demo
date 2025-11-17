@@ -39,11 +39,202 @@ type ServiceRow = {
   providers: ProviderSummary[];
 };
 
+/* ---------- Bulk Upload Modal ---------- */
+
+type BulkUploadModalProps = {
+  open: boolean;
+  onClose: () => void;
+  onUploaded: () => Promise<void> | void;
+};
+
+function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
+  const [servicesFile, setServicesFile] = useState<File | null>(null);
+  const [spacesFile, setSpacesFile] = useState<File | null>(null);
+  const [providersFile, setProvidersFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  if (!open) return null;
+
+  async function uploadOne(
+    file: File | null,
+    endpoint: string,
+    label: string
+  ) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      body: formData,
+      headers: {
+        Authorization: session?.access_token
+          ? `Bearer ${session.access_token}`
+          : "",
+      },
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({} as any));
+      throw new Error(
+        j.error || `Bulk upload failed for ${label} (${endpoint})`
+      );
+    }
+  }
+
+  async function handleUpload() {
+    if (!servicesFile && !spacesFile && !providersFile) {
+      alert("Please choose at least one CSV file to upload.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Upload whichever files were provided
+      await uploadOne(servicesFile, "/api/services/bulk-upload", "Services");
+      await uploadOne(spacesFile, "/api/spaces/bulk-upload", "Spaces");
+      await uploadOne(
+        providersFile,
+        "/api/providers/bulk-upload",
+        "Providers"
+      );
+
+      await onUploaded();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Bulk Upload</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Upload CSV files for Services, Spaces, and Providers. You can
+              upload one, two, or all three at once.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm"
+            onClick={onClose}
+            disabled={uploading}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="mt-5 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
+          {/* Services */}
+          <div className="rounded-2xl border border-gray-200 bg-[#F8F7FF] p-4">
+            <div className="font-semibold text-gray-800">Services CSV</div>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Core service definitions (names, pricing, duration, etc.).
+            </p>
+            <div className="mt-3">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setServicesFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-[11px]"
+              />
+            </div>
+            {servicesFile && (
+              <p className="mt-2 truncate text-[11px] text-gray-600">
+                Selected: {servicesFile.name}
+              </p>
+            )}
+          </div>
+
+          {/* Spaces */}
+          <div className="rounded-2xl border border-gray-200 bg-[#F8F7FF] p-4">
+            <div className="font-semibold text-gray-800">Spaces CSV</div>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Physical spaces / venues linked to your services.
+            </p>
+            <div className="mt-3">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setSpacesFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-[11px]"
+              />
+            </div>
+            {spacesFile && (
+              <p className="mt-2 truncate text-[11px] text-gray-600">
+                Selected: {spacesFile.name}
+              </p>
+            )}
+          </div>
+
+          {/* Providers */}
+          <div className="rounded-2xl border border-gray-200 bg-[#F8F7FF] p-4">
+            <div className="font-semibold text-gray-800">Providers CSV</div>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Coaches / practitioners who deliver these services.
+            </p>
+            <div className="mt-3">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) =>
+                  setProvidersFile(e.target.files?.[0] ?? null)
+                }
+                className="block w-full text-[11px]"
+              />
+            </div>
+            {providersFile && (
+              <p className="mt-2 truncate text-[11px] text-gray-600">
+                Selected: {providersFile.name}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-6 flex justify-end gap-2 text-xs">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-gray-300 px-4 py-2"
+            disabled={uploading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={uploading || (!servicesFile && !spacesFile && !providersFile)}
+            className="rounded-full bg-black px-6 py-2 font-semibold text-white disabled:opacity-60"
+          >
+            {uploading ? "Uploading…" : "Upload CSVs"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Main Page ---------- */
+
 export default function ServicesPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [rows, setRows] = useState<ServiceRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // load profile for sidebar
   useEffect(() => {
@@ -70,62 +261,58 @@ export default function ServicesPage() {
     [profile]
   );
 
-  // load services from API
-  useEffect(() => {
-    let mounted = true;
-
-    async function load() {
-      setLoading(true);
-      try {
-        const res = await fetch("/api/services");
-        const json = await res.json();
-        if (!res.ok) {
-          console.error("Failed to load services", json);
-          return;
-        }
-
-        const raw = json.services ?? json;
-
-        const mapped: ServiceRow[] = (raw as any[]).map((s) => ({
-          id: s.id,
-          name: s.name,
-          typeLabel:
-            (s.type_label as string | null) ??
-            (Array.isArray(s.service_types) && s.service_types[0]) ??
-            null,
-          locations:
-            (s.location_types as LocationType[]) ??
-            (Array.isArray(s.locations) ? s.locations : []),
-          expiry: (s.expiry as "fixed" | "anytime" | null) ?? null,
-          price: s.price ?? null,
-          durationMinutes: s.duration_minutes ?? null,
-          maxParticipants: s.max_participants ?? null,
-          ticketsSold: s.tickets_sold ?? null,
-          ticketsAvailable: s.tickets_available ?? null,
-          status: s.status as ServiceStatus,
-          coverImageUrl: s.cover_image_url ?? null,
-          providers:
-            (s.providers as ProviderSummary[]) ??
-            (Array.isArray(s.provider_names)
-              ? s.provider_names.map((name: string, idx: number) => ({
-                  id: `p-${idx}`,
-                  name,
-                }))
-              : []),
-        }));
-
-        if (mounted) setRows(mapped);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (mounted) setLoading(false);
+  // function to (re)load services from API
+  async function reloadServices() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/services");
+      const json = await res.json();
+      if (!res.ok) {
+        console.error("Failed to load services", json);
+        return;
       }
-    }
 
-    void load();
-    return () => {
-      mounted = false;
-    };
+      const raw = json.services ?? json;
+
+      const mapped: ServiceRow[] = (raw as any[]).map((s) => ({
+        id: s.id,
+        name: s.name,
+        typeLabel:
+          (s.type_label as string | null) ??
+          (Array.isArray(s.service_types) && s.service_types[0]) ??
+          null,
+        locations:
+          (s.location_types as LocationType[]) ??
+          (Array.isArray(s.locations) ? s.locations : []),
+        expiry: (s.expiry as "fixed" | "anytime" | null) ?? null,
+        price: s.price ?? null,
+        durationMinutes: s.duration_minutes ?? null,
+        maxParticipants: s.max_participants ?? null,
+        ticketsSold: s.tickets_sold ?? null,
+        ticketsAvailable: s.tickets_available ?? null,
+        status: s.status as ServiceStatus,
+        coverImageUrl: s.cover_image_url ?? null,
+        providers:
+          (s.providers as ProviderSummary[]) ??
+          (Array.isArray(s.provider_names)
+            ? s.provider_names.map((name: string, idx: number) => ({
+                id: `p-${idx}`,
+                name,
+              }))
+            : []),
+      }));
+
+      setRows(mapped);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // initial load
+  useEffect(() => {
+    void reloadServices();
   }, []);
 
   const filteredRows = rows.filter((r) => {
@@ -142,7 +329,7 @@ export default function ServicesPage() {
   function renderStatusChip(status: ServiceStatus) {
     if (status === "active") {
       return (
-        <span className="inline-flex h-7 items-center rounded-full bg-[#DCFCE7] px-3 text-[11px] font-semibold text-[#166534]">
+        <span className="inline-flex h-7 items.center rounded-full bg-[#DCFCE7] px-3 text-[11px] font-semibold text-[#166534]">
           Active
         </span>
       );
@@ -162,7 +349,8 @@ export default function ServicesPage() {
   }
 
   function renderLocations(locations: LocationType[]) {
-    if (!locations?.length) return <span className="text-[11px] text-gray-400">—</span>;
+    if (!locations?.length)
+      return <span className="text-[11px] text-gray-400">—</span>;
     return (
       <div className="flex flex-col gap-0.5 text-[11px]">
         {locations.map((loc) => (
@@ -213,7 +401,7 @@ export default function ServicesPage() {
       <div className="flex flex-1 items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* TOP BAR */}
-          <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
+          <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient.to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-semibold text-[#1B1529]">
                 All Services
@@ -250,6 +438,16 @@ export default function ServicesPage() {
                 />
               </div>
 
+              {/* Bulk Upload Button */}
+              <button
+                type="button"
+                onClick={() => setBulkOpen(true)}
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-700"
+              >
+                Bulk Upload CSV
+              </button>
+
+              {/* Add Single Service Button */}
               <button
                 type="button"
                 onClick={() => (window.location.href = "/pages/services/new")}
@@ -344,7 +542,9 @@ export default function ServicesPage() {
                         </td>
 
                         {/* LOCATIONS */}
-                        <td className="px-3 py-3">{renderLocations(row.locations)}</td>
+                        <td className="px-3 py-3">
+                          {renderLocations(row.locations)}
+                        </td>
 
                         {/* EXPIRY */}
                         <td className="px-3 py-3 text-[11px] text-gray-700">
@@ -377,7 +577,9 @@ export default function ServicesPage() {
 
                         {/* TICKETS AVAILABLE */}
                         <td className="px-3 py-3 text-[11px] text-gray-700">
-                          {row.ticketsAvailable != null ? row.ticketsAvailable : "—"}
+                          {row.ticketsAvailable != null
+                            ? row.ticketsAvailable
+                            : "—"}
                         </td>
 
                         {/* STATUS */}
@@ -411,13 +613,20 @@ export default function ServicesPage() {
               </table>
             </div>
 
-            {/* FOOTER SUMMARY (simple text – pagination can be added later) */}
+            {/* FOOTER SUMMARY */}
             <div className="mt-4 text-[11px] text-gray-500">
               Showing {filteredRows.length} of {rows.length} services
             </div>
           </div>
         </div>
       </div>
+
+      {/* Bulk Upload Modal */}
+      <BulkUploadModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onUploaded={reloadServices}
+      />
     </div>
   );
 }

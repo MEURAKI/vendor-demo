@@ -1,19 +1,20 @@
+// components/product/ProductImagesGallery.tsx
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
+import Image from "next/image";
 import clsx from "clsx";
 
 export type ProductImage = {
   id: string;
-  url: string;      // preview URL
-  file?: File;      // original high-res file (optional – for upload to storage)
+  url: string;           // preview or already-uploaded URL
+  file?: File | null;    // used for upload on create/edit
 };
 
-type Props = {
+type ProductImagesGalleryProps = {
   images: ProductImage[];
   onChange: (images: ProductImage[]) => void;
-  maxImages?: number; // default = 6 (1 main + 5 more)
-  title?: string;
+  maxImages?: number; // we'll use 5 for gallery
 };
 
 function uuid() {
@@ -26,131 +27,91 @@ function uuid() {
 export function ProductImagesGallery({
   images,
   onChange,
-  maxImages = 6,
-  title = "Product Images",
-}: Props) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  maxImages = 5,
+}: ProductImagesGalleryProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const mainImage = images[activeIndex];
+  const canAddMore = images.length < maxImages;
 
-  function handleAddClick() {
-    fileInputRef.current?.click();
-  }
+  function handleFileSelect(fileList: FileList | null) {
+    if (!fileList) return;
 
-  function handleFilesSelected(files: FileList | null) {
-    if (!files?.length) return;
-
+    const files = Array.from(fileList);
     const remainingSlots = maxImages - images.length;
-    if (remainingSlots <= 0) return;
 
-    const slice = Array.from(files).slice(0, remainingSlots);
+    const filesToUse = files.slice(0, remainingSlots);
 
-    const newImages: ProductImage[] = slice.map((file) => ({
+    const newImages = filesToUse.map((file) => ({
       id: uuid(),
-      url: URL.createObjectURL(file), // high-res preview
+      url: URL.createObjectURL(file),
       file,
     }));
 
-    const next = [...images, ...newImages];
-    onChange(next);
+    onChange([...images, ...newImages]);
 
-    if (!mainImage && next.length > 0) {
-      setActiveIndex(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   }
 
-  function handleDelete(id: string, index: number) {
-    const next = images.filter((img) => img.id !== id);
-    onChange(next);
-
-    if (index === activeIndex) {
-      setActiveIndex(0);
-    } else if (index < activeIndex) {
-      setActiveIndex((prev) => Math.max(0, prev - 1));
-    }
+  function handleRemove(id: string) {
+    onChange(images.filter((img) => img.id !== id));
   }
 
   return (
-    <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
-        {title}
-      </h2>
-
-      {/* Main image */}
-      <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-200">
-        {mainImage ? (
-          <img
-            src={mainImage.url}
-            alt="Main product"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
-            Upload a product image
-          </div>
-        )}
-      </div>
-
-      {/* Thumbnails row */}
-      <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-        {images.map((img, index) => (
-          <button
+    <div className="space-y-3">
+      {/* Thumbnails grid */}
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+        {images.map((img) => (
+          <div
             key={img.id}
-            type="button"
-            onClick={() => setActiveIndex(index)}
-            className={clsx(
-              "relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border",
-              activeIndex === index
-                ? "border-black"
-                : "border-dashed border-gray-300"
-            )}
+            className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
           >
-            <img
+            <Image
               src={img.url}
-              alt={`Product thumbnail ${index + 1}`}
+              alt="Product gallery image"
+              width={300}
+              height={300}
               className="h-full w-full object-cover"
             />
-
-            {/* Delete chip */}
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(img.id, index);
-              }}
-              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black text-[10px] text-white"
+            <button
+              type="button"
+              onClick={() => handleRemove(img.id)}
+              className={clsx(
+                "absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white",
+                "hover:bg-black"
+              )}
             >
-              ×
-            </span>
-          </button>
+              ✕
+            </button>
+          </div>
         ))}
 
-        {/* Add button */}
-        {images.length < maxImages && (
+        {/* Add tile */}
+        {canAddMore && (
           <button
             type="button"
-            onClick={handleAddClick}
-            className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F7F7FB] text-2xl text-gray-500"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex aspect-square w-full items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 text-xs text-gray-500 hover:border-gray-400 hover:bg-gray-100"
           >
-            +
+            + Add Image
           </button>
         )}
       </div>
 
-      {/* Hidden file input – accepts high-res images */}
+      {/* Hidden input */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
         multiple
         className="hidden"
-        onChange={(e) => handleFilesSelected(e.target.files)}
+        onChange={(e) => handleFileSelect(e.target.files)}
       />
 
-      <p className="mt-2 text-[10px] text-gray-400">
-        Upload up to {maxImages} high-resolution images. The first one will be
-        used as the main product image.
+      <p className="text-[11px] text-gray-500">
+        You can upload up to {maxImages} gallery images.
       </p>
-    </section>
+    </div>
   );
 }

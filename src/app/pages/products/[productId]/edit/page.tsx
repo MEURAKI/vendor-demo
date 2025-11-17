@@ -19,6 +19,11 @@ import Sidebar from "../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
 
+import {
+  ProductImagesGallery,
+  ProductImage,
+} from "../../../../../components/product/ProductImagesGallery";
+
 /* ---------- Types ---------- */
 
 type DiscountType = "fixed" | "percent";
@@ -28,6 +33,7 @@ type DescriptionSection = {
   id: string;
   title: string;
   body: string;
+  sortOrder?: number;
 };
 
 type OptionValue = {
@@ -49,6 +55,7 @@ type VariantRow = {
   price: number;
   inventory: number;
   imageUrl?: string | null;
+  imageFile?: File | null; // holds file when user updates image
   options: Record<string, string>;
 };
 
@@ -81,7 +88,11 @@ function generateBaseSku(input: string) {
   return slugifySkuPart(input || "PRODUCT");
 }
 
-function buildVariantSku(baseSku: string, index: number, customSuffix?: string) {
+function buildVariantSku(
+  baseSku: string,
+  index: number,
+  customSuffix?: string
+) {
   const skuNumber = String(index + 1).padStart(3, "0");
   const suffixPart = customSuffix?.trim() ? `-${customSuffix.trim()}` : "";
   return `${baseSku}${suffixPart}-${skuNumber}`.toUpperCase();
@@ -126,9 +137,46 @@ function generateVariantCombinations(
       price: defaultPrice,
       inventory: 0,
       imageUrl: null,
+      imageFile: null,
       options,
     };
   });
+}
+
+/**
+ * Upload an image file to Supabase Storage and return the public URL.
+ * Bucket: "product-images"
+ */
+async function uploadImageToSupabase(
+  file: File,
+  vendorId: string | null
+): Promise<string> {
+  const bucket = "product-images";
+
+  const ext = file.name.split(".").pop() || "jpg";
+  const fileName =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : uuid();
+  const path = vendorId ? `${vendorId}/${fileName}.${ext}` : `${fileName}.${ext}`;
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+
+  if (error || !data) {
+    console.error("Supabase upload error", error);
+    throw error || new Error("Upload failed");
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(bucket).getPublicUrl(data.path);
+
+  return publicUrl;
 }
 
 /* ---------- Page ---------- */
@@ -145,6 +193,7 @@ export default function EditProductPage({
 
   // sidebar profile
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [vendorId, setVendorId] = useState<string | null>(null);
 
   // main fields
   const [name, setName] = useState("");
@@ -177,6 +226,8 @@ export default function EditProductPage({
 
   // images
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
+  const [productImageFile, setProductImageFile] = useState<File | null>(null);
+  const [images, setImages] = useState<ProductImage[]>([]); // gallery images
 
   // variants data
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
@@ -185,9 +236,8 @@ export default function EditProductPage({
 
   const [customSkuEnabled, setCustomSkuEnabled] = useState(false);
   const [customSkuSuffix, setCustomSkuSuffix] = useState("");
-  const [baseVariantPrice, setBaseVariantPrice] = useState<
-    number | undefined
-  >(undefined);
+  const [baseVariantPrice, setBaseVariantPrice] =
+    useState<number | undefined>(undefined);
 
   const [variantsCollapsed, setVariantsCollapsed] = useState(false);
 
@@ -204,12 +254,18 @@ export default function EditProductPage({
     [profile]
   );
 
+  /* ---------- Load profile + vendor id ---------- */
+
   useEffect(() => {
     let isMounted = true;
 
     async function loadProfile() {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth?.user) return;
+
+      if (isMounted) {
+        setVendorId(auth.user.id);
+      }
 
       const { data: prof } = await supabase
         .from("profiles")
@@ -234,7 +290,18 @@ export default function EditProductPage({
     async function load() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/products/${productId}`);
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const res = await fetch(`/api/products/${productId}`, {
+          headers: {
+            Authorization: session?.access_token
+              ? `Bearer ${session.access_token}`
+              : "",
+          },
+        });
         if (!res.ok) {
           console.error("Failed to load product");
           setLoading(false);
@@ -242,19 +309,28 @@ export default function EditProductPage({
         }
         const data = await res.json();
 
+        // main fields
         setName(data.name ?? "");
         setDescription(data.description ?? "");
         setBaseSku(data.baseSku ?? generateBaseSku(data.name ?? ""));
         setIsVariant(!!data.isVariant);
 
+        // discount
         if (data.discount) {
           setDiscountType(data.discount.type as DiscountType);
           setDiscountValue(data.discount.value ?? undefined);
           setDiscountStart(data.discount.start ?? "");
           setDiscountEnd(data.discount.end ?? "");
           setDiscountAllVariants(!!data.discount.applyToVariants);
+        } else {
+          setDiscountType(null);
+          setDiscountValue(undefined);
+          setDiscountStart("");
+          setDiscountEnd("");
+          setDiscountAllVariants(false);
         }
 
+        // pricing / inventory + variants
         if (data.isVariant) {
           setPrice(undefined);
           setInventory(undefined);
@@ -265,6 +341,7 @@ export default function EditProductPage({
               price: (v.priceCents ?? 0) / 100,
               inventory: v.inventoryQty ?? 0,
               imageUrl: v.imageUrl ?? null,
+              imageFile: null,
               options: v.options ?? {},
             }))
           );
@@ -291,11 +368,40 @@ export default function EditProductPage({
           setOptionGroups([]);
         }
 
+        // sections
+        const mappedSections: DescriptionSection[] = (data.sections ?? []).map(
+          (s: any) => ({
+            id: s.id ?? uuid(),
+            title: s.title ?? "",
+            body: s.body ?? "",
+            sortOrder: s.sortOrder ?? s.sort_order ?? 0,
+          })
+        );
+        mappedSections.sort(
+          (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+        );
+        setSections(
+          mappedSections.length > 0
+            ? mappedSections
+            : [{ id: uuid(), title: "Product Details", body: "" }]
+        );
+
         // taxonomy / meta
         setWellness(data.wellnessIds ?? []);
         setCategories(data.categoryIds ?? []);
         setTags((data.tags ?? []).join(", "));
+
+        // images
         setProductImageUrl(data.productImageUrl ?? null);
+        setProductImageFile(null);
+
+        setImages(
+          (data.galleryImageUrls ?? []).map((url: string, idx: number) => ({
+            id: String(idx),
+            url,
+            file: null,
+          }))
+        );
       } catch (err) {
         console.error(err);
       } finally {
@@ -410,7 +516,9 @@ export default function EditProductPage({
     if (!file) return;
     const url = URL.createObjectURL(file);
     setVariants((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, imageUrl: url } : v))
+      prev.map((v) =>
+        v.id === id ? { ...v, imageUrl: url, imageFile: file } : v
+      )
     );
   }
 
@@ -418,6 +526,7 @@ export default function EditProductPage({
     if (!file) return;
     const url = URL.createObjectURL(file);
     setProductImageUrl(url);
+    setProductImageFile(file);
   }
 
   /* ---------- Save ---------- */
@@ -425,61 +534,103 @@ export default function EditProductPage({
   async function handleSave(status: "draft" | "published") {
     if (!canSave) return;
 
-    const apiVariants = variants.map((v) => ({
-      sku: v.sku,
-      priceCents: Math.round((v.price ?? 0) * 100),
-      inventoryQty: v.inventory ?? 0,
-      imageUrl: v.imageUrl ?? null,
-      optionsJson: v.options ?? {},
-    }));
-
-    const body = {
-      status,
-      name,
-      description,
-      baseSku,
-      isVariant,
-      priceCents: isVariant ? 0 : Math.round((price ?? 0) * 100),
-      inventoryQty: isVariant ? 0 : inventory ?? 0,
-      discount: discountType
-        ? {
-            type: discountType,
-            value: discountValue ?? 0,
-            start: discountStart || null,
-            end: discountEnd || null,
-            applyToVariants: discountAllVariants,
-          }
-        : null,
-      wellnessIds: wellness,
-      categoryIds: categories,
-      tags: tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-      sections: sections.map((s, idx) => ({
-        title: s.title,
-        body: s.body,
-        sortOrder: idx,
-      })),
-      productImageUrl,
-      optionGroups,
-      variants: apiVariants,
-    };
-
     try {
+      // 1) Upload main product image if changed
+      let finalProductImageUrl = productImageUrl;
+      if (productImageFile && vendorId) {
+        finalProductImageUrl = await uploadImageToSupabase(
+          productImageFile,
+          vendorId
+        );
+      }
+
+      // 2) Upload / keep gallery images
+      const galleryImageUrls: string[] = [];
+      for (const img of images) {
+        if (img.file && vendorId) {
+          const url = await uploadImageToSupabase(img.file, vendorId);
+          galleryImageUrls.push(url);
+        } else if (img.url) {
+          galleryImageUrls.push(img.url);
+        }
+      }
+
+      // 3) Upload any variant images that have new files
+      const variantUploads = await Promise.all(
+        variants.map(async (v) => {
+          let imageUrl = v.imageUrl ?? null;
+          if (v.imageFile && vendorId) {
+            imageUrl = await uploadImageToSupabase(v.imageFile, vendorId);
+          }
+          return {
+            sku: v.sku,
+            priceCents: Math.round((v.price ?? 0) * 100),
+            inventoryQty: v.inventory ?? 0,
+            imageUrl,
+            optionsJson: v.options ?? {},
+          };
+        })
+      );
+
+      const body = {
+        status,
+        name,
+        description,
+        baseSku,
+        isVariant,
+        priceCents: isVariant ? 0 : Math.round((price ?? 0) * 100),
+        inventoryQty: isVariant ? 0 : inventory ?? 0,
+        discount: discountType
+          ? {
+              type: discountType,
+              value: discountValue ?? 0,
+              start: discountStart || null,
+              end: discountEnd || null,
+              applyToVariants: discountAllVariants,
+            }
+          : null,
+        wellnessIds: wellness,
+        categoryIds: categories,
+        tags: tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+        sections: sections.map((s, idx) => ({
+          id: s.id ?? uuid(),
+          title: s.title,
+          body: s.body,
+          sortOrder: idx,
+        })),
+        productImageUrl: finalProductImageUrl,
+        galleryImageUrls,
+        optionGroups,
+        variants: variantUploads,
+      };
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       const res = await fetch(`/api/products/${productId}`, {
         method: "PUT",
         body: JSON.stringify(body),
+        headers: {
+          Authorization: session?.access_token
+            ? `Bearer ${session.access_token}`
+            : "",
+        },
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         alert(err.error || "Error saving product");
         return;
       }
+
       router.push("/pages/products");
     } catch (err) {
       console.error(err);
-      alert("Network error");
+      alert("Error uploading image or saving product");
     }
   }
 
@@ -487,10 +638,10 @@ export default function EditProductPage({
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
+      <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
         <Sidebar config={sidebarConfig} />
-        <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
-          <div className="flex h-full w-full items-center justify.center rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+        <div className="flex flex-1 items-stretch justify.center px-3 py-3 sm:px-6 sm:py-4">
+          <div className="flex h-full w-full items-center justify-center rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
             <p className="w-full text-center text-sm text-gray-500">
               Loading product…
             </p>
@@ -503,15 +654,15 @@ export default function EditProductPage({
   /* ---------- UI ---------- */
 
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       {/* Sidebar */}
       <Sidebar config={sidebarConfig} />
 
       {/* Black bezel + tablet */}
-      <div className="flex flex-1 items.stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
+      <div className="flex flex-1.items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Sticky header */}
-          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient.to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
+          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
             <h1 className="text-lg font-semibold text-[#1B1529] sm:text-2xl">
               Edit product
             </h1>
@@ -519,7 +670,7 @@ export default function EditProductPage({
               <button
                 type="button"
                 onClick={() => handleSave("draft")}
-                className="h-9 rounded-full border border-gray-300 bg-white px-3 text-xs font-medium sm:h-10 sm:px-4 sm:text-sm"
+                className="h-9 rounded-full border.border-gray-300 bg-white px-3 text-xs font-medium sm:h-10 sm:px-4 sm:text-sm"
               >
                 Save Draft
               </button>
@@ -671,12 +822,14 @@ export default function EditProductPage({
 
               {/* RIGHT COLUMN */}
               <div className="space-y-4 sm:space-y-6">
+                {/* Product images */}
                 <section className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6">
                   <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-700 sm:mb-4 sm:text-sm">
                     Product Images
                   </h2>
 
-                  <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-200">
+                  {/* Main image */}
+                  <div className="aspect-[4/3] w-full overflow-hidden.rounded-2xl bg-gray-200">
                     {productImageUrl ? (
                       <img
                         src={productImageUrl}
@@ -696,7 +849,7 @@ export default function EditProductPage({
 
                   <div className="mt-3 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-gray-500">
-                      Upload a main product image.
+                      Upload / replace the main product image.
                     </p>
                     <label className="cursor-pointer rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white">
                       Upload Image
@@ -712,8 +865,24 @@ export default function EditProductPage({
                       />
                     </label>
                   </div>
+
+                  {/* Gallery images */}
+                  <div className="mt-4">
+                    <h3 className="text-xs font-semibold text-gray-800">
+                      Gallery Images
+                    </h3>
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      Add up to 5 gallery images.
+                    </p>
+                    <ProductImagesGallery
+                      images={images}
+                      onChange={setImages}
+                      maxImages={5}
+                    />
+                  </div>
                 </section>
 
+                {/* Wellness / category / tags */}
                 <section className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6">
                   <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-700 sm:mb-4 sm:text-sm">
                     Wellness Dimension, Category &amp; Tags
@@ -824,7 +993,7 @@ export default function EditProductPage({
                       ))}
                     <th className="px-2 text-left">Price</th>
                     <th className="px-2 text-left">Inventory Stock</th>
-                    <th className="px-2 text.left">Upload Image</th>
+                    <th className="px-2 text-left">Upload Image</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -838,14 +1007,14 @@ export default function EditProductPage({
                               type="button"
                               onClick={() => moveVariant(index, index - 1)}
                               className={clsx(
-                                "h-4 w-4 text-xs leading.none",
+                                "h-4 w-4 text-xs leading-none",
                                 index === 0 && "opacity-30 cursor-default"
                               )}
                               disabled={index === 0}
                             >
                               ↑
                             </button>
-                            <span className="text-lg leading-none">≡</span>
+                            <span className="text-lg.leading-none">≡</span>
                             <button
                               type="button"
                               onClick={() => moveVariant(index, index + 1)}
@@ -891,14 +1060,14 @@ export default function EditProductPage({
                                   )
                                 );
                               }}
-                              className="h-8 w-20 rounded-xl border border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:outline-none sm:w-24"
+                              className="h-8 w-20 rounded-xl border.border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:outline-none sm:w-24"
                             />
                           </div>
                         </td>
 
                         <td className="bg-[#F7F7FB] px-3 py-2">
                           <div className="flex items-center gap-1">
-                            <span className="rounded-xl border border-gray-200 bg.white px-2 py-1 text-[11px] text-gray-500">
+                            <span className="rounded-xl border.border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-500">
                               QTY
                             </span>
                             <input
@@ -915,7 +1084,7 @@ export default function EditProductPage({
                                   )
                                 );
                               }}
-                              className="h-8 w-16 rounded-xl border border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:outline-none sm:w-20"
+                              className="h-8 w-16 rounded-xl border.border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:outline-none sm:w-20"
                             />
                           </div>
                         </td>
@@ -923,7 +1092,7 @@ export default function EditProductPage({
                         <td className="rounded-r-xl bg-[#F7F7FB] px-3 py-2">
                           <label
                             htmlFor={inputId}
-                            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-dashed border-gray-300 bg.white text-lg text-gray-400 cursor-pointer"
+                            className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-gray-300 bg-white text-lg text-gray-400"
                           >
                             {v.imageUrl ? (
                               <img

@@ -1,6 +1,7 @@
 // app/api/products/bulk-upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { parse } from "csv-parse/sync";
 
 // ---------- Supabase server client ----------
 
@@ -34,19 +35,51 @@ type ProductInsert = {
   price_cents: number | null;
   inventory_qty: number | null;
   status: "draft" | "published";
+  vendor_id: string;
 };
 
-// Utility: split a CSV line (very simple, no quoted commas support)
-function splitCsvLine(line: string): string[] {
-  return line
-    .split(",")
-    .map((c) => c.trim().replace(/^"|"$/g, ""));
+// Helper to safely get a mapped field from a row
+function getMappedValue(
+  row: Record<string, string>,
+  mapping: Partial<Mapping>,
+  key: CsvMappingKey
+): string {
+  const headerName = mapping[key];
+  if (!headerName) return "";
+  // headerName should exactly match the CSV column header
+  return (row[headerName] ?? "").trim();
 }
 
 // ---------- POST handler ----------
 
 export async function POST(req: NextRequest) {
   try {
+    // 0) Authenticate vendor using Bearer token
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Missing Authorization token" },
+        { status: 401 }
+      );
+    }
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    const vendorId = user.id;
+
+    // 1) Get CSV + mapping from multipart form-data
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const mappingJson = formData.get("mapping") as string | null;
@@ -67,63 +100,54 @@ export async function POST(req: NextRequest) {
 
     const mapping = JSON.parse(mappingJson || "{}") as Partial<Mapping>;
 
-    // Read entire CSV as text
+    // 2) Read entire CSV as text
     const text = await file.text();
 
-    const lines = text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    if (!text.trim()) {
+      return NextResponse.json(
+        { error: "CSV file is empty" },
+        { status: 400 }
+      );
+    }
 
-    if (lines.length < 2) {
+    // 3) Parse CSV
+    const records = parse(text, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    }) as Record<string, string>[];
+
+    if (!records.length) {
       return NextResponse.json(
         { error: "CSV must have a header row and at least one data row" },
         { status: 400 }
       );
     }
 
-    // Header row
-    const headers = splitCsvLine(lines[0]);
-    const headerIndex: Record<string, number> = {};
-    headers.forEach((h, idx) => {
-      headerIndex[h] = idx;
-    });
-
-    const getValue = (
-      cols: string[],
-      mappingKey: CsvMappingKey
-    ): string => {
-      const headerName = mapping[mappingKey];
-      if (!headerName) return "";
-      const idx = headerIndex[headerName];
-      if (idx === undefined) return "";
-      return cols[idx] ?? "";
-    };
-
     const productsToInsert: ProductInsert[] = [];
 
-    for (let i = 1; i < lines.length; i++) {
-      const row = lines[i];
-      const cols = splitCsvLine(row);
+    records.forEach((row, index) => {
+      const rowNumber = index + 2; // +2 because row 1 is header
 
-      // Skip completely empty lines
-      if (cols.every((c) => c === "")) continue;
-
-      const name = getValue(cols, "name");
+      const name = getMappedValue(row, mapping, "name");
       const sku =
-        getValue(cols, "sku") || getValue(cols, "productUniqueCode");
+        getMappedValue(row, mapping, "sku") ||
+        getMappedValue(row, mapping, "productUniqueCode");
 
+      const inventoryRaw = getMappedValue(row, mapping, "inventory");
+      console.log(`Processing row ${rowNumber}:`, inventoryRaw);
+
+      // Skip rows missing key fields
       if (!name || !sku) {
-        // If key data missing, skip this row
         console.warn(
-          `Skipping row ${i + 1} because name or sku is missing`
+          `Skipping row ${rowNumber} because name or sku is missing`,
+          { name, sku }
         );
-        continue;
+        return;
       }
 
-      const typeRaw = getValue(cols, "type").toLowerCase();
-      const priceRaw = getValue(cols, "price");
-      const inventoryRaw = getValue(cols, "inventory");
+      const typeRaw = getMappedValue(row, mapping, "type").toLowerCase();
+      const priceRaw = getMappedValue(row, mapping, "price");
 
       const priceNumber = priceRaw ? Number(priceRaw) : NaN;
       const inventoryNumber = inventoryRaw ? Number(inventoryRaw) : NaN;
@@ -132,17 +156,18 @@ export async function POST(req: NextRequest) {
         name,
         base_sku: sku,
         is_variant: typeRaw === "variant" || typeRaw === "variants",
-        price_cents: isNaN(priceNumber)
+        price_cents: Number.isNaN(priceNumber)
           ? null
           : Math.round(priceNumber * 100), // assume SGD
-        inventory_qty: isNaN(inventoryNumber)
+        inventory_qty: Number.isNaN(inventoryNumber)
           ? null
           : Math.round(inventoryNumber),
-        status: "draft",
+        status: "published",
+        vendor_id: vendorId, // 👈 attach authenticated vendor
       };
 
       productsToInsert.push(product);
-    }
+    });
 
     if (productsToInsert.length === 0) {
       return NextResponse.json(
@@ -151,7 +176,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Insert into products table
+    // 4) Insert into products table
     const { data, error } = await supabase
       .from("products")
       .insert(productsToInsert)
@@ -165,8 +190,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // TODO later: handle categories / wellness / tags using mapping.category / mapping.wellness
-    // (insert / upsert to categories, wellness_dimensions, etc.)
+    // TODO: handle categories / wellness via mapping.category / mapping.wellness
 
     return NextResponse.json({
       ok: true,

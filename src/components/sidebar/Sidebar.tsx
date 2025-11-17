@@ -3,9 +3,15 @@
 import React, { useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { ICONS, SidebarConfig } from "./sidebar.config"; // <- your file
 import { supabase } from "../../lib/supabase/client";
+import {
+  ChevronDown,
+  MoreHorizontal,
+  Settings,
+  HelpCircle,
+  LogOut,
+} from "lucide-react";
 
 export default function Sidebar({
   config,
@@ -190,52 +196,52 @@ export default function Sidebar({
               })}
             </ul>
 
-            <div className="my-4 h-px bg-ink-line" />
           </div>
         ))}
 
-        {/* Footer / Settings / Help / Logout */}
-        <div className="space-y-1.5">
-          <Link
-            href="/pages/setting/profile"
-            className={[
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700",
-              collapsed ? "justify-center" : "",
-            ].join(" ")}
-            title={collapsed ? "Settings" : undefined}
-          >
-            <span className="h-4 w-4 rounded border border-neu-600" />
-            {!collapsed && <span>Settings</span>}
-          </Link>
+        <div className="mt-auto space-y-1.5 pt-4 border-t border-ink-line">
+  {/* SETTINGS */}
+  <Link
+    href="/pages/setting/profile"
+    className={[
+      "flex items-center gap-3 rounded-lg px-2.5 py-2 text-neu-200 hover:bg-ink-700",
+      collapsed ? "justify-center" : "",
+    ].join(" ")}
+    title="Settings"
+  >
+    <Settings className="h-5 w-5 text-neu-300" />
+    {!collapsed && <span className="text-sm">Settings</span>}
+  </Link>
 
-          <Link
-            href="/help"
-            className={[
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700",
-              collapsed ? "justify-center" : "",
-            ].join(" ")}
-            title={collapsed ? "Help" : undefined}
-          >
-            <span className="h-4 w-4 rounded-full border border-neu-600" />
-            {!collapsed && <span>Help</span>}
-          </Link>
+  {/* HELP */}
+  <Link
+    href="/help"
+    className={[
+      "flex items-center gap-3 rounded-lg px-2.5 py-2 text-neu-200 hover:bg-ink-700",
+      collapsed ? "justify-center" : "",
+    ].join(" ")}
+    title="Help"
+  >
+    <HelpCircle className="h-5 w-5 text-neu-300" />
+    {!collapsed && <span className="text-sm">Help</span>}
+  </Link>
 
-          {/* ✅ Logout present in all states */}
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut();
-              router.replace("/pages/auth/login");
-            }}
-            className={[
-              "mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-accent-400 hover:text-accent-300",
-              collapsed ? "mx-auto" : "",
-            ].join(" ")}
-            title={collapsed ? "Logout" : undefined}
-          >
-            <span className="h-4 w-4 rounded-sm border border-accent-400" />
-            {!collapsed && <span>Logout Account</span>}
-          </button>
-        </div>
+  {/* LOGOUT */}
+  <button
+    onClick={async () => {
+      await supabase.auth.signOut();
+      router.replace("/pages/auth/login");
+    }}
+    className={[
+      "flex items-center gap-3 rounded-lg px-2.5 py-2 text-accent-400 hover:text-accent-300",
+      collapsed ? "justify-center" : "",
+    ].join(" ")}
+    title="Logout"
+  >
+    <LogOut className="h-5 w-5" />
+    {!collapsed && <span className="text-sm">Logout</span>}
+  </button>
+</div>
       </nav>
     </aside>
   );

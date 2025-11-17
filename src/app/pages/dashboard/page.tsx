@@ -1,351 +1,149 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
-import {
-  BarChart3,
-  CalendarDays,
-  Package,
-  Tag,                 // ✅ singular
-  ShoppingBasket,
-  Users,
-  PiggyBank,
-  Boxes,
-  ChevronDown,
-  MoreHorizontal,
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import Sidebar from "../../../components/sidebar/Sidebar";
+import type { SidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
+import ClipLoader from "react-spinners/ClipLoader";
+import Link from "next/link";
+
 
 /* ------------------------------------------------------------------ */
-/* Types & helpers                                                     */
+/* Types                                                              */
 /* ------------------------------------------------------------------ */
 
-const ICONS = {
-  BarChart3,
-  CalendarDays,
-  Package,
-  Tag,
-  ShoppingBasket,
-  Users,
-  PiggyBank,
-  Boxes,
-} as const;
-type IconName = keyof typeof ICONS;
+type UserStatus =
+  | "pending_admin_approval"
+  | "approved"
+  | "active"
+  | "rejected"
+  | "suspended"
+  | "incomplete_registration";
 
-type SidebarItem = { id: string; label: string; href: string; badge?: number };
-type SidebarGroup = { id: string; label: string; icon: IconName; items: SidebarItem[] };
-type SidebarSection = { id: string; label: string; groups: SidebarGroup[] };
-type SidebarConfig = {
-  profile: { initials: string; name: string; role: string; status: string };
-  sections: SidebarSection[];
-};
-
-type UserStatus = "pending_admin_approval" | "approved" | "active" | "rejected" | "suspended";
 type Profile = {
   id: string;
   email: string | null;
   status: UserStatus;
   onboarding_completed: boolean;
   full_name: string | null;
+  email_verified: boolean;
+};
+
+type Stats = {
+  products: number;
+  services: number;
+  listings: number;
 };
 
 function getInitials(nameOrEmail?: string | null) {
   if (!nameOrEmail) return "U";
-  const name = nameOrEmail.includes("@") ? nameOrEmail.split("@")[0] : nameOrEmail;
+  const name = nameOrEmail.includes("@")
+    ? nameOrEmail.split("@")[0]
+    : nameOrEmail;
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
 /* ------------------------------------------------------------------ */
-/* Sidebar                                                             */
-/* ------------------------------------------------------------------ */
-
-function Sidebar({ config }: { config: SidebarConfig }) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-  const [flyoutFor, setFlyoutFor] = useState<string | null>(null);
-  const flyoutAnchorRef = useRef<Record<string, HTMLButtonElement | null>>({});
-
-  const toggleGroup = (id: string) => setOpenGroups((p) => ({ ...p, [id]: !p[id] }));
-  const isActiveHref = (href: string) => pathname?.startsWith(href);
-
-  return (
-    <aside
-      className={[
-        "relative shrink-0 rounded-2xl border border-ink-line bg-ink-800 text-neu-200 shadow-panel",
-        "transition-[width,padding] duration-200",
-        collapsed ? "w-[68px] p-3" : "w-[300px] p-5",
-      ].join(" ")}
-    >
-      {/* Collapse toggle */}
-      <button
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        onClick={() => {
-          setFlyoutFor(null);
-          setCollapsed((v) => !v);
-        }}
-        className="absolute -right-3 top-4 grid h-7 w-7 place-items-center rounded-full border border-ink-line bg-ink-700 text-neu-300 shadow hover:text-neu-50"
-        title={collapsed ? "Expand" : "Collapse"}
-      >
-        <ChevronDown className={["h-4 w-4 transition-transform", collapsed ? "-rotate-90" : "rotate-0"].join(" ")} />
-      </button>
-
-      {/* Profile card */}
-      <div className="mb-5">
-        <div className="flex items-center gap-3">
-          <div
-            className={[
-              "grid place-items-center rounded-full bg-accent-600 text-white",
-              collapsed ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm",
-            ].join(" ")}
-            title={collapsed ? config.profile.name : undefined}
-          >
-            {config.profile.initials}
-          </div>
-          {!collapsed && (
-            <div className="leading-tight">
-              <div className="font-semibold text-neu-50">{config.profile.name}</div>
-              <div className="text-xs uppercase tracking-wide text-neu-500">{config.profile.role}</div>
-            </div>
-          )}
-        </div>
-
-        {!collapsed && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-danger/20 bg-[#2A1212] px-3 py-1 text-xs font-medium text-danger">
-            <span className="inline-block h-2 w-2 rounded-full bg-danger" />
-            {config.profile.status}
-          </div>
-        )}
-
-        {!collapsed && (
-          <div className="mt-4 rounded-2xl bg-gradient-to-b from-accent-500 to-accent-600 p-4 text-neu-50">
-            <div className="font-semibold leading-snug">
-              Complete Your <br /> Business Setup
-            </div>
-            <p className="mt-2 text-[13px] text-white/80">
-              Fill out the onboarding form with your business details to activate your shop.
-            </p>
-            <Link
-              href="/pages/setting/business"
-              className="mt-3 inline-flex items-center rounded-full bg-black/80 px-4 py-2 text-sm text-white transition hover:bg-black"
-            >
-              Open Form
-            </Link>
-          </div>
-        )}
-      </div>
-
-      {/* Sections */}
-      <nav className="pt-2">
-        {config.sections.map((section) => (
-          <div key={section.id} className="mb-3">
-            {!collapsed && (
-              <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-neu-600">
-                {section.label}
-              </div>
-            )}
-
-            <ul className="space-y-1.5">
-              {section.groups.map((group) => {
-                const IconCmp = ICONS[group.icon] ?? Boxes; // ✅ fallback icon
-                const expanded = !!openGroups[group.id];
-
-                return (
-                  <li key={group.id} className="relative">
-                    <button
-                      ref={(el) => {
-                        flyoutAnchorRef.current[group.id] = el;
-                      }}
-                      onClick={() => {
-                        if (collapsed) {
-                          setFlyoutFor((cur) => (cur === group.id ? null : group.id));
-                        } else {
-                          toggleGroup(group.id);
-                        }
-                      }}
-                      title={collapsed ? group.label : undefined}
-                      className={[
-                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
-                        collapsed
-                          ? "justify-center border-transparent hover:bg-ink-700"
-                          : expanded
-                          ? "border-accent-600/30 bg-accent-600/10 text-neu-50"
-                          : "border-transparent bg-transparent text-neu-200 hover:bg-ink-700 hover:text-neu-50",
-                      ].join(" ")}
-                    >
-                      <IconCmp className={collapsed ? "h-5 w-5 text-white/90" : "h-4 w-4 text-neu-400"} />
-                      {!collapsed && (
-                        <>
-                          <span className="text-[14px]">{group.label}</span>
-                          <ChevronDown
-                            className={["ml-auto h-4 w-4 text-neu-600 transition-transform", expanded ? "rotate-180" : ""].join(" ")}
-                          />
-                        </>
-                      )}
-                    </button>
-
-                    {/* Expanded submenu */}
-                    {!collapsed && expanded && (
-                      <div className="mt-2 pl-4">
-                        <div className="ml-2 h-px w-[1px] bg-ink-line" />
-                        <ul className="mt-2 space-y-1.5">
-                          {group.items.map((it) => (
-                            <li key={it.id}>
-                              <Link
-                                href={it.href}
-                                className={[
-                                  "flex items-center justify-between rounded-lg px-3 py-2 text-[14px]",
-                                  isActiveHref(it.href) ? "bg-ink-700 text-neu-50" : "text-neu-300 hover:bg-ink-700 hover:text-neu-50",
-                                ].join(" ")}
-                              >
-                                <span>{it.label}</span>
-                                <div className="flex items-center gap-2">
-                                  {!!it.badge && (
-                                    <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-accent-600 px-1.5 text-[11px] font-semibold text-white">
-                                      {it.badge}
-                                    </span>
-                                  )}
-                                  <MoreHorizontal className="h-4 w-4 text-neu-600" />
-                                </div>
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Flyout when collapsed */}
-                    {collapsed && flyoutFor === group.id && (
-                      <div
-                        className="absolute left-[60px] top-0 z-50 min-w-[240px] translate-x-2 rounded-2xl border border-ink-line bg-ink-700 p-2 text-neu-200 shadow-xl"
-                        onMouseLeave={() => setFlyoutFor(null)}
-                      >
-                        <div className="px-2 pb-1 text-[12px] font-semibold uppercase tracking-wider text-neu-500">
-                          {group.label}
-                        </div>
-                        <ul className="space-y-1">
-                          {group.items.map((it) => (
-                            <li key={it.id}>
-                              <Link
-                                href={it.href}
-                                className={[
-                                  "flex items-center justify-between rounded-lg px-3 py-2 text-sm",
-                                  isActiveHref(it.href) ? "bg-ink-600 text-neu-50" : "hover:bg-ink-600 hover:text-neu-50",
-                                ].join(" ")}
-                                onClick={() => setFlyoutFor(null)}
-                              >
-                                <span>{it.label}</span>
-                                {!!it.badge && (
-                                  <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-accent-600 px-1.5 text-[11px] font-semibold text-white">
-                                    {it.badge}
-                                  </span>
-                                )}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-
-            <div className="my-4 h-px bg-ink-line" />
-          </div>
-        ))}
-
-        {/* Footer */}
-        <div className="space-y-1.5">
-          <Link
-            href="/pages/setting/profile"
-            className={["flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700", collapsed ? "justify-center" : ""].join(
-              " "
-            )}
-            title={collapsed ? "Settings" : undefined}
-          >
-            <span className="h-4 w-4 rounded border border-neu-600" />
-            {!collapsed && <span>Settings</span>}
-          </Link>
-
-          <Link
-            href="/help"
-            className={["flex items-center gap-3 rounded-xl px-3 py-2.5 text-neu-200 hover:bg-ink-700", collapsed ? "justify-center" : ""].join(
-              " "
-            )}
-            title={collapsed ? "Help" : undefined}
-          >
-            <span className="h-4 w-4 rounded-full border border-neu-600" />
-            {!collapsed && <span>Help</span>}
-          </Link>
-
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut();
-              router.replace("/pages/auth/login");
-            }}
-            className={["mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-accent-400 hover:text-accent-300", collapsed ? "mx-auto" : ""].join(
-              " "
-            )}
-            title={collapsed ? "Logout" : undefined}
-          >
-            <span className="h-4 w-4 rounded-sm border border-accent-400" />
-            {!collapsed && <span>Logout Account</span>}
-          </button>
-        </div>
-      </nav>
-    </aside>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Page                                                                */
+/* Page                                                               */
 /* ------------------------------------------------------------------ */
 
 export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
 
   const redirectPath = useMemo(() => {
     if (!profile) return null;
-    if (profile.status === "pending_admin_approval") return "/pages/auth/pending";
-    if (profile.status === "approved" && !profile.onboarding_completed) return "/pages/onboarding/start";
+
+    // 1) Email not verified → pending screen
+    if (!profile.email_verified) {
+      return "/pages/auth/pending";
+    }
+
+    // 2) Verified but onboarding not completed → onboarding flow
+    if (
+      profile.status === "incomplete_registration" &&
+      !profile.onboarding_completed
+    ) {
+      return "/pages/onboarding/start";
+    }
+
+    // 3) Otherwise, they can stay on dashboard
     return null;
   }, [profile]);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
+
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
       const user = auth.user;
+
       if (!user) {
         router.replace("/pages/auth/login");
         return;
       }
 
+      // Load profile
       const { data: prof, error } = await supabase
         .from("profiles")
-        .select("id, email, status, onboarding_completed, full_name")
+        .select(
+          "id, email, status, onboarding_completed, full_name, email_verified"
+        )
         .eq("id", user.id)
         .single();
 
-      if (!error) setProfile(prof as Profile);
+      if (error) {
+        console.error("Error loading profile:", error);
+      } else {
+        setProfile(prof as Profile);
+      }
 
+      // Subscribe to profile changes
       const channel = supabase
         .channel(`profiles:${user.id}`)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
+          {
+            event: "*",
+            schema: "public",
+            table: "profiles",
+            filter: `id=eq.${user.id}`,
+          },
           (payload) => setProfile(payload.new as Profile)
         )
         .subscribe();
 
       unsub = () => supabase.removeChannel(channel);
+
+      // Load simple stats (adjust table/filters to your schema)
+      try {
+        const [{ count: productsCount }, { count: servicesCount }] =
+          await Promise.all([
+            supabase
+              .from("products")
+              .select("*", { count: "exact", head: true })
+              .eq("vendor_id", user.id),
+            supabase
+              .from("services")
+              .select("*", { count: "exact", head: true })
+              .eq("vendor_id", user.id),
+          ]);
+
+        setStats({
+          products: productsCount ?? 0,
+          services: servicesCount ?? 0,
+          listings: (productsCount ?? 0) + (servicesCount ?? 0),
+        });
+      } catch (e) {
+        console.error("Error loading stats:", e);
+        setStats({ products: 0, services: 0, listings: 0 });
+      }
+
       setLoading(false);
     })();
 
@@ -353,14 +151,18 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!loading && redirectPath) router.replace(redirectPath);
+    if (!loading && redirectPath) {
+      router.replace(redirectPath);
+    }
   }, [loading, redirectPath, router]);
 
-  const sidebarConfig = useMemo<SidebarConfig>(() => {
-    const displayName = profile?.full_name || profile?.email || "User";
+  const sidebarConfig: SidebarConfig | null = useMemo(() => {
+    if (!profile) return null;
+    const displayName = profile.full_name || profile.email || "User";
+
     return {
       profile: {
-        initials: getInitials(profile?.full_name || profile?.email),
+        initials: getInitials(profile.full_name || profile.email),
         name: displayName,
         role: "Vendor",
         status: "Incomplete Registration",
@@ -370,8 +172,18 @@ export default function DashboardPage() {
           id: "overview",
           label: "Overview",
           groups: [
-            { id: "dashboard", label: "Dashboard", icon: "BarChart3", items: [{ id: "dash-home", label: "Home", href: "/pages/dashboard" }] },
-            // { id: "calendar", label: "Calendar", icon: "CalendarDays", items: [{ id: "cal-home", label: "View Calendar", href: "/pages/calendar" }] },
+            {
+              id: "dashboard",
+              label: "Dashboard",
+              icon: "BarChart3",
+              items: [
+                {
+                  id: "dash-home",
+                  label: "Home",
+                  href: "/pages/dashboard",
+                },
+              ],
+            },
           ],
         },
         {
@@ -385,9 +197,6 @@ export default function DashboardPage() {
               items: [
                 { id: "p-all", label: "All Products", href: "/pages/products" },
                 { id: "p-add", label: "Add Product", href: "/pages/products/new" },
-                { id: "p-inv", label: "Inventory", href: "/pages/products/inventory" },
-                { id: "p-bundles", label: "Bundles", href: "/pages/products/bundles" },
-                { id: "p-cats", label: "Categories", href: "/pages/products/categories" },
               ],
             },
             {
@@ -397,77 +206,19 @@ export default function DashboardPage() {
               items: [
                 { id: "s-all", label: "All Services", href: "/pages/services" },
                 { id: "s-add", label: "Add Service", href: "/pages/services/new" },
-                { id: "s-providers", label: "Wellness Providers", href: "/pages/services/providers" },
-                { id: "s-spaces", label: "Wellness Spaces", href: "/pages/services/spaces" },
               ],
             },
-            // {
-            //   id: "discounts",
-            //   label: "Discounts",
-            //   icon: "Tag", // ✅ singular here too
-            //   items: [
-            //     { id: "d-store", label: "Store Discounts", href: "/pages/discounts/store" },
-            //     { id: "d-item", label: "Item Discounts", href: "/pages/discounts/item" },
-            //   ],
-            // },
           ],
         },
-      //   {
-      //     id: "orders-bookings",
-      //     label: "Orders & Bookings",
-      //     groups: [
-      //       {
-      //         id: "orders",
-      //         label: "Orders",
-      //         icon: "Boxes",
-      //         items: [
-      //           { id: "o-all", label: "All Orders", href: "/pages/orders" },
-      //           { id: "o-pending", label: "Pending", href: "/pages/orders/pending", badge: 1 },
-      //           { id: "o-delivery", label: "Delivery Orders", href: "/pages/orders/delivery", badge: 2 },
-      //           { id: "o-pickup", label: "Pickup Orders", href: "/pages/orders/pickup" },
-      //         ],
-      //       },
-      //       {
-      //         id: "bookings",
-      //         label: "Bookings",
-      //         icon: "CalendarDays",
-      //         items: [
-      //           { id: "b-all", label: "All Bookings", href: "/pages/bookings" },
-      //           { id: "b-upcoming", label: "Upcoming", href: "/pages/bookings/upcoming" },
-      //           { id: "b-reschedules", label: "Reschedules", href: "/pages/bookings/reschedules" },
-      //           { id: "b-cancelled", label: "Cancelled", href: "/pages/bookings/cancelled" },
-      //         ],
-      //       },
-      //       { id: "customers", label: "Customers", icon: "Users", items: [{ id: "c-all", label: "Customers", href: "/pages/customers" }] },
-      //     ],
-      //   },
-      //   {
-      //     id: "finance",
-      //     label: "Finance",
-      //     groups: [
-      //       {
-      //         id: "income",
-      //         label: "Income",
-      //         icon: "PiggyBank",
-      //         items: [
-      //           { id: "i-trans", label: "Transactions", href: "/pages/income/transactions", badge: 1 },
-      //           { id: "i-payouts", label: "Payouts", href: "/pages/income/payouts" },
-      //           { id: "i-reports", label: "Reports", href: "/pages/income/reports" },
-      //         ],
-      //       },
-      //     ],
-      //   },
-      // ],
-    // };
-      ]
-  } 
-  }
-  , [profile]);
+      ],
+    };
+  }, [profile]);
 
-  if (loading || !profile || redirectPath) {
+  // Loader
+  if (loading || !profile || redirectPath || !sidebarConfig) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-gray-600">Loading your dashboard…</p>
+        <ClipLoader size={55} color="#6B46C1" />
       </div>
     );
   }
@@ -477,23 +228,93 @@ export default function DashboardPage() {
       <Sidebar config={sidebarConfig} />
 
       <main className="min-h-screen flex-1 bg-zinc-50 p-10 text-gray-900">
-        <h1 className="mb-2 text-3xl font-bold">Welcome{profile.full_name ? `, ${profile.full_name}` : ""} 👋</h1>
-        <p className="mb-8 text-gray-600">You’re successfully logged in to the Meuraki Vendor Portal.</p>
+        <h1 className="mb-2 text-3xl font-bold">
+          Welcome{profile.full_name ? `, ${profile.full_name}` : ""} 👋
+        </h1>
+        <p className="mb-8 text-gray-600">
+          You’re successfully logged in to the Meuraki Vendor Portal.
+        </p>
 
+        {/* Simple stats row */}
+        <div className="mb-8 grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100">
+            <p className="text-sm text-gray-500">Products</p>
+            <p className="mt-2 text-2xl font-semibold">
+              {stats?.products ?? 0}
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              Total products in your catalog
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100">
+            <p className="text-sm text-gray-500">Services</p>
+            <p className="mt-2 text-2xl font-semibold">
+              {stats?.services ?? 0}
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              Active wellness services & sessions
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100">
+            <p className="text-sm text-gray-500">Total Listings</p>
+            <p className="mt-2 text-2xl font-semibold">
+              {stats?.listings ?? 0}
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              Combined products & services
+            </p>
+          </div>
+        </div>
+
+        {/* Simple “getting started” + account info */}
         <div className="grid gap-6 sm:grid-cols-2">
-          <div className="rounded-2xl bg-white p-6 shadow">
+          <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
             <h2 className="mb-2 font-semibold">Account</h2>
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 space-y-1">
               <div>Email: {profile.email ?? "—"}</div>
               <div>
-                Status: <span className="uppercase">{profile.status}</span>
+                Status:{" "}
+                <span className="uppercase tracking-wide text-xs">
+                  {profile.status}
+                </span>
+              </div>
+              <div>
+                Email verified:{" "}
+                <span className={profile.email_verified ? "text-green-600" : "text-red-500"}>
+                  {profile.email_verified ? "Yes" : "No"}
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-white p-6 shadow">
+          <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
             <h2 className="mb-2 font-semibold">Getting started</h2>
-            <p className="text-sm text-gray-600">Explore your vendor tools and manage your listings.</p>
+            <p className="text-sm text-gray-600 mb-3">
+              Complete your business profile and start adding products and
+              services to your shop.
+            </p>
+            <div className="flex flex-wrap gap-2 text-sm">
+              <Link
+                href="/pages/setting/business"
+                className="rounded-full bg-black px-4 py-2 text-white hover:bg-gray-900"
+              >
+                Business setup
+              </Link>
+              <Link
+                href="/pages/products/new"
+                className="rounded-full border border-gray-300 px-4 py-2 text-gray-800 hover:bg-gray-50"
+              >
+                Add a product
+              </Link>
+              <Link
+                href="/pages/services/new"
+                className="rounded-full border border-gray-300 px-4 py-2 text-gray-800 hover:bg-gray-50"
+              >
+                Add a service
+              </Link>
+            </div>
           </div>
         </div>
 

@@ -181,3 +181,13 @@ for select
 using (
   bucket_id = 'avatars'
 );
+
+create table product_images (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid references products(id) on delete cascade,
+  url text not null,
+  sort_order int default 0
+);
+
+ALTER TABLE products
+ADD COLUMN image_url text;

@@ -385,3 +385,30 @@ DROP TRIGGER IF EXISTS update_vendor_business_timestamp ON public.vendor_busines
 CREATE TRIGGER update_vendor_business_timestamp
 BEFORE UPDATE ON public.vendor_business
 FOR EACH ROW EXECUTE FUNCTION public.update_vendor_business_timestamp();
+
+
+create table public.vendor_payout (
+  vendor_id uuid primary key references auth.users(id),
+  stripe_account_id text,
+  bank_holder_name text,
+  created_at timestamptz default now(),
+  updated_at timestamptz
+);
+
+alter table public.vendor_payout
+  rename column bank_holder_name to account_holder_name;
+
+  -- Step 1: Add the column (nullable first if you already have data)
+ALTER TABLE public.products
+ADD COLUMN vendor_id uuid;
+
+-- Step 2: (Optional but recommended)
+-- If your "vendor" is stored in profiles.id, create a FK:
+ALTER TABLE public.products
+ADD CONSTRAINT products_vendor_id_fkey
+FOREIGN KEY (vendor_id) REFERENCES public.profiles (id);
+
+-- Step 3: Once you’ve backfilled vendor_id for existing rows,
+-- you can enforce NOT NULL if you want:
+-- ALTER TABLE public.products
+-- ALTER COLUMN vendor_id SET NOT NULL;

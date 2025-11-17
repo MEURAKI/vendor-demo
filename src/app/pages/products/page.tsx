@@ -161,12 +161,14 @@ function BulkEditModal({
           .map((x) => x.trim())
           .filter(Boolean);
       }
+
       if (form.categories.trim() !== "") {
         body.categories = form.categories
           .split(",")
           .map((x) => x.trim())
           .filter(Boolean);
       }
+
       if (form.tags.trim() !== "") {
         body.tags = form.tags
           .split(",")
@@ -213,7 +215,6 @@ function BulkEditModal({
         <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-auto px-8 py-5 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)]">
           {/* Left side: pricing / status */}
           <div className="space-y-4">
-            {/* Product Pricing & Stock */}
             <section className="rounded-2xl bg-[#F8F7FF] p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.02)]">
               <h3 className="mb-3 text-sm font-semibold">
                 Product Pricing &amp; Stock
@@ -333,7 +334,6 @@ function BulkEditModal({
               </div>
             </section>
 
-            {/* Change status */}
             <section className="rounded-2xl bg-[#F8F7FF] p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.02)]">
               <h3 className="mb-3 text-sm font-semibold">Change Status</h3>
               <div className="flex flex-wrap gap-2 text-xs">
@@ -367,7 +367,6 @@ function BulkEditModal({
               </div>
             </section>
 
-            {/* Selected products summary */}
             <section className="rounded-2xl bg-[#F8F7FF] p-4 shadow-[0_0_0_1px_rgba(0,0,0,0.02)]">
               <h3 className="mb-2 text-sm font-semibold">
                 You are editing {productCount} products
@@ -690,7 +689,6 @@ function AddProductChoiceModal({
         </div>
 
         <div className="mt-6 space-y-4">
-          {/* Single Product */}
           <button
             type="button"
             onClick={onSingleProduct}
@@ -707,7 +705,6 @@ function AddProductChoiceModal({
             </div>
           </button>
 
-          {/* Bulk Upload */}
           <button
             type="button"
             onClick={onBulkUpload}
@@ -751,16 +748,53 @@ type CsvMappingKey =
   | "price"
   | "inventory";
 
-interface BulkUploadModalProps {
+// interface BulkUploadModalProps {
+//   open: boolean;
+//   onClose: () => void;
+//   onUploaded: () => Promise<void> | void;
+// }
+
+// Make sure you have:
+// import { supabase } from "@/lib/supabase/client"; (or your path)
+
+type ProductCsvMappingKey =
+  | "productUniqueCode"
+  | "sku"
+  | "name"
+  | "type"
+  | "category"
+  | "wellness"
+  | "price"
+  | "inventory";
+
+type VariantCsvMappingKey =
+  | "productBaseSku" // parent product base_sku
+  | "variantSku"
+  | "price"
+  | "inventory"
+  | "optionSize"
+  | "optionColor"
+  | "optionVolume"
+  | "optionWeight"
+  | "customOption";
+
+type BulkUploadMode = "products" | "variants";
+
+type BulkUploadModalProps = {
   open: boolean;
   onClose: () => void;
   onUploaded: () => Promise<void> | void;
-}
+  mode: BulkUploadMode; // 👈 NEW: choose which upload this modal is for
+};
 
-function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
+function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<Record<CsvMappingKey, string>>({
+
+  // separate mappings for products vs variants
+  const [productMapping, setProductMapping] = useState<
+    Record<ProductCsvMappingKey, string>
+  >({
     productUniqueCode: "",
     sku: "",
     name: "",
@@ -770,6 +804,21 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
     price: "",
     inventory: "",
   });
+
+  const [variantMapping, setVariantMapping] = useState<
+    Record<VariantCsvMappingKey, string>
+  >({
+    productBaseSku: "",
+    variantSku: "",
+    price: "",
+    inventory: "",
+    optionSize: "",
+    optionColor: "",
+    optionVolume: "",
+    optionWeight: "",
+    customOption: "",
+  });
+
   const [uploading, setUploading] = useState(false);
 
   if (!open) return null;
@@ -791,8 +840,12 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
     reader.readAsText(f);
   }
 
-  function handleChangeMapping(key: CsvMappingKey, value: string) {
-    setMapping((m) => ({ ...m, [key]: value }));
+  function handleChangeProductMapping(key: ProductCsvMappingKey, value: string) {
+    setProductMapping((m) => ({ ...m, [key]: value }));
+  }
+
+  function handleChangeVariantMapping(key: VariantCsvMappingKey, value: string) {
+    setVariantMapping((m) => ({ ...m, [key]: value }));
   }
 
   async function handleUpload() {
@@ -805,15 +858,34 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("mapping", JSON.stringify(mapping));
 
-      const res = await fetch("/api/products/bulk-upload", {
+      // pick endpoint + mapping based on mode
+      const endpoint =
+        mode === "products"
+          ? "/api/products/bulk-upload"
+          : "/api/products/variants-bulk-upload";
+
+      const mappingToSend =
+        mode === "products" ? productMapping : variantMapping;
+
+      formData.append("mapping", JSON.stringify(mappingToSend));
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const res = await fetch(endpoint, {
         method: "POST",
         body: formData,
+        headers: {
+          Authorization: session?.access_token
+            ? `Bearer ${session.access_token}`
+            : "",
+        },
       });
 
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
+        const j = await res.json().catch(() => ({} as any));
         throw new Error(j.error || "Bulk upload failed");
       }
 
@@ -838,11 +910,15 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
     </>
   );
 
+  const isProducts = mode === "products";
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-[70] flex.items-center justify-center bg-black/40">
       <div className="w-full max-w-5xl rounded-3xl bg-white p-8 shadow-2xl">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">CSV Bulk Upload</h2>
+          <h2 className="text-lg font-semibold">
+            {isProducts ? "CSV Bulk Upload – Products" : "CSV Bulk Upload – Variants"}
+          </h2>
           <button
             className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm"
             onClick={onClose}
@@ -851,7 +927,6 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
           </button>
         </div>
 
-        {/* Upload control */}
         <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-[#F8F7FF] px-4 py-3">
           <div className="text-xs text-gray-600">
             <div className="font-semibold">Upload your CSV file</div>
@@ -865,117 +940,252 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
           />
         </div>
 
-        {/* Mapping UI */}
+        {/* Mapping UI changes based on mode */}
         <div className="mt-6 grid grid-cols-1 gap-4 text-xs md:grid-cols-2">
           <div>
             <div className="mb-2 text-[11px] font-semibold text-gray-500">
-              Import to Products (Vendor Portal)
+              {isProducts
+                ? "Import to Products (Vendor Portal)"
+                : "Import to Product Variants (Vendor Portal)"}
             </div>
-            <div className="space-y-2">
-              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
-                Product Unique Code (used later for variants)
+
+            {isProducts ? (
+              <div className="space-y-2">
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Product Unique Code (used later for variants)
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Product SKU (Single Item Code)
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Product Name
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Product Type (Single / Variant)
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Category
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Wellness Dimension
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Price (SGD)
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Inventory Stock
+                </div>
               </div>
-              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
-                Product SKU (Single Item Code)
+            ) : (
+              <div className="space-y-2">
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Product Base SKU (parent product base_sku)
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Variant SKU
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Price (SGD)
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Inventory Stock
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Option: Size
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Option: Color
+                </div>
+                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Option: Volume
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Option: Weight
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Option: Custom
+                </div>
               </div>
-              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
-                Product Name
-              </div>
-              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
-                Product Type (Single / Variant)
-              </div>
-              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
-                Category
-              </div>
-              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
-                Wellness Dimension
-              </div>
-              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
-                Price (SGD)
-              </div>
-              <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
-                Inventory Stock
-              </div>
-            </div>
+            )}
           </div>
 
           <div>
             <div className="mb-2 text-[11px] font-semibold text-gray-500">
               What (CSV) column field matches best?
             </div>
-            <div className="space-y-2">
-              <select
-                value={mapping.productUniqueCode}
-                onChange={(e) =>
-                  handleChangeMapping("productUniqueCode", e.target.value)
-                }
-                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
-              >
-                {headerOptions}
-              </select>
 
-              <select
-                value={mapping.sku}
-                onChange={(e) => handleChangeMapping("sku", e.target.value)}
-                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
-              >
-                {headerOptions}
-              </select>
+            {isProducts ? (
+              <div className="space-y-2">
+                <select
+                  value={productMapping.productUniqueCode}
+                  onChange={(e) =>
+                    handleChangeProductMapping("productUniqueCode", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
 
-              <select
-                value={mapping.name}
-                onChange={(e) => handleChangeMapping("name", e.target.value)}
-                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
-              >
-                {headerOptions}
-              </select>
+                <select
+                  value={productMapping.sku}
+                  onChange={(e) =>
+                    handleChangeProductMapping("sku", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
 
-              <select
-                value={mapping.type}
-                onChange={(e) => handleChangeMapping("type", e.target.value)}
-                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
-              >
-                {headerOptions}
-              </select>
+                <select
+                  value={productMapping.name}
+                  onChange={(e) =>
+                    handleChangeProductMapping("name", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
 
-              <select
-                value={mapping.category}
-                onChange={(e) =>
-                  handleChangeMapping("category", e.target.value)
-                }
-                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
-              >
-                {headerOptions}
-              </select>
+                <select
+                  value={productMapping.type}
+                  onChange={(e) =>
+                    handleChangeProductMapping("type", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
 
-              <select
-                value={mapping.wellness}
-                onChange={(e) =>
-                  handleChangeMapping("wellness", e.target.value)
-                }
-                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
-              >
-                {headerOptions}
-              </select>
+                <select
+                  value={productMapping.category}
+                  onChange={(e) =>
+                    handleChangeProductMapping("category", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
 
-              <select
-                value={mapping.price}
-                onChange={(e) => handleChangeMapping("price", e.target.value)}
-                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
-              >
-                {headerOptions}
-              </select>
+                <select
+                  value={productMapping.wellness}
+                  onChange={(e) =>
+                    handleChangeProductMapping("wellness", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
 
-              <select
-                value={mapping.inventory}
-                onChange={(e) =>
-                  handleChangeMapping("inventory", e.target.value)
-                }
-                className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
-              >
-                {headerOptions}
-              </select>
-            </div>
+                <select
+                  value={productMapping.price}
+                  onChange={(e) =>
+                    handleChangeProductMapping("price", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={productMapping.inventory}
+                  onChange={(e) =>
+                    handleChangeProductMapping("inventory", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <select
+                  value={variantMapping.productBaseSku}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("productBaseSku", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={variantMapping.variantSku}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("variantSku", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={variantMapping.price}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("price", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={variantMapping.inventory}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("inventory", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={variantMapping.optionSize}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("optionSize", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={variantMapping.optionColor}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("optionColor", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+                <select
+                  value={variantMapping.optionVolume}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("optionVolume", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+                <select
+                  value={variantMapping.optionWeight}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("optionWeight", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+                <select
+                  value={variantMapping.customOption}
+                  onChange={(e) =>
+                    handleChangeVariantMapping("customOption", e.target.value)
+                  }
+                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                >
+                  {headerOptions}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -992,7 +1202,7 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
             type="button"
             onClick={handleUpload}
             disabled={uploading || !file}
-            className="rounded-full bg-black px-6 py-2 font-semibold text-white disabled:opacity-60"
+            className="rounded-full bg-black px-6 py-2 font-semibold text-white.disabled:opacity-60"
           >
             {uploading ? "Uploading…" : "Upload"}
           </button>
@@ -1009,7 +1219,11 @@ export default function AllProductsPage() {
 
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // searchInput = what user is typing; search = active filter term
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+
   const [filterOpen, setFilterOpen] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -1023,19 +1237,34 @@ export default function AllProductsPage() {
   >([]);
   const [productVariants, setProductVariants] = useState<ListVariantRow[]>([]);
 
-  // bulk edit
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
 
-  // add product choice modal
   const [addChoiceOpen, setAddChoiceOpen] = useState(false);
-
-  // bulk CSV upload modal
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
 
-  // pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
+
+  const [filters, setFilters] = useState({
+    type: [] as string[],
+    status: [] as string[],
+    discount: [] as string[],
+  });
+
+  function toggleFilter(
+    group: "type" | "status" | "discount",
+    value: string,
+    checked: boolean
+  ) {
+    setFilters((prev) => {
+      const arr = prev[group];
+      return {
+        ...prev,
+        [group]: checked ? [...arr, value] : arr.filter((v) => v !== value),
+      };
+    });
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -1043,7 +1272,6 @@ export default function AllProductsPage() {
     async function init() {
       try {
         setLoading(true);
-
         const { data: auth } = await supabase.auth.getUser();
 
         if (auth?.user) {
@@ -1067,7 +1295,19 @@ export default function AllProductsPage() {
     }
 
     async function loadProducts(isStillMounted: boolean) {
-      const res = await fetch("/api/products");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const res = await fetch("/api/products", {
+        headers: {
+          Authorization: session?.access_token
+            ? `Bearer ${session.access_token}`
+            : "",
+        },
+      });
+      if (!res.ok) {
+        throw new Error("Failed to fetch products");
+      }
       const data = await res.json();
 
       const mapped: ProductRow[] = (data.products ?? data ?? []).map(
@@ -1091,7 +1331,6 @@ export default function AllProductsPage() {
     }
 
     void init();
-
     return () => {
       isMounted = false;
     };
@@ -1103,7 +1342,16 @@ export default function AllProductsPage() {
     setVariantsLoading(true);
 
     try {
-      const res = await fetch(`/api/products/${product.id}/variants`);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const res = await fetch(`/api/products/${product.id}/variants`, {
+        headers: {
+          Authorization: session?.access_token
+            ? `Bearer ${session.access_token}`
+            : "",
+        },
+      });
       const data = await res.json();
 
       setVariantOptionGroups(data.optionGroups ?? []);
@@ -1124,11 +1372,11 @@ export default function AllProductsPage() {
     }
   }
 
+  // Apply search term
   const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase())
+    p?.name?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // pagination calculations
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * pageSize;
@@ -1179,8 +1427,18 @@ export default function AllProductsPage() {
   async function reloadAfterBulk() {
     try {
       setLoading(true);
-      const res = await fetch("/api/products");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const res = await fetch("/api/products", {
+        headers: {
+          Authorization: session?.access_token
+            ? `Bearer ${session.access_token}`
+            : "",
+        },
+      });
       const data = await res.json();
+
       const mapped: ProductRow[] = (data.products ?? data ?? []).map(
         (p: any): ProductRow => ({
           id: String(p.id),
@@ -1204,13 +1462,17 @@ export default function AllProductsPage() {
 
   async function handleTrash(productId: string) {
     try {
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       await fetch("/api/products/bulk-update", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: session?.access_token ? `Bearer ${session.access_token}` : "" },
         body: JSON.stringify({
           productIds: [productId],
           status: "draft",
-          trash: true, // backend should treat this as soft delete
+          trash: true,
         }),
       });
 
@@ -1223,13 +1485,11 @@ export default function AllProductsPage() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      {/* Left sidebar */}
       <Sidebar config={sidebarConfig} />
 
-      {/* Black bezel + inner tablet */}
       <div className="flex flex-1 items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-          {/* Sticky top bar */}
+          {/* Top bar */}
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-semibold text-[#1B1529]">
@@ -1261,7 +1521,7 @@ export default function AllProductsPage() {
                 <span>▾</span>
               </button>
 
-              {/* Filter dropdown */}
+              {/* Filters */}
               <div className="relative">
                 <button
                   type="button"
@@ -1273,26 +1533,199 @@ export default function AllProductsPage() {
 
                 {filterOpen && (
                   <div className="absolute right-0 z-40 mt-2 w-60 rounded-2xl border border-gray-200 bg-white p-3 text-[11px] shadow-xl">
-                    {/* filter content here */}
+                    <div className="space-y-4">
+                      {/* Filter by Type */}
+                      <div>
+                        <p className="mb-1 font-semibold text-gray-700">
+                          Filter by: Type
+                        </p>
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.type.includes("single")}
+                            onChange={(e) =>
+                              toggleFilter("type", "single", e.target.checked)
+                            }
+                          />
+                          <span>Single</span>
+                        </label>
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.type.includes("variant")}
+                            onChange={(e) =>
+                              toggleFilter("type", "variant", e.target.checked)
+                            }
+                          />
+                          <span>Variant</span>
+                        </label>
+                      </div>
+
+                      {/* Filter by Status */}
+                      <div>
+                        <p className="mb-1 font-semibold text-gray-700">
+                          Filter by: Status
+                        </p>
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.status.includes("draft")}
+                            onChange={(e) =>
+                              toggleFilter("status", "draft", e.target.checked)
+                            }
+                          />
+                          <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 font-medium text-gray-600">
+                            Draft
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.status.includes("inactive")}
+                            onChange={(e) =>
+                              toggleFilter(
+                                "status",
+                                "inactive",
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span className="inline-flex items-center rounded-full bg-gray-300 px-2 py-0.5 font-medium text-gray-700">
+                            In-active
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.status.includes("active")}
+                            onChange={(e) =>
+                              toggleFilter(
+                                "status",
+                                "active",
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span className="inline-flex items-center rounded-full bg-[#DCFCE7] px-2 py-0.5 font-medium text-[#166534]">
+                            Active
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.status.includes("out_of_stock")}
+                            onChange={(e) =>
+                              toggleFilter(
+                                "status",
+                                "out_of_stock",
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span className="inline-flex items-center rounded-full bg-[#FEE2E2] px-2 py-0.5 font-medium text-[#B91C1C]">
+                            Out of Stock
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.status.includes("published")}
+                            onChange={(e) =>
+                              toggleFilter(
+                                "status",
+                                "published",
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span className="inline-flex items-center rounded-full bg-[#E0F2FE] px-2 py-0.5 font-medium text-[#0369A1]">
+                            Published
+                          </span>
+                        </label>
+                      </div>
+
+                      {/* Filter by Discount (visual only; not wired to data) */}
+                      <div>
+                        <p className="mb-1 font-semibold text-gray-700">
+                          Filter by: Discount
+                        </p>
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.discount.includes("no_discount")}
+                            onChange={(e) =>
+                              toggleFilter(
+                                "discount",
+                                "no_discount",
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span>No Discounts</span>
+                        </label>
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.discount.includes("active")}
+                            onChange={(e) =>
+                              toggleFilter(
+                                "discount",
+                                "active",
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span>Active Discounts</span>
+                        </label>
+                        <label className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.discount.includes("expired")}
+                            onChange={(e) =>
+                              toggleFilter(
+                                "discount",
+                                "expired",
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span>Expired Discounts</span>
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Search */}
+              {/* Search box + button */}
               <div className="flex items-center rounded-full border border-gray-200 bg-[#F5F5F8] px-3 py-1">
                 <span className="mr-1 text-xs text-gray-400">🔍</span>
                 <input
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setCurrentPage(1);
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setSearch(searchInput);
+                      setCurrentPage(1);
+                    }
                   }}
                   placeholder="Search Product"
                   className="w-48 bg-transparent text-xs text-gray-700 focus:outline-none"
                 />
               </div>
 
-              <button className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch(searchInput); // trigger search
+                  setCurrentPage(1);
+                }}
+                className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white"
+              >
                 Search
               </button>
 
@@ -1306,7 +1739,7 @@ export default function AllProductsPage() {
             </div>
           </div>
 
-          {/* Scrollable body */}
+          {/* Body */}
           <div className="flex-1 overflow-auto p-6">
             <div className="min-h-0 overflow-auto rounded-2xl border border-[#ECECFB] bg-white">
               <table className="min-w-full text-xs">
@@ -1429,7 +1862,8 @@ export default function AllProductsPage() {
                             <span
                               className={clsx(
                                 "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-semibold",
-                                p.status === "active" &&
+                                (p.status === "active" ||
+                                  p.status === "published") &&
                                   "bg-[#DCFCE7] text-[#166534]",
                                 p.status === "draft" &&
                                   "bg-gray-200 text-gray-700",
@@ -1441,6 +1875,8 @@ export default function AllProductsPage() {
                                 ? "Out of Stock"
                                 : p.status === "active"
                                 ? "Active"
+                                : p.status === "published"
+                                ? "Published"
                                 : "Draft"}
                             </span>
                           </td>
@@ -1544,7 +1980,7 @@ export default function AllProductsPage() {
         optionGroups={variantOptionGroups}
         variants={productVariants}
         loading={variantsLoading}
-        onChangeVariant={(rows) => setProductVariants(rows)}
+        onChangeVariant={setProductVariants}
         onSave={async (rows) => {
           if (!selectedProduct) return;
           await fetch(`/api/products/${selectedProduct.id}/variants`, {
@@ -1571,9 +2007,8 @@ export default function AllProductsPage() {
       <BulkUploadModal
         open={bulkUploadOpen}
         onClose={() => setBulkUploadOpen(false)}
-        onUploaded={async () => {
-          await reloadAfterBulk();
-        }}
+        onUploaded={reloadAfterBulk}
+         mode="variants"
       />
 
       <BulkEditModal

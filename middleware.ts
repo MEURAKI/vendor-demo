@@ -31,21 +31,23 @@ export async function middleware(req: NextRequest) {
   // Fetch status + onboarding flag
   const { data: profile } = await supabase
     .from("profiles")
-    .select("status, onboarding_completed")
+    .select("status, onboarding_completed, email_verified")
     .eq("id", user.id)
     .single();
+  
+    console.log("Middleware profile:", profile);
 
   if (!profile) return res;
 
   // Pending → show holding page
-  if (profile.status === "pending_admin_approval" && path !== "/pages/auth/pending") {
+  if (profile.email_verified === false && path !== "/pages/auth/pending") {
     const url = req.nextUrl.clone();
     url.pathname = "/pages/auth/pending";
     return NextResponse.redirect(url);
   }
 
   // Approved but not finished onboarding → force onboarding
-  if (profile.status === "approved" && !profile.onboarding_completed && !path.startsWith("/onboarding")) {
+  if (profile.email_verified === true && !path.startsWith("/onboarding")) {
     const url = req.nextUrl.clone();
     url.pathname = "/pages/onboarding/start";
     return NextResponse.redirect(url);

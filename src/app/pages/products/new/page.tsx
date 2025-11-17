@@ -18,8 +18,10 @@ import {
   OptionGroupKind as BaseOptionGroupKind,
 } from "../../../../components/product/ProductVariantChooser";
 import { ProductVariantSettings } from "../../../../components/product/ProductVariantSettings";
-import { ProductImagesGallery, ProductImage } from "../../../../components/product/ProductImagesGallery";
-
+import {
+  ProductImagesGallery,
+  ProductImage,
+} from "../../../../components/product/ProductImagesGallery";
 
 /* ---------- Types ---------- */
 
@@ -53,6 +55,8 @@ type VariantRow = {
   price: number;
   inventory: number;
   imageUrl?: string | null;
+  // If you want to upload variant-level images later:
+  imageFile?: File | null;
   options: Record<string, string>;
 };
 
@@ -64,7 +68,13 @@ type Profile = {
   onboarding_completed: boolean;
 };
 
-/* ---------- Helpers ---------- */
+type WellnessDimension = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+/* ---------- Small helpers ---------- */
 
 function uuid() {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
@@ -137,17 +147,457 @@ function generateVariantCombinations(
       price: defaultPrice,
       inventory: 0,
       imageUrl: null,
+      imageFile: null,
       options,
     };
   });
 }
 
-/* ---------- Page ---------- */
+/* ---------- Reusable chips input (categories / tags) ---------- */
+
+function ChipsInput({
+  items,
+  onChange,
+  placeholder,
+}: {
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder?: string;
+}) {
+  const [value, setValue] = useState("");
+
+  function commitValue() {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (!items.includes(trimmed)) {
+      onChange([...items, trimmed]);
+    }
+    setValue("");
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-2">
+      {items.map((item) => (
+        <span
+          key={item}
+          className="inline-flex items-center gap-1 rounded-full bg-[#EFEDFF] px-3 py-1 text-xs font-medium text-gray-800"
+        >
+          {item}
+          <button
+            type="button"
+            className="ml-1 text-[10px] text-gray-500 hover:text-gray-800"
+            onClick={() => onChange(items.filter((x) => x !== item))}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+
+      <input
+        className="min-w-[120px] flex-1 border-none bg-transparent px-2 py-1 text-xs focus:outline-none"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commitValue();
+          } else if (e.key === "Backspace" && !value && items.length > 0) {
+            onChange(items.slice(0, -1));
+          }
+        }}
+        onBlur={commitValue}
+      />
+    </div>
+  );
+}
+
+/* ---------- Discount Calendar Modal ---------- */
+
+type DiscountCalendarModalProps = {
+  open: boolean;
+  start: string; // ISO string or ""
+  end: string; // ISO string or ""
+  onChange: (startISO: string, endISO: string) => void;
+  onClose: () => void;
+};
+
+function parseMaybeDate(value: string): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function buildISO(
+  date: Date | null,
+  hour: number,
+  minute: number,
+  ampm: "AM" | "PM"
+) {
+  if (!date) return "";
+  const d = new Date(date);
+  let h = hour % 12;
+  if (ampm === "PM") h += 12;
+  d.setHours(h, minute, 0, 0);
+  return d.toISOString();
+}
+
+function DiscountCalendarModal({
+  open,
+  start,
+  end,
+  onChange,
+  onClose,
+}: DiscountCalendarModalProps) {
+  const [monthCursor, setMonthCursor] = useState<Date>(() => {
+    const d = parseMaybeDate(start) ?? new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
+  const [rangeStart, setRangeStart] = useState<Date | null>(
+    () => parseMaybeDate(start)
+  );
+  const [rangeEnd, setRangeEnd] = useState<Date | null>(() =>
+    parseMaybeDate(end)
+  );
+
+  const [startHour, setStartHour] = useState(9);
+  const [startMinute, setStartMinute] = useState(30);
+  const [startAmPm, setStartAmPm] = useState<"AM" | "PM">("AM");
+
+  const [endHour, setEndHour] = useState(9);
+  const [endMinute, setEndMinute] = useState(30);
+  const [endAmPm, setEndAmPm] = useState<"AM" | "PM">("AM");
+
+  useEffect(() => {
+    if (!open) return;
+    const s = parseMaybeDate(start);
+    const e = parseMaybeDate(end);
+
+    setRangeStart(s);
+    setRangeEnd(e);
+
+    const base = s ?? new Date();
+    setMonthCursor(new Date(base.getFullYear(), base.getMonth(), 1));
+  }, [open, start, end]);
+
+  const daysMatrix = useMemo(() => {
+    const year = monthCursor.getFullYear();
+    const month = monthCursor.getMonth();
+    const firstDayOfMonth = new Date(year, month, 1);
+    const startWeekday = firstDayOfMonth.getDay(); // 0 = Sun
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: (Date | null)[] = [];
+
+    for (let i = 0; i < startWeekday; i++) {
+      cells.push(null);
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      cells.push(new Date(year, month, day));
+    }
+    return cells;
+  }, [monthCursor]);
+
+  function sameDay(a: Date | null, b: Date | null) {
+    if (!a || !b) return false;
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  }
+
+  function inRange(d: Date) {
+    if (!rangeStart || !rangeEnd) return false;
+    const t = d.getTime();
+    return (
+      t >=
+        new Date(
+          rangeStart.getFullYear(),
+          rangeStart.getMonth(),
+          rangeStart.getDate()
+        ).getTime() &&
+      t <=
+        new Date(
+          rangeEnd.getFullYear(),
+          rangeEnd.getMonth(),
+          rangeEnd.getDate()
+        ).getTime()
+    );
+  }
+
+  function handleDayClick(day: Date) {
+    if (!rangeStart || (rangeStart && rangeEnd)) {
+      setRangeStart(day);
+      setRangeEnd(null);
+      return;
+    }
+
+    if (day < rangeStart) {
+      setRangeStart(day);
+      setRangeEnd(null);
+    } else if (day.getTime() === rangeStart.getTime()) {
+      setRangeEnd(day);
+    } else {
+      setRangeEnd(day);
+    }
+  }
+
+  function parseIntClamped(value: string, min: number, max: number) {
+    const n = parseInt(value, 10);
+    if (Number.isNaN(n)) return min;
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function handleSaveClick() {
+    const startISO = buildISO(rangeStart, startHour, startMinute, startAmPm);
+    const endISO = buildISO(rangeEnd ?? rangeStart, endHour, endMinute, endAmPm);
+    onChange(startISO, endISO);
+    onClose();
+  }
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-4 shadow-2xl sm:p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Discount Validity Period
+            </h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Choose a start and end date and the start and end time.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-sm text-gray-600 hover:bg-gray-200"
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Calendar */}
+        <div className="mt-4 rounded-2xl bg-[#F9F8FF] p-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-700">
+            <button
+              type="button"
+              onClick={() =>
+                setMonthCursor(
+                  new Date(
+                    monthCursor.getFullYear(),
+                    monthCursor.getMonth() - 1,
+                    1
+                  )
+                )
+              }
+              className="rounded-full px-2 py-1 hover:bg.white"
+            >
+              ‹
+            </button>
+            <div>
+              {monthCursor.toLocaleString("default", {
+                month: "short",
+              })}{" "}
+              {monthCursor.getFullYear()}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setMonthCursor(
+                  new Date(
+                    monthCursor.getFullYear(),
+                    monthCursor.getMonth() + 1,
+                    1
+                  )
+                )
+              }
+              className="rounded-full px-2 py-1 hover:bg-white"
+            >
+              ›
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-gray-400">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+              <div key={d} className="py-1">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-1 grid grid-cols-7 gap-1 text-center text-xs">
+            {daysMatrix.map((d, idx) => {
+              if (!d) {
+                return <div key={idx} />;
+              }
+              const isStart = sameDay(d, rangeStart);
+              const isEnd = sameDay(d, rangeEnd);
+              const selected = isStart || isEnd || inRange(d);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleDayClick(d)}
+                  className={clsx(
+                    "flex h-8 w-8 items-center justify-center rounded-full text-xs",
+                    selected
+                      ? "bg-[#5B33FF] text-white"
+                      : "text-gray-800 hover:bg-white"
+                  )}
+                >
+                  {d.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Times */}
+        <div className="mt-4 space-y-3 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Start Time</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={startHour}
+                onChange={(e) =>
+                  setStartHour(parseIntClamped(e.target.value, 1, 12))
+                }
+                className="h-8 w-10 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+              />
+              :
+              <input
+                type="number"
+                min={0}
+                max={59}
+                value={startMinute}
+                onChange={(e) =>
+                  setStartMinute(parseIntClamped(e.target.value, 0, 59))
+                }
+                className="h-8 w-10 rounded-lg border border-gray-200 bg[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+              />
+              <div className="flex rounded-full bg-[#ECEBFF] p-0.5">
+                {(["AM", "PM"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setStartAmPm(v)}
+                    className={clsx(
+                      "h-7 w-10 rounded-full text-[11px] font-medium",
+                      startAmPm === v
+                        ? "bg-white text-gray-900 shadow-sm"
+                        : "text-gray-500"
+                    )}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">End Time</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={endHour}
+                onChange={(e) =>
+                  setEndHour(parseIntClamped(e.target.value, 1, 12))
+                }
+                className="h-8 w-10 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+              />
+              :
+              <input
+                type="number"
+                min={0}
+                max={59}
+                value={endMinute}
+                onChange={(e) =>
+                  setEndMinute(parseIntClamped(e.target.value, 0, 59))
+                }
+                className="h-8 w-10 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+              />
+              <div className="flex rounded-full bg-[#ECEBFF] p-0.5">
+                {(["AM", "PM"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setEndAmPm(v)}
+                    className={clsx(
+                      "h-7 w-10 rounded-full text-[11px] font-medium",
+                      endAmPm === v
+                        ? "bg-white text-gray-900 shadow-sm"
+                        : "text-gray-500"
+                    )}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Save button */}
+        <button
+          type="button"
+          onClick={handleSaveClick}
+          className="mt-5 flex w-full items-center justify-center rounded-full bg-black px-4 py-2.5 text-xs font-semibold text-white hover:bg-gray-900"
+        >
+          Save Discount Validity
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Supabase upload helper ---------- */
+
+async function uploadImageToSupabase(
+  file: File,
+  vendorId: string | null
+): Promise<string> {
+  const bucket = "product-images"; // make sure this bucket exists
+
+  const ext = file.name.split(".").pop() || "jpg";
+  const fileName = `${uuid()}.${ext}`;
+  const path = vendorId ? `${vendorId}/${fileName}` : fileName;
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+  if (error || !data) {
+    console.error("Supabase upload error", error);
+    throw error || new Error("Upload failed");
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(bucket).getPublicUrl(data.path);
+
+  return publicUrl;
+}
+
+/* ---------- Main Page ---------- */
 
 export default function NewProductPage() {
   const router = useRouter();
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [vendorId, setVendorId] = useState<string | null>(null);
 
   // core product fields
   const [name, setName] = useState("");
@@ -167,11 +617,15 @@ export default function NewProductPage() {
   const [discountStart, setDiscountStart] = useState<string>("");
   const [discountEnd, setDiscountEnd] = useState<string>("");
   const [discountAllVariants, setDiscountAllVariants] = useState(false);
+  const [discountModalOpen, setDiscountModalOpen] = useState(false);
 
   // taxonomy
-  const [wellness, setWellness] = useState<string[]>([]);
+  const [wellnessOptions, setWellnessOptions] = useState<WellnessDimension[]>(
+    []
+  );
+  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [tags, setTags] = useState<string>("");
+  const [tags, setTags] = useState<string[]>([]);
 
   // description accordions
   const [sections, setSections] = useState<DescriptionSection[]>([
@@ -180,6 +634,10 @@ export default function NewProductPage() {
 
   // main product image
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
+  const [productImageFile, setProductImageFile] = useState<File | null>(null);
+
+  // gallery images (up to 5)
+  const [images, setImages] = useState<ProductImage[]>([]);
 
   // variants
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
@@ -194,9 +652,6 @@ export default function NewProductPage() {
 
   const [variantsCollapsed, setVariantsCollapsed] = useState(false);
 
-  const [images, setImages] = useState<ProductImage[]>([]);
-
-
   // sidebar config
   const sidebarConfig = useMemo(
     () =>
@@ -209,26 +664,37 @@ export default function NewProductPage() {
     [profile]
   );
 
-  // load profile for sidebar
+  // load profile (vendor-specific) and wellness options
   useEffect(() => {
     let isMounted = true;
 
-    async function loadProfile() {
+    async function loadData() {
       const { data: auth } = await supabase.auth.getUser();
-      if (!auth?.user) return;
+      const user = auth?.user;
+      if (!user) return;
+
+      setVendorId(user.id);
 
       const { data: prof } = await supabase
         .from("profiles")
         .select("id,email,status,onboarding_completed,full_name")
-        .eq("id", auth.user.id)
+        .eq("id", user.id)
         .maybeSingle();
 
       if (isMounted && prof) {
         setProfile(prof as Profile);
       }
+
+      const { data: wellnessData } = await supabase
+        .from("wellness_dimensions")
+        .select("id,name,slug");
+
+      if (isMounted && wellnessData) {
+        setWellnessOptions(wellnessData as WellnessDimension[]);
+      }
     }
 
-    void loadProfile();
+    void loadData();
     return () => {
       isMounted = false;
     };
@@ -317,26 +783,6 @@ export default function NewProductPage() {
     );
   }
 
-  // manual row (still available if you want to use it somewhere)
-  function addVariantRow() {
-    const sku = `${baseSku || "SKU"}-${String(variants.length + 1).padStart(
-      3,
-      "0"
-    )}`;
-    setVariants((prev) => [
-      ...prev,
-      {
-        id: uuid(),
-        sku,
-        price: baseVariantPrice ?? 0,
-        inventory: 0,
-        imageUrl: null,
-        options: {},
-      },
-    ]);
-  }
-
-  // move variant row up/down
   function moveVariant(fromIndex: number, toIndex: number) {
     setVariants((prev) => {
       if (
@@ -354,89 +800,127 @@ export default function NewProductPage() {
     });
   }
 
-  // per-row image upload
   function handleVariantImageChange(id: string, file: File | null) {
     if (!file) return;
     const url = URL.createObjectURL(file);
     setVariants((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, imageUrl: url } : v))
+      prev.map((v) =>
+        v.id === id ? { ...v, imageUrl: url, imageFile: file } : v
+      )
     );
   }
 
-  // main product image upload
+  // main product image upload – store preview + file
   function handleProductImageChange(file: File | null) {
     if (!file) return;
     const url = URL.createObjectURL(file);
     setProductImageUrl(url);
+    setProductImageFile(file);
   }
 
   /* ---------- Save ---------- */
 
   async function handleSave(status: "draft" | "published") {
     if (!canSave) return;
-
-    const apiVariants = variants.map((v) => ({
-      sku: v.sku,
-      priceCents: Math.round((v.price ?? 0) * 100),
-      inventoryQty: v.inventory ?? 0,
-      imageUrl: v.imageUrl ?? null,
-      optionsJson: v.options ?? {},
-    }));
-
-    const body = {
-      status,
-      name,
-      description,
-      baseSku,
-      isVariant,
-      priceCents: isVariant ? 0 : Math.round((price ?? 0) * 100),
-      inventoryQty: isVariant ? 0 : inventory ?? 0,
-      discount: discountType
-        ? {
-            type: discountType,
-            value: discountValue ?? 0,
-            start: discountStart || null,
-            end: discountEnd || null,
-            applyToVariants: discountAllVariants,
-          }
-        : null,
-      wellnessIds: wellness,
-      categoryIds: categories,
-      tags: tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-      sections: sections.map((s, idx) => ({
-        title: s.title,
-        body: s.body,
-        sortOrder: idx,
-      })),
-      productImageUrl, // adapt name on API side if needed
-      optionGroups,
-      variants: apiVariants,
-    };
+    if (!vendorId) {
+      alert("You must be logged in as a vendor to save a product.");
+      return;
+    }
 
     try {
+      // 1) upload main image (single)
+      let imageUrlToSave = productImageUrl;
+
+      if (productImageFile) {
+        imageUrlToSave = await uploadImageToSupabase(
+          productImageFile,
+          vendorId
+        );
+      }
+
+      // 2) upload gallery images (up to 5)
+      const galleryImageUrls: string[] = [];
+      for (const img of images) {
+        if (img.file) {
+          const url = await uploadImageToSupabase(img.file, vendorId);
+          galleryImageUrls.push(url);
+        } else if (img.url) {
+          // e.g., if editing and already has URL
+          galleryImageUrls.push(img.url);
+        }
+      }
+
+      // 3) (optional) upload variant images if imageFile exists
+      const apiVariants = [];
+      for (const v of variants) {
+        let variantImageUrl = v.imageUrl ?? null;
+        if (v.imageFile) {
+          variantImageUrl = await uploadImageToSupabase(v.imageFile, vendorId);
+        }
+
+        apiVariants.push({
+          sku: v.sku,
+          priceCents: Math.round((v.price ?? 0) * 100),
+          inventoryQty: v.inventory ?? 0,
+          imageUrl: variantImageUrl,
+          optionsJson: v.options ?? {},
+        });
+      }
+
+      const body = {
+        status,
+        vendorId,
+        name,
+        description,
+        baseSku,
+        isVariant,
+        priceCents: isVariant ? 0 : Math.round((price ?? 0) * 100),
+        inventoryQty: isVariant ? 0 : inventory ?? 0,
+        discount: discountType
+          ? {
+              type: discountType,
+              value: discountValue ?? 0,
+              start: discountStart || null,
+              end: discountEnd || null,
+              applyToVariants: discountAllVariants,
+            }
+          : null,
+        wellnessIds: selectedWellnessIds,
+        categoryIds: categories,
+        tags,
+        sections: sections.map((s, idx) => ({
+          title: s.title,
+          body: s.body,
+          sortOrder: idx,
+        })),
+        productImageUrl: imageUrlToSave, // main image
+        galleryImageUrls, // 1–5 gallery images
+        optionGroups,
+        variants: apiVariants,
+      };
+
       const res = await fetch("/api/products", {
         method: "POST",
         body: JSON.stringify(body),
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         alert(err.error || "Error saving product");
         return;
       }
+
       router.push("/pages/products");
     } catch (err) {
       console.error(err);
-      alert("Network error");
+      alert("Error uploading image or saving product");
     }
   }
 
   /* ---------- UI ---------- */
 
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       {/* Sidebar on the left */}
       <Sidebar config={sidebarConfig} />
 
@@ -453,7 +937,7 @@ export default function NewProductPage() {
               <button
                 type="button"
                 onClick={() => handleSave("draft")}
-                className="h-9 rounded-full border border-gray-300 px-3 text-xs font-medium sm:h-10 sm:px-4 sm:text-sm bg-white"
+                className="h-9 rounded-full border border-gray-300 bg-white px-3 text-xs font-medium sm:h-10 sm:px-4 sm:text-sm"
               >
                 Save Draft
               </button>
@@ -462,7 +946,7 @@ export default function NewProductPage() {
                 disabled={!canSave}
                 onClick={() => handleSave("published")}
                 className={clsx(
-                  "h-9 rounded-full px-4 text-xs font-semibold text-white sm:h-10 sm:px-6 sm:text-sm",
+                  "h-9 rounded-full px-4 text-xs font-semibold text.white sm:h-10 sm:px-6 sm:text-sm",
                   canSave
                     ? "bg-black hover:bg-gray-900"
                     : "cursor-not-allowed bg-gray-300"
@@ -488,7 +972,16 @@ export default function NewProductPage() {
                   onDescriptionChange={setDescription}
                   onBaseSkuChange={setBaseSku}
                   onToggleCustomSku={setIsCustomSku}
-                  onToggleVariant={setIsVariant}
+                  onToggleVariant={(value) => {
+                    setIsVariant(value);
+                    if (!value) {
+                      setOptionGroups([]);
+                      setVariants([]);
+                      setCustomSkuEnabled(false);
+                      setCustomSkuSuffix("");
+                      setBaseVariantPrice(undefined);
+                    }
+                  }}
                 />
 
                 <ProductDescriptionTabs
@@ -523,9 +1016,31 @@ export default function NewProductPage() {
                   onBaseVariantPriceChange={setBaseVariantPrice}
                 />
 
+                {/* Discount calendar trigger */}
+                {discountType && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountModalOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-full bg-[#5B33FF] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#4b2bd6]"
+                    >
+                      <span>Set Discount Validity Period</span>
+                    </button>
+                  </div>
+                )}
+
                 <ProductVariantChooser
                   enabled={isVariant}
-                  onToggleEnabled={setIsVariant}
+                  onToggleEnabled={(value) => {
+                    setIsVariant(value);
+                    if (!value) {
+                      setOptionGroups([]);
+                      setVariants([]);
+                      setCustomSkuEnabled(false);
+                      setCustomSkuSuffix("");
+                      setBaseVariantPrice(undefined);
+                    }
+                  }}
                   selectedKinds={selectedKinds}
                   onToggleKind={(kind) => {
                     setOptionGroups((prev) => {
@@ -546,7 +1061,7 @@ export default function NewProductPage() {
                         {
                           id: uuid(),
                           name: defaultName,
-                          kind, // BaseOptionGroupKind
+                          kind,
                           values: [],
                         },
                       ];
@@ -557,31 +1072,35 @@ export default function NewProductPage() {
                   onToggleCollapsed={() => setVariantsCollapsed((c) => !c)}
                 />
 
-                <ProductVariantSettings
-                  optionGroups={optionGroups}
-                  onGroupNameChange={(groupId, name) =>
-                    setOptionGroups((prev) =>
-                      prev.map((g) => (g.id === groupId ? { ...g, name } : g))
-                    )
-                  }
-                  onAddOptionValue={addOptionValue}
-                  onUpdateOptionValue={updateOptionValue}
-                  onRemoveOptionValue={removeOptionValue}
-                  onAddCustomGroup={addCustomGroup}
-                  onGenerateVariants={() => {
-                    const defaultPrice = baseVariantPrice ?? price ?? 0;
-                    const generated = generateVariantCombinations(
-                      optionGroups,
-                      baseSku,
-                      defaultPrice,
-                      customSkuEnabled ? customSkuSuffix : undefined
-                    );
-                    setVariants(generated);
-                    if (generated.length > 0) {
-                      setShowVariantModal(true);
+                {isVariant && (
+                  <ProductVariantSettings
+                    optionGroups={optionGroups}
+                    onGroupNameChange={(groupId, name) =>
+                      setOptionGroups((prev) =>
+                        prev.map((g) =>
+                          g.id === groupId ? { ...g, name } : g
+                        )
+                      )
                     }
-                  }}
-                />
+                    onAddOptionValue={addOptionValue}
+                    onUpdateOptionValue={updateOptionValue}
+                    onRemoveOptionValue={removeOptionValue}
+                    onAddCustomGroup={addCustomGroup}
+                    onGenerateVariants={() => {
+                      const defaultPrice = baseVariantPrice ?? price ?? 0;
+                      const generated = generateVariantCombinations(
+                        optionGroups,
+                        baseSku,
+                        defaultPrice,
+                        customSkuEnabled ? customSkuSuffix : undefined
+                      );
+                      setVariants(generated);
+                      if (generated.length > 0) {
+                        setShowVariantModal(true);
+                      }
+                    }}
+                  />
+                )}
 
                 {/* View / edit all variants pill */}
                 {isVariant && (
@@ -593,7 +1112,6 @@ export default function NewProductPage() {
                     disabled={variants.length === 0}
                     className={clsx(
                       "mt-2 flex w-full items-center justify-between rounded-full px-4 py-3 text-xs font-semibold sm:mt-3 sm:px-5 sm:text-sm",
-                      "transition-colors",
                       variants.length === 0
                         ? "cursor-not-allowed bg-[#F3E8FF] text-gray-400"
                         : "bg-[#E7D6FF] text-gray-900 hover:bg-[#ddc6ff]"
@@ -613,18 +1131,27 @@ export default function NewProductPage() {
                     Product Images
                   </h2>
 
-                  <ProductImagesGallery
-                      images={images}
-                      onChange={setImages}
-                      maxImages={6}        // 1 main + 5 thumbnails
-                    />
+                  {/* Main image preview */}
+                  <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-200">
+                    {productImageUrl ? (
+                      <img
+                        src={productImageUrl}
+                        alt="Main product"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
+                        Main product image
+                      </div>
+                    )}
+                  </div>
 
                   <div className="mt-3 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-gray-500">
                       Upload a main product image.
                     </p>
                     <label className="cursor-pointer rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white">
-                      Upload Image
+                      Upload Main Image
                       <input
                         type="file"
                         accept="image/*"
@@ -635,6 +1162,21 @@ export default function NewProductPage() {
                       />
                     </label>
                   </div>
+
+                  {/* Gallery images */}
+                  <div className="mt-4">
+                    <h3 className="text-xs font-semibold text-gray-800">
+                      Gallery Images
+                    </h3>
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      Add up to 5 gallery images.
+                    </p>
+                    <ProductImagesGallery
+                      images={images}
+                      onChange={setImages}
+                      maxImages={5}
+                    />
+                  </div>
                 </section>
 
                 {/* Wellness / category / tags */}
@@ -643,52 +1185,82 @@ export default function NewProductPage() {
                     Wellness Dimension, Category &amp; Tags
                   </h2>
 
-                  <div className="space-y-3 text-xs sm:space-y-4">
+                  <div className="space-y-4 text-xs sm:space-y-5">
+                    {/* Wellness dimensions from DB */}
                     <div>
                       <label className="font-semibold text-gray-800">
                         Wellness Dimensions
                       </label>
-                      <input
-                        placeholder="Emotional, Physical"
-                        value={wellness.join(", ")}
-                        onChange={(e) =>
-                          setWellness(
-                            e.target.value
-                              .split(",")
-                              .map((x) => x.trim())
-                              .filter(Boolean)
-                          )
-                        }
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        Choose one or more wellness dimensions for this
+                        product.
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {wellnessOptions.map((w) => {
+                          const active = selectedWellnessIds.includes(w.id);
+                          const iconSrc = `/images/wellness/${w.slug}.png`;
+                          return (
+                            <button
+                              key={w.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedWellnessIds((prev) =>
+                                  prev.includes(w.id)
+                                    ? prev.filter((id) => id !== w.id)
+                                    : [...prev, w.id]
+                                );
+                              }}
+                              className={clsx(
+                                "flex items-center gap-2 rounded-2xl border px-2 py-2 text-left text-[11px] transition",
+                                active
+                                  ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
+                                  : "border-gray-200 bg-white text-gray-700 hover:border-[#C4B5FF]"
+                              )}
+                            >
+                              <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
+                                <Image
+                                  src={iconSrc}
+                                  alt={w.name}
+                                  width={28}
+                                  height={28}
+                                  className="h-full w-full object-contain"
+                                />
+                              </div>
+                              <span className="line-clamp-2">{w.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
+
+                    {/* Categories as chips */}
                     <div>
                       <label className="font-semibold text-gray-800">
                         Categories
                       </label>
-                      <input
-                        placeholder="Tops, Graphic Tees"
-                        value={categories.join(", ")}
-                        onChange={(e) =>
-                          setCategories(
-                            e.target.value
-                              .split(",")
-                              .map((x) => x.trim())
-                              .filter(Boolean)
-                          )
-                        }
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        Type a category and press Enter to add.
+                      </p>
+                      <ChipsInput
+                        items={categories}
+                        onChange={setCategories}
+                        placeholder="e.g. Apparel, Classes"
                       />
                     </div>
+
+                    {/* Tags as chips */}
                     <div>
                       <label className="font-semibold text-gray-800">
                         Tags
                       </label>
-                      <input
-                        placeholder="Use ',' to add more tags"
-                        value={tags}
-                        onChange={(e) => setTags(e.target.value)}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        Use tags to help customers find this product. Press
+                        Enter to add each tag.
+                      </p>
+                      <ChipsInput
+                        items={tags}
+                        onChange={setTags}
+                        placeholder="e.g. Limited Edition, Bestseller"
                       />
                     </div>
                   </div>
@@ -767,7 +1339,7 @@ export default function NewProductPage() {
                               onClick={() => moveVariant(index, index - 1)}
                               className={clsx(
                                 "h-4 w-4 text-xs leading-none",
-                                index === 0 && "opacity-30 cursor-default"
+                                index === 0 && "cursor-default opacity-30"
                               )}
                               disabled={index === 0}
                             >
@@ -780,7 +1352,7 @@ export default function NewProductPage() {
                               className={clsx(
                                 "h-4 w-4 text-xs leading-none",
                                 index === variants.length - 1 &&
-                                  "opacity-30 cursor-default"
+                                  "cursor-default opacity-30"
                               )}
                               disabled={index === variants.length - 1}
                             >
@@ -802,7 +1374,7 @@ export default function NewProductPage() {
 
                         {/* Price */}
                         <td className="bg-[#F7F7FB] px-3 py-2">
-                          <div className="flex items-center gap-1">
+                          <div className="flex.items-center gap-1">
                             <span className="rounded-xl border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-500">
                               SGD
                             </span>
@@ -855,7 +1427,7 @@ export default function NewProductPage() {
                         <td className="rounded-r-xl bg-[#F7F7FB] px-3 py-2">
                           <label
                             htmlFor={inputId}
-                            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-dashed border-gray-300 bg-white text-lg text-gray-400 cursor-pointer"
+                            className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-gray-300 bg-white text-lg text-gray-400"
                           >
                             {v.imageUrl ? (
                               <img
@@ -895,6 +1467,18 @@ export default function NewProductPage() {
           </div>
         </div>
       )}
+
+      {/* Discount calendar modal */}
+      <DiscountCalendarModal
+        open={discountModalOpen}
+        start={discountStart}
+        end={discountEnd}
+        onClose={() => setDiscountModalOpen(false)}
+        onChange={(startISO, endISO) => {
+          setDiscountStart(startISO);
+          setDiscountEnd(endISO);
+        }}
+      />
     </div>
   );
 }

@@ -10,23 +10,40 @@ type Props = {
 export default function VerifyEmailClient({ email }: Props) {
   const { successToast, errorToast } = useToast();
 
-  async function resend() {
-    if (!email) return;
+async function resend() {
+  if (!email) {
+    errorToast({
+      title: "Error",
+      description: "Missing email address. Please go back and sign up again.",
+    });
+    return;
+  }
+
+  try {
     const r = await fetch("/api/auth/send-verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, userName: email.split("@")[0] }),
     });
+
     if (r.ok) {
       successToast({ title: "Sent", description: "Check your inbox again." });
     } else {
       const j = await r.json().catch(() => ({}));
+      console.error("Resend error:", j);
       errorToast({
         title: "Error",
         description: j.error || "Couldn’t send email.",
       });
     }
+  } catch (err) {
+    console.error("Resend network error:", err);
+    errorToast({
+      title: "Error",
+      description: "Network error. Please try again.",
+    });
   }
+}
 
   return (
     <div className="h-screen bg-white flex overflow-hidden">
