@@ -1,3 +1,4 @@
+// app/pages/setting/payouts/page.tsx
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -24,6 +25,8 @@ type Payout = {
 };
 
 type Me = { id: string; email: string | null; full_name: string | null };
+
+type BillingTab = "payouts" | "plan" | "invoices";
 
 /* ---------- Small shared UI helpers ---------- */
 
@@ -113,24 +116,27 @@ function LockedInvoicesCard() {
           </svg>
         </div>
 
-        <h2 className="text-2xl font-semibold text-gray-900">Invoices &amp; Statements</h2>
+        <h2 className="text-2xl font-semibold text-gray-900">
+          Invoices &amp; Statements
+        </h2>
         <p className="mt-2 text-sm text-gray-600">
-          Downloadable invoices and monthly statements are on the way. You’ll be able to filter by date
-          range and export in CSV/PDF.
+          Downloadable invoices and monthly statements are on the way. You’ll be able to
+          filter by date range and export in CSV/PDF.
         </p>
       </div>
     </div>
   );
 }
 
-/* ---------- Main unified page ---------- */
+/* ======================================================================= */
+/*                         INNER PAGE (uses hooks)                        */
+/* ======================================================================= */
 
-type BillingTab = "payouts" | "plan" | "invoices";
-
-export default function BillingSettingsPage() {
-    const router = useRouter();
+function BillingSettingsPageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+
   const [me, setMe] = useState<Me | null>(null);
   const [payout, setPayout] = useState<Payout>({
     vendor_id: "",
@@ -161,11 +167,22 @@ export default function BillingSettingsPage() {
   useEffect(() => {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return;
+      if (!auth.user) {
+        setLoading(false);
+        return;
+      }
 
       const [{ data: profile }, { data: p }] = await Promise.all([
-        supabase.from("profiles").select("id,email,full_name").eq("id", auth.user.id).maybeSingle(),
-        supabase.from("vendor_payout").select("*").eq("vendor_id", auth.user.id).maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("id,email,full_name")
+          .eq("id", auth.user.id)
+          .maybeSingle(),
+        supabase
+          .from("vendor_payout")
+          .select("*")
+          .eq("vendor_id", auth.user.id)
+          .maybeSingle(),
       ]);
 
       setMe((profile || null) as Me);
@@ -212,7 +229,11 @@ export default function BillingSettingsPage() {
     if (!payout.vendor_id) return;
     setSaving(true);
 
-    const required = ["bank_name", "account_number", "account_holder_name"] as const;
+    const required = [
+      "bank_name",
+      "account_number",
+      "account_holder_name",
+    ] as const;
     const missing = required.filter((k) => !String(payout[k] || "").trim());
     if (missing.length) {
       errorToast({
@@ -247,17 +268,14 @@ export default function BillingSettingsPage() {
   }
 
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-gray-600">Loading billing settings…</p>
-      </div>
-    }>
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar config={sidebarConfig} />
       <SettingsNav
         alerts={{
           "/pages/setting/payouts?tab=payouts":
-            !payout.bank_name || !payout.account_number || !payout.account_holder_name,
+            !payout.bank_name ||
+            !payout.account_number ||
+            !payout.account_holder_name,
         }}
       />
 
@@ -309,8 +327,8 @@ export default function BillingSettingsPage() {
 
           {/* Shared banner */}
           <div className="mt-6 rounded-full border border-black/10 bg-black px-4 py-2 text-sm font-medium text-white shadow">
-            You cannot publish products, list services, or receive payouts until your business is
-            verified.
+            You cannot publish products, list services, or receive payouts until your
+            business is verified.
           </div>
 
           {/* CONTENT PER TAB */}
@@ -346,7 +364,9 @@ export default function BillingSettingsPage() {
                 label="Account Holder Name"
                 placeholder="e.g. Wellness Club Co."
                 value={payout.account_holder_name || ""}
-                onChange={(v) => setPayout((x) => ({ ...x, account_holder_name: v }))}
+                onChange={(v) =>
+                  setPayout((x) => ({ ...x, account_holder_name: v }))
+                }
                 help="Name must match your verified business / brand."
                 required
               />
@@ -430,6 +450,23 @@ export default function BillingSettingsPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+/* ======================================================================= */
+/*                    OUTER WRAPPER (NO HOOKS HERE)                        */
+/* ======================================================================= */
+
+export default function BillingSettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <p className="text-gray-600">Loading billing settings…</p>
+        </div>
+      }
+    >
+      <BillingSettingsPageInner />
     </Suspense>
   );
 }

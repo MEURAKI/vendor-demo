@@ -1,3 +1,4 @@
+// app/pages/setting/shop/page.tsx
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -51,15 +52,16 @@ type VendorBusiness = {
   delivery_days_note: string | null;
 };
 
-/* ----------------------------- Page ----------------------------- */
-
 type TabKey = "general" | "fulfilment";
 
-export default function ShopSettingsPage() {
-    // URL-based tab handling
+/* ---------------------- INNER PAGE (with hooks) ---------------------- */
+
+function ShopSettingsPageInner() {
+  // URL-based tab handling
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+
   const [profile, setProfile] = useState<ProfileLite | null>(null);
   const [vb, setVb] = useState<VendorBusiness | null>(null);
   const [bioCount, setBioCount] = useState(0);
@@ -259,11 +261,6 @@ export default function ShopSettingsPage() {
   /* ------------------------- Render -------------------------- */
 
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-gray-600">Loading shop settings…</p>
-      </div>  
-    }>
     <div className="flex h-screen bg-[#F7F7FB]">
       <Sidebar config={sidebarConfig} />
       <SettingsNav />
@@ -772,6 +769,21 @@ export default function ShopSettingsPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+/* ---------------------- OUTER WRAPPER (no hooks) ---------------------- */
+
+export default function ShopSettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <p className="text-gray-600">Loading shop settings…</p>
+        </div>
+      }
+    >
+      <ShopSettingsPageInner />
     </Suspense>
   );
 }
