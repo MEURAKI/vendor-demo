@@ -1,7 +1,13 @@
 // app/pages/spaces/new/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  type ChangeEvent,
+} from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -18,9 +24,54 @@ type Profile = {
   full_name: string | null;
 };
 
+// ---------- Google Places loader ----------
+
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
+const GOOGLE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+let googlePlacesPromise: Promise<void> | null = null;
+
+function loadGooglePlacesScript(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+
+  if (window.google?.maps?.places) {
+    return Promise.resolve();
+  }
+
+  if (googlePlacesPromise) return googlePlacesPromise;
+
+  googlePlacesPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-google-places="true"]'
+    );
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", (e) => reject(e));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_API_KEY}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.googlePlaces = "true";
+
+    script.onload = () => resolve();
+    script.onerror = (e) => reject(e);
+
+    document.head.appendChild(script);
+  });
+
+  return googlePlacesPromise;
+}
+
 // ---------- Storage helper ----------
 async function uploadSpaceImage(file: File, spaceId?: string) {
-  // 🔁 adjust bucket name if needed
   const bucket = "space-images";
 
   const ext = file.name.split(".").pop() || "jpg";
@@ -78,7 +129,10 @@ export default function NewSpacePage() {
 
   const [saving, setSaving] = useState(false);
 
-  // load profile for sidebar + vendor id (server APIs read auth, so this is just for UI)
+  // Google Places: address input ref
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
+
+  // load profile for sidebar + vendor id
   useEffect(() => {
     async function loadProfile() {
       const { data: auth } = await supabase.auth.getUser();
@@ -91,6 +145,80 @@ export default function NewSpacePage() {
       if (data) setProfile(data as Profile);
     }
     void loadProfile();
+  }, []);
+
+  // Attach Google Places Autocomplete to Address field
+  useEffect(() => {
+    let autocomplete: any = null;
+    let cancelled = false;
+
+    async function initAutocomplete() {
+      try {
+        await loadGooglePlacesScript();
+        if (cancelled) return;
+        if (!addressInputRef.current || !window.google?.maps?.places) return;
+
+        autocomplete = new window.google.maps.places.Autocomplete(
+          addressInputRef.current,
+          {
+            fields: [
+              "formatted_address",
+              "address_components",
+              "geometry",
+              "place_id",
+              "url",
+              "name",
+            ],
+            types: ["establishment", "geocode"],
+          }
+        );
+
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace();
+          if (!place) return;
+
+          const formattedAddress =
+            place.formatted_address || addressInputRef.current?.value || "";
+
+          // Postal code
+          let postal = "";
+          if (place.address_components) {
+            const pcComponent = place.address_components.find((c: any) =>
+              c.types.includes("postal_code")
+            );
+            if (pcComponent) {
+              postal = pcComponent.long_name || pcComponent.short_name || "";
+            }
+          }
+
+          const placeId = place.place_id || "";
+          let url = place.url as string | undefined;
+
+          if (!url && placeId) {
+            // Fallback if url field isn't populated
+            url = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
+          }
+
+          setAddress(formattedAddress);
+          setPostalCode(postal);
+          setGmbId(placeId);
+          setMapLink(url || mapLink);
+        });
+      } catch (err) {
+        console.error("Failed to init Google Places", err);
+      }
+    }
+
+    initAutocomplete();
+
+    return () => {
+      cancelled = true;
+      if (autocomplete && window.google?.maps?.event) {
+        window.google.maps.event.clearInstanceListeners(autocomplete);
+      }
+    };
+    // we intentionally don't add dependencies to avoid re-creating it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sidebarConfig = useMemo(
@@ -148,9 +276,7 @@ export default function NewSpacePage() {
   }
 
   // ---------- IMAGE HANDLER (upload to Supabase) ----------
-  async function handleAddImages(
-    e: ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleAddImages(e: ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || !files.length) return;
 
@@ -290,9 +416,11 @@ export default function NewSpacePage() {
                           Address
                         </label>
                         <input
+                          ref={addressInputRef}
                           value={address}
                           onChange={(e) => setAddress(e.target.value)}
                           className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                          placeholder="Start typing and choose from suggestions"
                         />
                       </div>
                       <div>
@@ -326,6 +454,7 @@ export default function NewSpacePage() {
                         value={gmbId}
                         onChange={(e) => setGmbId(e.target.value)}
                         className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                        placeholder="Filled automatically from Google, or paste manually"
                       />
                     </div>
                   </div>
