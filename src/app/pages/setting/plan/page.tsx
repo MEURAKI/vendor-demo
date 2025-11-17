@@ -1,6 +1,7 @@
+// app/pages/setting/plan/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../../lib/supabase/client";
 import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
@@ -23,7 +24,7 @@ function LockedFeature({
       <div className="mx-auto max-w-2xl text-center">
         <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-purple-600 text-white shadow-lg">
           {/* lock icon */}
-          <svg width="24" height="24" viewBox="0 0 24 24" className="">
+          <svg width="24" height="24" viewBox="0 0 24 24">
             <path
               fill="currentColor"
               d="M7 10V8a5 5 0 1 1 10 0v2h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zm2 0h6V8a3 3 0 1 0-6 0z"
@@ -53,8 +54,14 @@ function LockedFeature({
   );
 }
 
-export default function PlanLockedPage() {
-  const [me, setMe] = useState<{ id: string; email: string | null; full_name: string | null } | null>(null);
+/* ------------------ INNER COMPONENT (hooks here) ------------------ */
+
+function PlanLockedPageInner() {
+  const [me, setMe] = useState<{
+    id: string;
+    email: string | null;
+    full_name: string | null;
+  } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -87,17 +94,25 @@ export default function PlanLockedPage() {
 
       <main className="flex-1">
         <div className="mx-auto max-w-5xl px-8 py-10">
-          <h1 className="text-[28px] font-semibold text-gray-900">Billing &amp; Payment Settings</h1>
+          <h1 className="text-[28px] font-semibold text-gray-900">
+            Billing &amp; Payment Settings
+          </h1>
 
           {/* Tabs */}
           <div className="mt-6 flex gap-8 border-b border-gray-200 text-sm">
-            <Link href="/pages/setting/payouts" className="pb-3 text-gray-600 hover:text-gray-900">
+            <Link
+              href="/pages/setting/payouts"
+              className="pb-3 text-gray-600 hover:text-gray-900"
+            >
               Payout Details
             </Link>
             <span className="border-b-2 border-gray-900 pb-3 font-semibold text-gray-900">
               Plans &amp; Subscription
             </span>
-            <Link href="/pages/setting/invoices" className="pb-3 text-gray-600 hover:text-gray-900">
+            <Link
+              href="/pages/setting/invoices"
+              className="pb-3 text-gray-600 hover:text-gray-900"
+            >
               Invoices &amp; Statements
             </Link>
           </div>
@@ -111,5 +126,21 @@ export default function PlanLockedPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+/* ------------------ OUTER WRAPPER (no hooks) ------------------ */
+
+export default function PlanLockedPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <p className="text-gray-600">Loading plan settings…</p>
+        </div>
+      }
+    >
+      <PlanLockedPageInner />
+    </Suspense>
   );
 }
