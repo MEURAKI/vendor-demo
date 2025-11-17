@@ -128,6 +128,9 @@ function LockedInvoicesCard() {
 type BillingTab = "payouts" | "plan" | "invoices";
 
 export default function BillingSettingsPage() {
+    const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [me, setMe] = useState<Me | null>(null);
   const [payout, setPayout] = useState<Payout>({
     vendor_id: "",
@@ -145,10 +148,6 @@ export default function BillingSettingsPage() {
   const [saving, setSaving] = useState(false);
 
   const { successToast, errorToast } = useToast();
-
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
 
   const urlTab = (searchParams.get("tab") as BillingTab) || "payouts";
   const [activeTab, setActiveTab] = useState<BillingTab>(urlTab);

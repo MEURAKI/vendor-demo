@@ -251,6 +251,9 @@ function FileChip({
 /* ======================================================================= */
 
 export default function BusinessSettingsPage() {
+    const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -275,10 +278,6 @@ export default function BusinessSettingsPage() {
 
   // payouts for verification
   const [payout, setPayout] = useState<Payout | null>(null);
-
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
 
   const urlTab = (searchParams.get("tab") as Tab) || "business";
   const [activeTab, setActiveTab] = useState<Tab>(urlTab);

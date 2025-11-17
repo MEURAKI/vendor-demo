@@ -6,7 +6,7 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams,usePathname  } from "next/navigation";
 import SettingsNav from "../../../../components/settings/SettingsNav";
 
 /* ------------------- Types ------------------- */
@@ -152,13 +152,15 @@ function Field({
 /* ------------------- Page ------------------- */
 
 export default function AccountSettingsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { successToast, errorToast } = useToast();
 
   const [loading, setLoading] = useState(true);
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const router = useRouter();
-const searchParams = useSearchParams();
+
 
 const [activeTab, setActiveTab] = useState<TabKey>("profile");
 

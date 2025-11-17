@@ -56,17 +56,16 @@ type VendorBusiness = {
 type TabKey = "general" | "fulfilment";
 
 export default function ShopSettingsPage() {
+    // URL-based tab handling
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [profile, setProfile] = useState<ProfileLite | null>(null);
   const [vb, setVb] = useState<VendorBusiness | null>(null);
   const [bioCount, setBioCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { successToast, errorToast } = useToast();
-
-  // URL-based tab handling
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
 
   const urlTab = (searchParams.get("tab") as TabKey) || "general";
   const [activeTab, setActiveTab] = useState<TabKey>(urlTab);
