@@ -22,6 +22,12 @@ type LoadedImageRow = {
   position: number;
 };
 
+type Qualification = {
+  title: string;
+  institute: string;
+  year: string;
+};
+
 type LoadedProvider = {
   id: string;
   name: string;
@@ -34,7 +40,8 @@ type LoadedProvider = {
   tags: string[] | null;
   status: ProviderStatus;
   cover_image_url: string | null;
-  images?: LoadedImageRow[]; // from provider_images table
+  images?: LoadedImageRow[];
+  qualifications?: Qualification[] | null;
 };
 
 export default function EditProviderPage({
@@ -64,6 +71,12 @@ export default function EditProviderPage({
   const [images, setImages] = useState<string[]>([]);
 
   const [status, setStatus] = useState<ProviderStatus>("draft");
+
+  // qualifications
+  const [qualificationsOpen, setQualificationsOpen] = useState(true);
+  const [qualifications, setQualifications] = useState<Qualification[]>([
+    { title: "", institute: "", year: "" },
+  ]);
 
   // ---- Load profile for sidebar ----
   useEffect(() => {
@@ -120,6 +133,19 @@ export default function EditProviderPage({
         setCategories(p.categories ?? []);
         setTags((p.tags ?? []).join(", "));
         setStatus(p.status ?? "draft");
+
+        // Qualifications
+        if (p.qualifications && p.qualifications.length > 0) {
+          setQualifications(
+            p.qualifications.map((q) => ({
+              title: q.title ?? "",
+              institute: q.institute ?? "",
+              year: q.year ?? "",
+            }))
+          );
+        } else {
+          setQualifications([{ title: "", institute: "", year: "" }]);
+        }
 
         // build images array: cover first, then ordered gallery
         const imgArr: string[] = [];
@@ -183,12 +209,54 @@ export default function EditProviderPage({
     setImages((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // ---- Qualifications handlers ----
+  function addQualification(afterIndex?: number) {
+    setQualifications((prev) => {
+      const next = [...prev];
+      const insertIndex =
+        afterIndex !== undefined ? afterIndex + 1 : prev.length;
+      next.splice(insertIndex, 0, { title: "", institute: "", year: "" });
+      return next;
+    });
+  }
+
+  function removeQualification(index: number) {
+    setQualifications((prev) => {
+      if (prev.length === 1) {
+        // keep at least one block – just clear it
+        return [{ title: "", institute: "", year: "" }];
+      }
+      const next = [...prev];
+      next.splice(index, 1);
+      return next;
+    });
+  }
+
+  function updateQualification(
+    index: number,
+    field: keyof Qualification,
+    value: string
+  ) {
+    setQualifications((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  }
+
   // ---- Save (PUT) ----
   async function handleSave(nextStatus: ProviderStatus) {
     if (!canSave) return;
     setSaving(true);
 
     try {
+      const cleanedQualifications = qualifications.filter(
+        (q) =>
+          q.title.trim() !== "" ||
+          q.institute.trim() !== "" ||
+          q.year.trim() !== ""
+      );
+
       const body = {
         name,
         specialisationAreas,
@@ -203,6 +271,7 @@ export default function EditProviderPage({
           .map((t) => t.trim())
           .filter(Boolean),
         images,
+        qualifications: cleanedQualifications,
       };
 
       const res = await fetch(`/api/providers/${providerId}`, {
@@ -250,7 +319,7 @@ export default function EditProviderPage({
                 type="button"
                 disabled={!canSave}
                 onClick={() => handleSave("draft")}
-                className="h-9 rounded-full border border-gray-300 bg-white px-4 text-xs font-medium text-gray-800 disabled:opacity-40"
+                className="h-9 rounded-full border border-gray-300 bg.white px-4 text-xs font-medium text-gray-800 disabled:opacity-40"
               >
                 Save Draft
               </button>
@@ -318,8 +387,128 @@ export default function EditProviderPage({
                   </div>
                 </section>
 
-                {/* Qualifications etc. – you can plug in your own components here */}
-                {/* ... */}
+                {/* Qualifications */}
+                <section className="rounded-3xl border border-[#ECECFB] bg-white">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setQualificationsOpen((prev) => !prev)
+                    }
+                    className="flex w-full items-center justify-between px-6 py-4 text-sm font-semibold text-gray-900"
+                  >
+                    <span>Qualifications</span>
+                    <span
+                      className={clsx(
+                        "inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-50 text-xs transition-transform",
+                        qualificationsOpen ? "rotate-180" : "rotate-0"
+                      )}
+                    >
+                      ▾
+                    </span>
+                  </button>
+
+                  {qualificationsOpen && (
+                    <div className="space-y-5 border-t border-[#ECECFB] p-6 pb-5 text-xs">
+                      {qualifications.map((q, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-2xl border border-gray-200 bg-[#FBFBFE] p-4"
+                        >
+                          <div className="mb-3 flex items-center justify-between">
+                            <p className="text-[11px] font-semibold text-purple-600">
+                              Qualification {idx + 1}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => removeQualification(idx)}
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-700 hover:bg-gray-300"
+                                aria-label="Remove qualification"
+                              >
+                                ✕
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => addQualification(idx)}
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-black text-xs text-white hover:bg-gray-900"
+                                aria-label="Add qualification"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[11px] font-semibold text-gray-700">
+                                Qualification Title (Displayed on app)
+                              </label>
+                              <input
+                                value={q.title}
+                                onChange={(e) =>
+                                  updateQualification(
+                                    idx,
+                                    "title",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:outline-none"
+                                placeholder="Birth Doula Certification"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-semibold text-gray-700">
+                                Institute (Displayed on app)
+                              </label>
+                              <input
+                                value={q.institute}
+                                onChange={(e) =>
+                                  updateQualification(
+                                    idx,
+                                    "institute",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg.white px-3 text-xs text-gray-900 focus:border-purple-500 focus:outline-none"
+                                placeholder="Childbirth International"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-semibold text-gray-700">
+                                Year
+                              </label>
+                              <input
+                                value={q.year}
+                                onChange={(e) =>
+                                  updateQualification(
+                                    idx,
+                                    "year",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:outline-none"
+                                placeholder="2013"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => addQualification()}
+                        className="mt-1 inline-flex items-center gap-2 rounded-full border border-dashed border-gray-300 bg-white px-4 py-2 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <span className="flex h-4 w-4 items-center justify.center rounded-full bg-black text-[10px] text-white">
+                          +
+                        </span>
+                        Add another qualification
+                      </button>
+                    </div>
+                  )}
+                </section>
               </div>
 
               {/* RIGHT column */}
@@ -345,39 +534,42 @@ export default function EditProviderPage({
                   </div>
 
                   <div className="mt-3 flex gap-2">
-                    {images.map((url, idx) => (
-                      <button
-                        key={url + idx}
-                        type="button"
-                        onClick={() => handleMakeCover(idx)}
-                        className={clsx(
-                          "relative h-14 w-14 overflow-hidden rounded-2xl border bg-gray-100",
-                          idx === 0
-                            ? "border-black ring-2 ring-black"
-                            : "border-gray-200"
-                        )}
-                      >
-                        <img
-                          src={url}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                        <span className="absolute left-1 top-1 rounded-full bg-black/70 px-1.5 text-[9px] font-semibold text-white">
-                          {idx === 0 ? "Cover" : idx + 1}
-                        </span>
-                        {idx > 0 && (
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveImage(idx);
-                            }}
-                            className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white"
-                          >
-                            ×
+                    {[cover, ...gallery].map((url, idx) => {
+                      if (!url) return null;
+                      return (
+                        <button
+                          key={url + idx}
+                          type="button"
+                          onClick={() => handleMakeCover(idx)}
+                          className={clsx(
+                            "relative h-14 w-14 overflow-hidden rounded-2xl border bg-gray-100",
+                            idx === 0
+                              ? "border-black ring-2 ring-black"
+                              : "border-gray-200"
+                          )}
+                        >
+                          <img
+                            src={url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                          <span className="absolute left-1 top-1 rounded-full bg-black/70 px-1.5 text-[9px] font-semibold text-white">
+                            {idx === 0 ? "Cover" : idx + 1}
                           </span>
-                        )}
-                      </button>
-                    ))}
+                          {idx > 0 && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveImage(idx);
+                              }}
+                              className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white"
+                            >
+                              ×
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
 
                     {images.length < 6 && (
                       <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">

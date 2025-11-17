@@ -18,6 +18,12 @@ type Profile = {
   full_name: string | null;
 };
 
+type Qualification = {
+  title: string;
+  institute: string;
+  year: string;
+};
+
 export default function NewProviderPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -35,6 +41,12 @@ export default function NewProviderPage() {
   // images – first item is the main provider image
   const [images, setImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Qualifications
+  const [qualificationsOpen, setQualificationsOpen] = useState(true);
+  const [qualifications, setQualifications] = useState<Qualification[]>([
+    { title: "", institute: "", year: "" },
+  ]);
 
   // --------- load profile for sidebar ----------
   useEffect(() => {
@@ -99,11 +111,54 @@ export default function NewProviderPage() {
     });
   }
 
+  // --------- qualifications handlers ----------
+
+  function addQualification(afterIndex?: number) {
+    setQualifications((prev) => {
+      const next: Qualification[] = [...prev];
+      const insertIndex =
+        afterIndex !== undefined ? afterIndex + 1 : prev.length;
+      next.splice(insertIndex, 0, { title: "", institute: "", year: "" });
+      return next;
+    });
+  }
+
+  function removeQualification(index: number) {
+    setQualifications((prev) => {
+      if (prev.length === 1) {
+        // keep at least one block, just clear it
+        return [{ title: "", institute: "", year: "" }];
+      }
+      const next = [...prev];
+      next.splice(index, 1);
+      return next;
+    });
+  }
+
+  function updateQualification(
+    index: number,
+    field: keyof Qualification,
+    value: string
+  ) {
+    setQualifications((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  }
+
   // --------- save handler ----------
 
   async function handleSave(status: ProviderStatus) {
     if (!canSave || saving) return;
     setSaving(true);
+
+    const cleanedQualifications = qualifications.filter(
+      (q) =>
+        q.title.trim() !== "" ||
+        q.institute.trim() !== "" ||
+        q.year.trim() !== ""
+    );
 
     const body = {
       name,
@@ -119,6 +174,7 @@ export default function NewProviderPage() {
         .map((t) => t.trim())
         .filter(Boolean),
       images,
+      qualifications: cleanedQualifications,
     };
 
     const res = await fetch("/api/providers", {
@@ -133,7 +189,7 @@ export default function NewProviderPage() {
       return;
     }
 
-    window.location.href = "/pages/services/providers"; // or /pages/services/providers
+    window.location.href = "/pages/services/providers";
   }
 
   const coverImage = images[0] ?? null;
@@ -227,8 +283,129 @@ export default function NewProviderPage() {
                   </div>
                 </section>
 
-                {/* (Optional) Qualifications block – you can expand later */}
-                {/* <section>…</section> */}
+                {/* Qualifications */}
+                <section className="rounded-3xl border border-[#ECECFB] bg-white">
+                  {/* header / accordion toggle */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setQualificationsOpen((prev) => !prev)
+                    }
+                    className="flex w-full items-center justify-between px-6 py-4 text-sm font-semibold text-gray-900"
+                  >
+                    <span>Qualifications</span>
+                    <span
+                      className={clsx(
+                        "inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-50 text-xs transition-transform",
+                        qualificationsOpen ? "rotate-180" : "rotate-0"
+                      )}
+                    >
+                      ▾
+                    </span>
+                  </button>
+
+                  {qualificationsOpen && (
+                    <div className="space-y-5 border-t border-[#ECECFB] p-6 pb-5 text-xs">
+                      {qualifications.map((q, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-2xl border border-gray-200 bg-[#FBFBFE] p-4"
+                        >
+                          <div className="mb-3 flex items-center justify-between">
+                            <p className="text-[11px] font-semibold text-purple-600">
+                              Qualification {idx + 1}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => removeQualification(idx)}
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-700 hover:bg-gray-300"
+                                aria-label="Remove qualification"
+                              >
+                                ✕
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => addQualification(idx)}
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-black text-xs text-white hover:bg-gray-900"
+                                aria-label="Add qualification"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[11px] font-semibold text-gray-700">
+                                Qualification Title (Displayed on app)
+                              </label>
+                              <input
+                                value={q.title}
+                                onChange={(e) =>
+                                  updateQualification(
+                                    idx,
+                                    "title",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:outline-none"
+                                placeholder="Birth Doula Certification"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-semibold text-gray-700">
+                                Institute (Displayed on app)
+                              </label>
+                              <input
+                                value={q.institute}
+                                onChange={(e) =>
+                                  updateQualification(
+                                    idx,
+                                    "institute",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:outline-none"
+                                placeholder="Childbirth International"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-semibold text-gray-700">
+                                Year
+                              </label>
+                              <input
+                                value={q.year}
+                                onChange={(e) =>
+                                  updateQualification(
+                                    idx,
+                                    "year",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:outline-none"
+                                placeholder="2013"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => addQualification()}
+                        className="mt-1 inline-flex items-center gap-2 rounded-full border border-dashed border-gray-300 bg-white px-4 py-2 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-black text-[10px] text-white">
+                          +
+                        </span>
+                        Add another qualification
+                      </button>
+                    </div>
+                  )}
+                </section>
               </div>
 
               {/* RIGHT COLUMN */}
