@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
@@ -247,13 +247,10 @@ function FileChip({
 }
 
 /* ======================================================================= */
-/*                               MAIN PAGE                                 */
+/*                         INNER PAGE (uses hooks)                         */
 /* ======================================================================= */
 
-export default function BusinessSettingsPage() {
-    const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
+function BusinessSettingsPageInner() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -279,6 +276,10 @@ export default function BusinessSettingsPage() {
   // payouts for verification
   const [payout, setPayout] = useState<Payout | null>(null);
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const urlTab = (searchParams.get("tab") as Tab) || "business";
   const [activeTab, setActiveTab] = useState<Tab>(urlTab);
 
@@ -293,6 +294,7 @@ export default function BusinessSettingsPage() {
     params.set("tab", tab);
     router.replace(`${pathname}?${params.toString()}`);
   }
+
   const { successToast, errorToast } = useToast();
 
   /* ---------- Load everything once ---------- */
@@ -431,27 +433,27 @@ export default function BusinessSettingsPage() {
   /* ---------- Business: upload logo & save ---------- */
 
   async function handleUploadLogo(file: File) {
-  if (!biz) return;
-  const ext = file.name.split(".").pop() || "png";
-  const path = `logos/${biz.id}-${Date.now()}.${ext}`;
+    if (!biz) return;
+    const ext = file.name.split(".").pop() || "png";
+    const path = `logos/${biz.id}-${Date.now()}.${ext}`;
 
-  const { error: upErr } = await supabase.storage
-    .from("brand-assets")
-    .upload(path, file, {
-      cacheControl: "3600",
-      upsert: true,
-      contentType: file.type,
-    });
+    const { error: upErr } = await supabase.storage
+      .from("brand-assets")
+      .upload(path, file, {
+        cacheControl: "3600",
+        upsert: true,
+        contentType: file.type,
+      });
 
-  if (upErr) {
-    errorToast({ title: "Error", description: `Upload failed: ${upErr.message}` });
-    return;
+    if (upErr) {
+      errorToast({ title: "Error", description: `Upload failed: ${upErr.message}` });
+      return;
+    }
+
+    const { data } = supabase.storage.from("brand-assets").getPublicUrl(path);
+    const url = data?.publicUrl ?? null;
+    setBiz({ ...biz, brand_logo_url: url });
   }
-
-  const { data } = supabase.storage.from("brand-assets").getPublicUrl(path);
-  const url = data?.publicUrl ?? null;
-  setBiz({ ...biz, brand_logo_url: url });
-}
 
   async function saveBusiness() {
     if (!biz) return;
@@ -597,21 +599,21 @@ export default function BusinessSettingsPage() {
 
   /* ---------- Tab UIs ---------- */
 
-function renderTabsHeader() {
-  const TabBtn = ({ id, label }: { id: Tab; label: string }) => (
-    <button
-      type="button"
-      onClick={() => setActiveTab(id)}      // ⬅️ CHANGE THIS
-      className={cn(
-        "pb-3 text-sm",
-        activeTab === id
-          ? "border-b-2 border-gray-900 font-semibold text-gray-900"
-          : "text-gray-500 hover:text-gray-900"
-      )}
-    >
-      {label}
-    </button>
-  );
+  function renderTabsHeader() {
+    const TabBtn = ({ id, label }: { id: Tab; label: string }) => (
+      <button
+        type="button"
+        onClick={() => switchTab(id)}
+        className={cn(
+          "pb-3 text-sm",
+          activeTab === id
+            ? "border-b-2 border-gray-900 font-semibold text-gray-900"
+            : "text-gray-500 hover:text-gray-900"
+        )}
+      >
+        {label}
+      </button>
+    );
 
     return (
       <div className="mt-6 flex gap-8 border-b border-gray-200">
@@ -878,7 +880,7 @@ function renderTabsHeader() {
               />
             ))}
           </div>
-          <div className="mt-8 border-t border-gray-200" />
+          <div className="mt-8 border-gray-200" />
         </section>
 
         {/* Offerings */}
@@ -1265,11 +1267,6 @@ function renderTabsHeader() {
     }
 
     return (
-      <Suspense fallback={
-        <div className="flex min-h-screen items-center justify-center bg-white">
-          <p className="text-gray-600">Loading shop settings…</p>
-        </div>
-      }>
       <div className="fixed bottom-0 left-0 right-0 z-10 ml-[calc(300px+280px)] bg-white/85 backdrop-blur border-t border-gray-200">
         <div className="mx-auto max-w-5xl px-8 py-4 flex items-center gap-3">
           <button
@@ -1289,7 +1286,6 @@ function renderTabsHeader() {
           </button>
         </div>
       </div>
-      </Suspense>
     );
   }
 
@@ -1325,5 +1321,23 @@ function renderTabsHeader() {
         {renderFooter()}
       </main>
     </div>
+  );
+}
+
+/* ======================================================================= */
+/*                      OUTER WRAPPER WITH SUSPENSE                        */
+/* ======================================================================= */
+
+export default function BusinessSettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <p className="text-gray-600">Loading business settings…</p>
+        </div>
+      }
+    >
+      <BusinessSettingsPageInner />
+    </Suspense>
   );
 }
