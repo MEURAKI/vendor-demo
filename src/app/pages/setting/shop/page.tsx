@@ -260,7 +260,11 @@ export default function ShopSettingsPage() {
   /* ------------------------- Render -------------------------- */
 
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <p className="text-gray-600">Loading shop settings…</p>
+      </div>  
+    }>
     <div className="flex h-screen bg-[#F7F7FB]">
       <Sidebar config={sidebarConfig} />
       <SettingsNav />

@@ -1266,7 +1266,11 @@ function renderTabsHeader() {
     }
 
     return (
-      <Suspense>
+      <Suspense fallback={
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <p className="text-gray-600">Loading shop settings…</p>
+        </div>
+      }>
       <div className="fixed bottom-0 left-0 right-0 z-10 ml-[calc(300px+280px)] bg-white/85 backdrop-blur border-t border-gray-200">
         <div className="mx-auto max-w-5xl px-8 py-4 flex items-center gap-3">
           <button

@@ -248,7 +248,11 @@ export default function BillingSettingsPage() {
   }
 
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <p className="text-gray-600">Loading billing settings…</p>
+      </div>
+    }>
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar config={sidebarConfig} />
       <SettingsNav

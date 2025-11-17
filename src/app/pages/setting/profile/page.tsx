@@ -609,7 +609,11 @@ async function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
   }
 
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <p className="text-gray-600">Loading account settings…</p>
+      </div>
+    }>
     <div className="flex h-screen bg-gray-50">
       {/* Dark app sidebar */}
       <Sidebar config={sidebarConfig} />
