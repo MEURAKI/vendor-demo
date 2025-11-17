@@ -1,7 +1,7 @@
 // app/pages/setting/business/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "../../../../components/sidebar/Sidebar";
@@ -1266,6 +1266,7 @@ function renderTabsHeader() {
     }
 
     return (
+      <Suspense>
       <div className="fixed bottom-0 left-0 right-0 z-10 ml-[calc(300px+280px)] bg-white/85 backdrop-blur border-t border-gray-200">
         <div className="mx-auto max-w-5xl px-8 py-4 flex items-center gap-3">
           <button
@@ -1285,6 +1286,7 @@ function renderTabsHeader() {
           </button>
         </div>
       </div>
+      </Suspense>
     );
   }
 
