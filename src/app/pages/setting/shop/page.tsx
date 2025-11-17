@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { supabase } from "../../../../lib/supabase/client";
 import Sidebar from "../../../../components/sidebar/Sidebar";
@@ -260,6 +260,7 @@ export default function ShopSettingsPage() {
   /* ------------------------- Render -------------------------- */
 
   return (
+    <Suspense>
     <div className="flex h-screen bg-[#F7F7FB]">
       <Sidebar config={sidebarConfig} />
       <SettingsNav />
@@ -768,5 +769,6 @@ export default function ShopSettingsPage() {
         </div>
       </main>
     </div>
+    </Suspense>
   );
 }

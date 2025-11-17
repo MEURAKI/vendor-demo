@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
@@ -609,6 +609,7 @@ async function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
   }
 
   return (
+    <Suspense>
     <div className="flex h-screen bg-gray-50">
       {/* Dark app sidebar */}
       <Sidebar config={sidebarConfig} />
@@ -1206,6 +1207,6 @@ onClick={() => handleTabChange(tab.key as TabKey)}                  className={[
             </div>
           )}
         </div>
-    
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase/client";
@@ -248,6 +248,7 @@ export default function BillingSettingsPage() {
   }
 
   return (
+    <Suspense>
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar config={sidebarConfig} />
       <SettingsNav
@@ -426,5 +427,6 @@ export default function BillingSettingsPage() {
         </div>
       </main>
     </div>
+    </Suspense>
   );
 }
