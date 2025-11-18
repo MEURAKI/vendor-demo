@@ -43,9 +43,13 @@ type LoadedBundle = {
   items: (BundleCandidateItem & { quantity: number })[];
 };
 
+type UserStatus = "active" | "inactive" | "pending";
+
 type Profile = {
   id: string;
   email: string | null;
+  status: UserStatus;
+  onboarding_completed: boolean;
   full_name: string | null;
 };
 
@@ -102,7 +106,7 @@ export default function EditBundlePage() {
 
       const { data: profileRow } = await supabase
         .from("profiles")
-        .select("id,email,full_name")
+        .select("id,email,full_name,status,onboarding_completed")
         .eq("id", auth.user.id)
         .single();
 
@@ -112,6 +116,8 @@ export default function EditBundlePage() {
           id: profileRow.id,
           email: profileRow.email,
           full_name: profileRow.full_name,
+          status: profileRow.status,
+          onboarding_completed: profileRow.onboarding_completed,
         });
       }
     }
