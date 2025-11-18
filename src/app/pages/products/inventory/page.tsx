@@ -186,24 +186,24 @@ export default function InventoryPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search inventory…"
                   className="
-                    w-64
-                    rounded-full
-                    bg-white
-                    pl-11
-                    pr-4
-                    py-2
-                    text-xs
-                    text-gray-700
-                    shadow-sm
-                    border border-gray-200
-                    placeholder:text-gray-400
-                    focus:border-[#7C3AED]
-                    focus:ring-2
-                    focus:ring-[#E9D8FD]
-                    focus:outline-none
-                    transition-all
-                  "
-                />
+      w-60
+      rounded-full
+      bg-white
+      pl-11
+      pr-4
+      py-2
+      text-xs
+      text-gray-700
+      shadow-sm
+      border border-gray-200
+      placeholder:text-gray-400
+      focus:border-[#7C3AED]
+      focus:ring-2 
+      focus:ring-[#E9D8FD] 
+      focus:outline-none
+      transition-all
+    "
+  />
               </div>
             </div>
           </div>

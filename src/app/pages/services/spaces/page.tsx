@@ -147,15 +147,30 @@ export default function SpacesPage() {
               </button> */}
 
               {/* Search pill */}
-              <div className="flex items-center rounded-full border border-gray-200 bg-[#F5F5F8] px-3 py-1 w-[220px] md:w-[280px]">
-                <span className="mr-1 text-xs text-gray-400">🔍</span>
+              
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search Space"
-                  className="w-full bg-transparent text-xs text-gray-700 focus:outline-none"
-                />
-              </div>
+ className="
+      w-60
+      rounded-full
+      bg-white
+      pl-11
+      pr-4
+      py-2
+      text-xs
+      text-gray-700
+      shadow-sm
+      border border-gray-200
+      placeholder:text-gray-400
+      focus:border-[#7C3AED]
+      focus:ring-2 
+      focus:ring-[#E9D8FD] 
+      focus:outline-none
+      transition-all
+    "
+  />                
 
               {/* Add new space button */}
               <button
