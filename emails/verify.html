@@ -1,30 +1,164 @@
 <!DOCTYPE html>
-<html lang="en" style="margin:0;padding:0;background:#f8f8fb;">
+<html lang="en" style="margin:0;padding:0;background:#05040B;">
   <head>
     <meta charset="UTF-8" />
+    <title>You're Invited to Join MEURAKI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Confirm your email</title>
     <style>
-      body{background-color:#f8f8fb;font-family:'Inter',Arial,sans-serif;margin:0;padding:0;color:#111;}
-      .container{max-width:600px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.05);}
-      .header{background:#1a1a1a;padding:20px;text-align:center;}
-      .header h1{color:#fff;margin:0;font-size:24px;letter-spacing:1px;}
-      .content{padding:32px;}
-      .content p{line-height:1.6;font-size:15px;color:#444;}
-      .cta{display:inline-block;margin-top:24px;background:#6d28d9;color:#fff;text-decoration:none;padding:14px 28px;border-radius:9999px;font-weight:600;}
-      .footer{text-align:center;font-size:12px;color:#888;padding:20px 10px 40px;}
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #05040B;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      }
+      @media only screen and (max-width: 600px) {
+        .main-card { border-radius: 0 !important; }
+        .inner-card { padding: 24px 18px !important; }
+        .cta-btn { width: 100% !important; }
+      }
     </style>
   </head>
-  <body>
-    <div class="container">
-      <div class="header"><h1>MEURAKI</h1></div>
-      <div class="content">
-        <h2>Hello {{userName}},</h2>
-        <p>Thanks for signing up. Please confirm your email address to continue.</p>
-        <a href="{{verifyUrl}}" class="cta">Confirm my email</a>
-        <p style="margin-top:20px;">If you didn’t create an account, you can ignore this email.</p>
-      </div>
-      <div class="footer">© 2025 MEURAKI. All rights reserved.</div>
-    </div>
+
+  <body style="margin:0;padding:0;background:#05040B;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#05040B;padding:40px 12px;">
+      <tr>
+        <td align="center">
+
+          <!-- MAIN CARD -->
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+            style="max-width:600px;border-radius:28px;overflow:hidden;background:#05040B;border:1px solid #1F1C34;"
+            class="main-card">
+
+            <!-- HEADER -->
+            <tr>
+              <td align="center"
+                style="
+                  padding:44px 24px 60px;
+                  background:linear-gradient(180deg, #A020F0 0%, #5D1CFF 100%);
+                "
+              >
+                <!-- LOGO -->
+                <div style="margin-bottom:16px;">
+                  <img
+                    src="https://kltjywhkfwoaefxtzztg.supabase.co/storage/v1/object/public/emails/MeurakiLogo.png"
+                    alt="MEURAKI"
+                    width="120"
+                    style="display:block;margin:0 auto;max-width:160px;height:auto;"
+                  />
+                </div>
+
+                <h1 style="margin:0;font-size:26px;font-weight:800;color:#ffffff;text-align:center;">
+                  You’re Invited to Join MEURAKI!
+                </h1>
+              </td>
+            </tr>
+
+            <!-- WHITE CARD -->
+            <tr>
+              <td style="padding:5px 18px 32px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                  style="
+                    margin-top:-42px;
+                    background:#ffffff;
+                    border-radius:24px;
+                    padding:32px 28px;
+                    box-shadow:0px 18px 45px rgba(0,0,0,0.35);
+                  "
+                  class="inner-card">
+
+                  <tr>
+                    <td style="padding-bottom:10px;">
+                      <p style="margin:0;font-size:16px;font-weight:700;color:#121212;">
+                        Hi {{userName}},
+                      </p>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="padding-bottom:20px;">
+                      <p style="margin:0;font-size:14px;color:#3A3A4A;line-height:1.7;">
+                        You’ve been invited to join the MEURAKI community.
+                        Tap the button below to confirm your email and create your profile —
+                        your first step into a world of holistic wellness.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- CTA BUTTON -->
+                  <tr>
+                    <td align="center" style="padding:24px 0;">
+                      <a
+                        href="{{verifyUrl}}"
+                        style="
+                          display:inline-block;
+                          padding:14px 34px;
+                          background:linear-gradient(90deg,#FF3BB8,#8A2BFF);
+                          color:#fff;
+                          text-decoration:none;
+                          font-size:14px;
+                          font-weight:700;
+                          border-radius:999px;
+                          box-shadow:0 10px 28px rgba(112,0,255,0.35);
+                        "
+                        class="cta-btn"
+                      >
+                        Accept Invitation
+                      </a>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td>
+                      <p style="margin:0;font-size:12px;line-height:1.7;color:#7A7A8C;text-align:center;">
+                        If this wasn’t intended for you, simply ignore this email.
+                        Your invitation will automatically expire in a few days.
+                      </p>
+                    </td>
+                  </tr>
+
+                </table>
+              </td>
+            </tr>
+
+            <!-- FOOTER -->
+            <tr>
+              <td style="background:#05040B;padding:28px 24px 24px;border-top:1px solid #1F1C34;">
+
+                <p style="margin:0;font-size:11px;letter-spacing:1px;color:#C8C6FF;text-transform:uppercase;">
+                  In Wellness,
+                </p>
+                <p style="margin:6px 0 20px;font-size:13px;font-weight:700;color:#ffffff;">
+                  The MEURAKI Team
+                </p>
+
+                <div style="width:100%;height:1px;background:#2D2944;margin:14px 0;"></div>
+
+                <p style="margin:0;font-size:11px;color:#9B99B9;line-height:1.7;">
+                  You’re receiving this message from
+                  <span style="color:#E2D7FF;">notifications@MEURAKI.com</span>.
+                  For help, contact
+                  <a href="mailto:hello@MEURAKI.com" style="color:#E2D7FF;text-decoration:underline;">hello@MEURAKI.com</a>.
+                </p>
+
+                <p style="margin:12px 0;font-size:11px;color:#A09DBD;">
+                  <a href="#" style="color:#E2D7FF;text-decoration:underline;margin-right:10px;">Terms of Use</a>
+                  <span style="color:#5E5A7A;">|</span>
+                  <a href="#" style="color:#E2D7FF;text-decoration:underline;margin-left:10px;">Privacy Policy</a>
+                </p>
+
+                <p style="margin:0;font-size:11px;color:#706D8D;line-height:1.6;">
+                  © 2025 MEURAKI PTE. LTD.<br/>
+                  10 Bukit Batok Crescent, #08-04C THE SPIRE,<br/>
+                  Singapore 658079
+                </p>
+
+              </td>
+            </tr>
+
+          </table>
+
+        </td>
+      </tr>
+    </table>
   </body>
 </html>
