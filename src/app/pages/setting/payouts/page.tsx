@@ -24,7 +24,7 @@ type Payout = {
   updated_at?: string;
 };
 
-type Me = { id: string; email: string | null; full_name: string | null };
+type Me = { id: string; email: string | null; full_name: string | null; status: string | null; onboarding_completed: boolean; };
 
 type BillingTab = "payouts" | "plan" | "invoices";
 
@@ -175,7 +175,7 @@ function BillingSettingsPageInner() {
       const [{ data: profile }, { data: p }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id,email,full_name")
+          .select("id,email,full_name,status,onboarding_completed")
           .eq("id", auth.user.id)
           .maybeSingle(),
         supabase
@@ -213,7 +213,7 @@ function BillingSettingsPageInner() {
         fullName: me?.full_name || me?.email || "User",
         email: me?.email || "",
         role: "Vendor",
-       status: profile?.status ?? "active"
+       status: me?.status ?? "active"
       }),
     [me]
   );

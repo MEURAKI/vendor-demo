@@ -25,7 +25,9 @@ type DocRow = {
   uploaded_at: string;
 };
 
-type ProfileLite = { id: string; email: string | null; full_name: string | null };
+type UserStatus = "active" | "inactive" | "pending";
+
+type ProfileLite = { id: string; email: string | null; status: UserStatus; onboarding_completed: boolean; full_name: string | null };
 
 /* --------------- Constants -------------- */
 const BUCKET = "vendor-docs";
@@ -47,7 +49,7 @@ export default function DocumentsAgreementsPage() {
         fullName: me?.full_name || me?.email || "User",
         email: me?.email || "",
         role: "Vendor",
-       status: profile?.status ?? "active"
+       status: me?.status ?? "active"
       }),
     [me]
   );

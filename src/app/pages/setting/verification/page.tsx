@@ -28,7 +28,7 @@ type Payout = {
 
 export default function VerificationStatusPage() {
   const [loading, setLoading] = useState(true);
-  const [me, setMe] = useState<{ id: string; email: string | null; full_name: string | null } | null>(null);
+  const [me, setMe] = useState<{ id: string; email: string | null; full_name: string | null; status: string | null; onboarding_completed: boolean } | null>(null);
   const [biz, setBiz] = useState<Business | null>(null);
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [payout, setPayout] = useState<Payout | null>(null);
@@ -89,7 +89,7 @@ export default function VerificationStatusPage() {
         fullName: me?.full_name || me?.email || "User",
         email: me?.email || "",
         role: "Vendor",
-        status: completeness.overallIncomplete ? "Incomplete Registration" : "Active",
+        status: me?.status ?? (completeness.overallIncomplete ? "Incomplete Registration" : "Active"),
       }),
     [me, completeness.overallIncomplete]
   );
