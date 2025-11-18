@@ -660,7 +660,7 @@ function AccountSettingsPageInner() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept=".jpg,.jpeg,.png,.webp,.svg,image/*"
                 className="hidden"
                 onChange={handleAvatarFileChange}
               />

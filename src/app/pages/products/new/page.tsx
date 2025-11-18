@@ -960,7 +960,7 @@ export default function NewProductPage() {
                 disabled={!canSave}
                 onClick={() => handleSave("published")}
                 className={clsx(
-                  "h-9 rounded-full px-4 text-xs font-semibold text.white sm:h-10 sm:px-6 sm:text-sm",
+                  "h-9 rounded-full px-4 text-xs font-semibold text-white sm:h-10 sm:px-6 sm:text-sm",
                   canSave
                     ? "bg-black hover:bg-gray-900"
                     : "cursor-not-allowed bg-gray-300"
