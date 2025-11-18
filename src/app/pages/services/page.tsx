@@ -97,7 +97,6 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
 
     setUploading(true);
     try {
-      // Upload whichever files were provided
       await uploadOne(servicesFile, "/api/services/bulk-upload", "Services");
       await uploadOne(spacesFile, "/api/spaces/bulk-upload", "Spaces");
       await uploadOne(
@@ -117,20 +116,27 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-3xl rounded-[28px] border border-white/10 bg-gradient-to-br from-[#FFFFFF] via-[#F9F7FF] to-[#EEF2FF] p-6 shadow-[0_24px_80px_rgba(15,23,42,0.55)]">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">Bulk Upload</h2>
-            <p className="mt-1 text-xs text-gray-500">
-              Upload CSV files for Services, Spaces, and Providers. You can
-              upload one, two, or all three at once.
+            <div className="inline-flex items-center gap-2 rounded-full bg-black/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+              <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Bulk Import
+            </div>
+            <h2 className="mt-2 text-lg font-semibold text-slate-900">
+              Upload CSVs for Services, Spaces &amp; Providers
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              You can upload one, two, or all three at once. We’ll process each
+              file and import your data.
             </p>
           </div>
+
           <button
             type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-sm text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-60"
             onClick={onClose}
             disabled={uploading}
           >
@@ -139,91 +145,134 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
         </div>
 
         {/* Body */}
-        <div className="mt-5 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
           {/* Services */}
-          <div className="rounded-2xl border border-gray-200 bg-[#F8F7FF] p-4">
-            <div className="font-semibold text-gray-800">Services CSV</div>
-            <p className="mt-1 text-[11px] text-gray-500">
+          <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-slate-900">
+                Services CSV
+              </div>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-[13px]">
+                🧾
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
               Core service definitions (names, pricing, duration, etc.).
             </p>
-            <div className="mt-3">
+            <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
+              <span>{servicesFile ? "Change file" : "Choose file"}</span>
+              <span className="text-[10px] opacity-80">.csv</span>
               <input
                 type="file"
                 accept=".csv"
                 onChange={(e) => setServicesFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-[11px]"
+                className="hidden"
               />
-            </div>
+            </label>
             {servicesFile && (
-              <p className="mt-2 truncate text-[11px] text-gray-600">
-                Selected: {servicesFile.name}
+              <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
+                Selected:{" "}
+                <span className="font-medium">{servicesFile.name}</span>
               </p>
             )}
           </div>
 
           {/* Spaces */}
-          <div className="rounded-2xl border border-gray-200 bg-[#F8F7FF] p-4">
-            <div className="font-semibold text-gray-800">Spaces CSV</div>
-            <p className="mt-1 text-[11px] text-gray-500">
+          <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-slate-900">Spaces CSV</div>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-[13px]">
+                🏢
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
               Physical spaces / venues linked to your services.
             </p>
-            <div className="mt-3">
+            <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
+              <span>{spacesFile ? "Change file" : "Choose file"}</span>
+              <span className="text-[10px] opacity-80">.csv</span>
               <input
                 type="file"
                 accept=".csv"
                 onChange={(e) => setSpacesFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-[11px]"
+                className="hidden"
               />
-            </div>
+            </label>
             {spacesFile && (
-              <p className="mt-2 truncate text-[11px] text-gray-600">
-                Selected: {spacesFile.name}
+              <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
+                Selected: <span className="font-medium">{spacesFile.name}</span>
               </p>
             )}
           </div>
 
           {/* Providers */}
-          <div className="rounded-2xl border border-gray-200 bg-[#F8F7FF] p-4">
-            <div className="font-semibold text-gray-800">Providers CSV</div>
-            <p className="mt-1 text-[11px] text-gray-500">
+          <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-slate-900">Providers CSV</div>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-[13px]">
+                👤
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
               Coaches / practitioners who deliver these services.
             </p>
-            <div className="mt-3">
+            <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
+              <span>{providersFile ? "Change file" : "Choose file"}</span>
+              <span className="text-[10px] opacity-80">.csv</span>
               <input
                 type="file"
                 accept=".csv"
                 onChange={(e) =>
                   setProvidersFile(e.target.files?.[0] ?? null)
                 }
-                className="block w-full text-[11px]"
+                className="hidden"
               />
-            </div>
+            </label>
             {providersFile && (
-              <p className="mt-2 truncate text-[11px] text-gray-600">
-                Selected: {providersFile.name}
+              <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
+                Selected:{" "}
+                <span className="font-medium">{providersFile.name}</span>
               </p>
             )}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-6 flex justify-end gap-2 text-xs">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-gray-300 px-4 py-2"
-            disabled={uploading}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleUpload}
-            disabled={uploading || (!servicesFile && !spacesFile && !providersFile)}
-            className="rounded-full bg-black px-6 py-2 font-semibold text-white disabled:opacity-60"
-          >
-            {uploading ? "Uploading…" : "Upload CSVs"}
-          </button>
+        <div className="mt-7 flex items-center justify-between text-[11px]">
+          <p className="text-slate-500">
+            You can safely close this window after the upload completes.
+          </p>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-[11px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+              disabled={uploading}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleUpload}
+              disabled={
+                uploading || (!servicesFile && !spacesFile && !providersFile)
+              }
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-slate-900 to-violet-600 px-6 py-2 text-[11px] font-semibold text-white shadow-[0_10px_30px_rgba(15,23,42,0.4)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {uploading ? (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <span>Upload CSVs</span>
+                  <span className="text-xs opacity-80">↗</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
