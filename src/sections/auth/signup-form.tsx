@@ -272,19 +272,6 @@ export default function SignupForm() {
               Continue with Google
             </button>
 
-            {/* Disclaimer */}
-            <p className="text-center text-xs text-gray-500 leading-relaxed">
-              By clicking the “Sign up” button, you are creating a MEURAKI
-              Subscriber account and therefore you agree to MEURAKI{" "}
-              <Link href="/terms" className="underline">
-                Terms of Use
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" className="underline">
-                Privacy Policy
-              </Link>
-              .
-            </p>
 
             {/* Switch to login */}
             <p className="text-center text-sm text-gray-600">

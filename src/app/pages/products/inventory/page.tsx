@@ -61,8 +61,14 @@ export default function InventoryPage() {
             .maybeSingle();
           if (isMounted && prof) setProfile(prof as Profile);
         }
-
-        const res = await fetch("/api/inventory");
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const res = await fetch("/api/inventory", {
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        });
         const data = await res.json();
         const mapped: InventoryRow[] = (data.inventory ?? []).map((r: any) => ({
           id: String(r.id),

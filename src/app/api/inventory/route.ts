@@ -16,10 +16,39 @@ type InventoryStatus =
   | "published"
   | "inactive";
 
-export async function GET() {
+export async function GET(req: Request) {
   const client = supa();
 
-  /* ----------------- 1) VARIANT ROWS ----------------- */
+  /* ----------------- 0) GET LOGGED-IN USER ----------------- */
+
+  const authHeader = req.headers.get("Authorization");
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.split(" ")[1]
+    : undefined;
+
+  if (!token) {
+    return NextResponse.json(
+      { error: "Missing access token" },
+      { status: 401 }
+    );
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await client.auth.getUser(token);
+
+  if (userError || !user) {
+    return NextResponse.json(
+      { error: userError?.message ?? "Unauthenticated" },
+      { status: 401 }
+    );
+  }
+
+  // 👇 This assumes your products table has a `vendor_id` column
+  const vendorId = user.id;
+
+  /* ----------------- 1) VARIANT ROWS (FOR THIS VENDOR ONLY) ----------------- */
 
   const { data: variantData, error: variantError } = await client
     .from("product_variants")
@@ -36,12 +65,15 @@ export async function GET() {
         status,
         is_variant,
         base_sku,
+        vendor_id,
         product_categories (
           category
         )
       )
     `
-    );
+    )
+    // filter by vendor on joined products
+    .eq("products.vendor_id", vendorId);
 
   if (variantError) {
     console.error("[inventory] variant error:", variantError);
@@ -51,7 +83,7 @@ export async function GET() {
     );
   }
 
-  /* ----------------- 2) SINGLE PRODUCTS ----------------- */
+  /* ----------------- 2) SINGLE PRODUCTS (FOR THIS VENDOR ONLY) ----------------- */
 
   const { data: singleData, error: singleError } = await client
     .from("products")
@@ -64,12 +96,14 @@ export async function GET() {
       base_sku,
       status,
       is_variant,
+      vendor_id,
       product_categories (
         category
       )
     `
     )
-    .eq("is_variant", false); // only plain products
+    .eq("is_variant", false) // only plain products
+    .eq("vendor_id", vendorId); // ✅ only logged-in vendor's products
 
   if (singleError) {
     console.error("[inventory] single error:", singleError);
@@ -84,11 +118,9 @@ export async function GET() {
   const variantRows = (variantData ?? []).map((v: any) => {
     const product = v.products;
 
-    // product_categories looks like: [{ idx, product_id, category }]
     const catRel = product?.product_categories?.[0];
     const categoryName = catRel?.category ?? "—";
 
-    // Build a label from options_json – e.g. "S", "S · Black"
     let variantLabel: string | null = null;
     if (v.options_json && typeof v.options_json === "object") {
       const parts = Object.values(v.options_json as Record<string, string>);
@@ -113,7 +145,7 @@ export async function GET() {
       stock,
       sku: v.sku ?? product?.base_sku ?? "",
       status,
-      // imageUrl: v.image_url ?? product?.image_url ?? null, // hook this up when you have it
+      // imageUrl: v.image_url ?? product?.image_url ?? null,
     };
   });
 
@@ -150,7 +182,6 @@ export async function GET() {
   inventory.sort((a, b) => {
     const nameCmp = a.productName.localeCompare(b.productName);
     if (nameCmp !== 0) return nameCmp;
-    // group variants of the same product together
     return (a.variantLabel ?? "").localeCompare(b.variantLabel ?? "");
   });
 
