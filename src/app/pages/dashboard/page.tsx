@@ -196,7 +196,10 @@ export default function DashboardPage() {
               icon: "Package",
               items: [
                 { id: "p-all", label: "All Products", href: "/pages/products" },
-                { id: "p-add", label: "Add Product", href: "/pages/products/new" },
+              { id: "p-add", label: "Add Product", href: "/pages/products/new" },
+              { id: "p-inv", label: "Inventory", href: "/pages/products/inventory" },
+              { id: "p-bundles", label: "Bundles", href: "/pages/products/bundles" },
+              { id: "p-cats", label: "Categories", href: "/pages/products/categories" },
               ],
             },
             {
@@ -205,7 +208,9 @@ export default function DashboardPage() {
               icon: "ShoppingBasket",
               items: [
                 { id: "s-all", label: "All Services", href: "/pages/services" },
-                { id: "s-add", label: "Add Service", href: "/pages/services/new" },
+              { id: "s-add", label: "Add Service", href: "/pages/services/new" },
+              { id: "s-providers", label: "Wellness Providers", href: "/pages/services/providers" },
+              { id: "s-spaces", label: "Wellness Spaces", href: "/pages/services/spaces" },
               ],
             },
           ],
