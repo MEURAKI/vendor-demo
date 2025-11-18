@@ -10,9 +10,13 @@ import { uploadProviderImage } from "../../../../../../lib/uploadProviderImage";
 
 type ProviderStatus = "draft" | "active" | "unavailable";
 
+type UserStatus = "active" | "inactive" | "pending";
+
 type Profile = {
   id: string;
   email: string | null;
+  status: UserStatus;
+  onboarding_completed: boolean;
   full_name: string | null;
 };
 

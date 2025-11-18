@@ -15,9 +15,13 @@ type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
 type ServiceStatus = "draft" | "active" | "unavailable";
 
+type UserStatus = "active" | "inactive" | "pending";
+
 type Profile = {
   id: string;
   email: string | null;
+  status: UserStatus;
+  onboarding_completed: boolean;
   full_name: string | null;
 };
 

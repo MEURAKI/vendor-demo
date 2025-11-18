@@ -12,9 +12,13 @@ import { supabase } from "../../../../../../lib/supabase/client";
 type SpaceType = "in_person" | "online" | "hybrid";
 type SpaceStatus = "draft" | "active" | "unavailable";
 
+type UserStatus = "active" | "inactive" | "pending";
+
 type Profile = {
   id: string;
   email: string | null;
+  status: UserStatus;
+  onboarding_completed: boolean;
   full_name: string | null;
 };
 

@@ -16,6 +16,8 @@ type Profile = {
   id: string;
   email: string | null;
   full_name: string | null;
+  status: "active" | "inactive" | "pending";
+  onboarding_completed: boolean;
 };
 
 type DescriptionTab = {

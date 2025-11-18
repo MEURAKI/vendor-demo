@@ -21,10 +21,13 @@ type SpaceRow = {
 };
 
 type SpaceType = "in_person" | "online" | "hybrid";
+type UserStatus = "active" | "inactive" | "pending";
 
 type Profile = {
   id: string;
   email: string | null;
+  status: UserStatus;
+  onboarding_completed: boolean;
   full_name: string | null;
 };
 
