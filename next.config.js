@@ -12,7 +12,7 @@ const nextConfig = {
       },
       {
       protocol: "https",
-      hostname: "abcxyzcompany.supabase.co",
+      hostname: "kltjywhkfwoaefxtzztg.supabase.co",
       pathname: "/storage/v1/object/public/**",
     },
       // Add your production Supabase domain too so it works after deploy:
