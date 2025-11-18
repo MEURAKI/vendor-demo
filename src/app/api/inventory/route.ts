@@ -37,23 +37,56 @@ export async function GET() {
         is_variant,
         base_sku,
         product_categories (
-          categories ( name )
+          category
         )
       )
     `
     );
 
   if (variantError) {
+    console.error("[inventory] variant error:", variantError);
     return NextResponse.json(
       { error: variantError.message },
       { status: 400 }
     );
   }
 
+  /* ----------------- 2) SINGLE PRODUCTS ----------------- */
+
+  const { data: singleData, error: singleError } = await client
+    .from("products")
+    .select(
+      `
+      id,
+      name,
+      price_cents,
+      inventory_qty,
+      base_sku,
+      status,
+      is_variant,
+      product_categories (
+        category
+      )
+    `
+    )
+    .eq("is_variant", false); // only plain products
+
+  if (singleError) {
+    console.error("[inventory] single error:", singleError);
+    return NextResponse.json(
+      { error: singleError.message },
+      { status: 400 }
+    );
+  }
+
+  /* ----------------- 3) MAP VARIANT ROWS ----------------- */
+
   const variantRows = (variantData ?? []).map((v: any) => {
     const product = v.products;
+
+    // product_categories looks like: [{ idx, product_id, category }]
     const catRel = product?.product_categories?.[0];
-    const categoryName = catRel?.categories?.name ?? "—";
+    const categoryName = catRel?.category ?? "—";
 
     // Build a label from options_json – e.g. "S", "S · Black"
     let variantLabel: string | null = null;
@@ -80,40 +113,15 @@ export async function GET() {
       stock,
       sku: v.sku ?? product?.base_sku ?? "",
       status,
-      // imageUrl: v.image_url ?? product?.image_url ?? null,
+      // imageUrl: v.image_url ?? product?.image_url ?? null, // hook this up when you have it
     };
   });
 
-  /* ----------------- 2) SINGLE PRODUCTS ----------------- */
-
-  const { data: singleData, error: singleError } = await client
-    .from("products")
-    .select(
-      `
-      id,
-      name,
-      price_cents,
-      inventory_qty,
-      base_sku,
-      status,
-      is_variant,
-      product_categories (
-        categories ( name )
-      )
-    `
-    )
-    .eq("is_variant", false); // only plain products
-
-  if (singleError) {
-    return NextResponse.json(
-      { error: singleError.message },
-      { status: 400 }
-    );
-  }
+  /* ----------------- 4) MAP SINGLE PRODUCT ROWS ----------------- */
 
   const singleRows = (singleData ?? []).map((p: any) => {
     const catRel = p.product_categories?.[0];
-    const categoryName = catRel?.categories?.name ?? "—";
+    const categoryName = catRel?.category ?? "—";
 
     const stock = p.inventory_qty ?? 0;
 
@@ -135,7 +143,7 @@ export async function GET() {
     };
   });
 
-  /* ----------------- 3) MERGE & SORT ----------------- */
+  /* ----------------- 5) MERGE & SORT ----------------- */
 
   const inventory = [...variantRows, ...singleRows];
 

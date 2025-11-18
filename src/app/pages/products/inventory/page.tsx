@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
+import { Search, Pencil } from "lucide-react";
+
 import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
@@ -92,7 +94,7 @@ export default function InventoryPage() {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-       status: profile?.status ?? "active"
+        status: profile?.status ?? "active",
       }),
     [profile]
   );
@@ -106,8 +108,60 @@ export default function InventoryPage() {
     );
   });
 
+  function renderStatusChip(status: InventoryStatus) {
+    const base =
+      "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-semibold";
+
+    if (status === "active") {
+      return (
+        <span className={clsx(base, "bg-[#DCFCE7] text-[#166534]")}>
+          Active
+        </span>
+      );
+    }
+
+    if (status === "out_of_stock") {
+      return (
+        <span className={clsx(base, "bg-[#FEE2E2] text-[#B91C1C]")}>
+          Out of Stock
+        </span>
+      );
+    }
+
+    if (status === "draft") {
+      return (
+        <span className={clsx(base, "bg-gray-200 text-gray-700")}>
+          Draft
+        </span>
+      );
+    }
+
+    if (status === "published") {
+      return (
+        <span className={clsx(base, "bg-[#E0F2FE] text-[#0369A1]")}>
+          Published
+        </span>
+      );
+    }
+
+    if (status === "inactive") {
+      return (
+        <span className={clsx(base, "bg-[#E5E7EB] text-gray-700")}>
+          Inactive
+        </span>
+      );
+    }
+
+    // Fallback
+    return (
+      <span className={clsx(base, "bg-gray-200 text-gray-700")}>
+        {status}
+      </span>
+    );
+  }
+
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
 
       <div className="flex flex-1 items-stretch justify-center px-6 py-4">
@@ -124,13 +178,31 @@ export default function InventoryPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex items-center rounded-full border border-gray-200 bg-[#F5F5F8] px-3 py-1">
-                <span className="mr-1 text-xs text-gray-400">🔍</span>
+              {/* Modern pill search */}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search inventory"
-                  className="w-56 bg-transparent text-xs text-gray-700 focus:outline-none"
+                  placeholder="Search inventory…"
+                  className="
+                    w-64
+                    rounded-full
+                    bg-white
+                    pl-11
+                    pr-4
+                    py-2
+                    text-xs
+                    text-gray-700
+                    shadow-sm
+                    border border-gray-200
+                    placeholder:text-gray-400
+                    focus:border-[#7C3AED]
+                    focus:ring-2
+                    focus:ring-[#E9D8FD]
+                    focus:outline-none
+                    transition-all
+                  "
                 />
               </div>
             </div>
@@ -220,35 +292,18 @@ export default function InventoryPage() {
                         </td>
 
                         <td className="px-3 py-3 text-center">
-                          <span
-                            className={clsx(
-                              "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-semibold",
-                              r.status === "active" &&
-                                "bg-[#DCFCE7] text-[#166534]",
-                              r.status === "out_of_stock" &&
-                                "bg-[#FEE2E2] text-[#B91C1C]",
-                              r.status === "draft" &&
-                                "bg-gray-200 text-gray-700"
-                            )}
-                          >
-                            {r.status === "out_of_stock"
-                              ? "Out of Stock"
-                              : r.status === "active"
-                              ? "Active"
-                              : r.status === "draft"
-                              ? "Draft"
-                              : r.status}
-                          </span>
+                          {renderStatusChip(r.status)}
                         </td>
 
                         <td className="px-3 py-3 text-center">
                           <button
-                            className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
+                            className="inline-flex items-center gap-1 rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-gray-900 transition-colors"
                             onClick={() =>
                               router.push(`/pages/products/${r.productId}/edit`)
                             }
                           >
-                            Edit Product
+                            <Pencil className="h-3 w-3" />
+                            <span>Edit Product</span>
                           </button>
                         </td>
                       </tr>
@@ -261,7 +316,7 @@ export default function InventoryPage() {
             {/* footer / count */}
             <div className="mt-4 flex items-center justify-between text-[11px] text-gray-500">
               <span>Showing {filtered.length} items</span>
-              {/* add pagination here later if you need */}
+              {/* pagination placeholder */}
             </div>
           </div>
         </div>
