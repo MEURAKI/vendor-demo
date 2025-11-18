@@ -165,7 +165,7 @@ export default function DashboardPage() {
         initials: getInitials(profile.full_name || profile.email),
         name: displayName,
         role: "Vendor",
-        status: "Incomplete Registration",
+       status: profile?.status ?? "active"
       },
       sections: [
         {

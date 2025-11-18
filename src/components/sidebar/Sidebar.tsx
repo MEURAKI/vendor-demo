@@ -12,6 +12,7 @@ import {
   HelpCircle,
   LogOut,
 } from "lucide-react";
+import clsx from "clsx";
 
 export default function Sidebar({
   config,
@@ -71,12 +72,28 @@ export default function Sidebar({
           )}
         </div>
 
-        {!collapsed && config.profile.status && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-danger/20 bg-[#2A1212] px-3 py-1 text-xs font-medium text-danger">
-            <span className="inline-block h-2 w-2 rounded-full bg-danger" />
-            {config.profile.status}
-          </div>
-        )}
+       {!collapsed && config.profile.status && (
+  <div
+    className={clsx(
+      "mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium",
+      {
+        // ACTIVE → GREEN
+        "border-green-600/20 bg-green-50 text-green-700": config.profile.status === "active",
+
+        // INACTIVE / PENDING / ANYTHING ELSE → RED
+        "border-danger/20 bg-[#2A1212] text-danger": config.profile.status !== "active",
+      }
+    )}
+  >
+    <span
+      className={clsx("inline-block h-2 w-2 rounded-full", {
+        "bg-green-600": config.profile.status === "active",
+        "bg-danger": config.profile.status !== "active",
+      })}
+    />
+    {config.profile.status}
+  </div>
+)}
       </div>
 
       {/* Sections */}

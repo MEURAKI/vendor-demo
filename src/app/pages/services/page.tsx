@@ -12,12 +12,15 @@ import { supabase } from "../../../lib/supabase/client";
 type ServiceStatus = "draft" | "active" | "unavailable";
 type LocationType = "online" | "in_person";
 
+type UserStatus = "active" | "inactive" | "pending";
+
 type Profile = {
   id: string;
   email: string | null;
+  status: UserStatus;
+  onboarding_completed: boolean;
   full_name: string | null;
 };
-
 type ProviderSummary = {
   id: string;
   name: string;
@@ -243,7 +246,7 @@ export default function ServicesPage() {
       if (!auth.user) return;
       const { data } = await supabase
         .from("profiles")
-        .select("id,email,full_name")
+        .select("id,email,full_name,status")
         .eq("id", auth.user.id)
         .maybeSingle();
       if (data) setProfile(data as Profile);
@@ -256,7 +259,7 @@ export default function ServicesPage() {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-        status: "Incomplete Registration",
+       status: profile?.status ?? "active"
       }),
     [profile]
   );
@@ -277,21 +280,49 @@ export default function ServicesPage() {
       const mapped: ServiceRow[] = (raw as any[]).map((s) => ({
         id: s.id,
         name: s.name,
+        // Prefer explicit typeLabel, otherwise first serviceTypes entry
         typeLabel:
-          (s.type_label as string | null) ??
-          (Array.isArray(s.service_types) && s.service_types[0]) ??
+          (s.typeLabel as string | null) ??
+          (Array.isArray(s.serviceTypes) && s.serviceTypes[0]) ??
           null,
+        // Locations from camelCase locationTypes
         locations:
-          (s.location_types as LocationType[]) ??
+          (s.locationTypes as LocationType[]) ??
           (Array.isArray(s.locations) ? s.locations : []),
+
+        // These may not be present in your lightweight list API yet – default to null
         expiry: (s.expiry as "fixed" | "anytime" | null) ?? null,
-        price: s.price ?? null,
-        durationMinutes: s.duration_minutes ?? null,
-        maxParticipants: s.max_participants ?? null,
-        ticketsSold: s.tickets_sold ?? null,
-        ticketsAvailable: s.tickets_available ?? null,
+        price:
+          typeof s.price === "number"
+            ? s.price
+            : typeof s.priceCents === "number"
+            ? s.priceCents / 100
+            : null,
+        durationMinutes:
+          typeof s.durationMinutes === "number"
+            ? s.durationMinutes
+            : null,
+        maxParticipants:
+          typeof s.maxParticipants === "number"
+            ? s.maxParticipants
+            : null,
+        ticketsSold:
+          typeof s.ticketsSold === "number" ? s.ticketsSold : null,
+        ticketsAvailable:
+          typeof s.ticketsAvailable === "number"
+            ? s.ticketsAvailable
+            : null,
+
         status: s.status as ServiceStatus,
-        coverImageUrl: s.cover_image_url ?? null,
+
+        // ✅ use the normalized URL from the API
+        coverImageUrl:
+          (s.imageUrl as string | null) ??
+          (s.coverImageUrl as string | null) ??
+          (s.cover_image_url as string | null) ??
+          null,
+
+        // You can later extend API to send providers; for now, default empty
         providers:
           (s.providers as ProviderSummary[]) ??
           (Array.isArray(s.provider_names)

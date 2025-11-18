@@ -15,6 +15,8 @@ type Profile = {
   id: string;
   email: string | null;
   full_name: string | null;
+  status: "active" | "inactive" | "pending";
+  onboarding_completed: boolean;
 };
 
 type ProviderRow = {
@@ -56,7 +58,7 @@ export default function ProvidersPage() {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-        status: "Incomplete Registration",
+       status: profile?.status ?? "active"
       }),
     [profile]
   );

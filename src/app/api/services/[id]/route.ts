@@ -9,8 +9,11 @@ export async function GET(
 ) {
   const supabase = createRouteHandlerClient({ cookies });
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!auth.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
+  // 1) main service row
   const { data: srv, error } = await supabase
     .from("services")
     .select("*")
@@ -25,34 +28,40 @@ export async function GET(
     );
   }
 
-  const [{ data: tabs }, { data: imgs }, { data: locs }, { data: providers }, { data: spaces }] =
-    await Promise.all([
-      supabase
-        .from("service_description_tabs")
-        .select("*")
-        .eq("service_id", params.id)
-        .order("position", { ascending: true }),
-      supabase
-        .from("service_images")
-        .select("*")
-        .eq("service_id", params.id)
-        .order("position", { ascending: true }),
-      supabase
-        .from("service_location_settings")
-        .select("*")
-        .eq("service_id", params.id),
-      supabase
-        .from("service_providers")
-        .select("provider_id")
-        .eq("service_id", params.id),
-      supabase
-        .from("service_spaces")
-        .select("space_id")
-        .eq("service_id", params.id),
-    ]);
+  // 2) children in parallel
+  const [
+    { data: tabs },
+    { data: imgs },
+    { data: locs },
+    { data: providers },
+    { data: spaces },
+  ] = await Promise.all([
+    supabase
+      .from("service_description_tabs")
+      .select("*")
+      .eq("service_id", params.id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("service_images")
+      .select("*")
+      .eq("service_id", params.id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("service_location_settings")
+      .select("*")
+      .eq("service_id", params.id),
+    supabase
+      .from("service_providers")
+      .select("provider_id")
+      .eq("service_id", params.id),
+    supabase
+      .from("service_spaces")
+      .select("space_id")
+      .eq("service_id", params.id),
+  ]);
 
-  // attach time slots & session packages per location
-  const locationsWithChildren = [];
+  // 3) attach time slots & session packages per location
+  const locationsWithChildren: any[] = [];
   for (const loc of locs ?? []) {
     const [{ data: slots }, { data: pkgs }] = await Promise.all([
       supabase
@@ -73,13 +82,64 @@ export async function GET(
     });
   }
 
+  // 4) Normalise into LoadedService shape expected by EditServicePage
+
+  const descriptionTabs = (tabs ?? []).map((t: any, idx: number) => ({
+    title: t.title,
+    body: t.body,
+    position: t.position ?? idx,
+  }));
+
+  // IMPORTANT: return just URLs, not full image objects
+  const imageUrls: string[] = (imgs ?? []).map((img: any) => img.image_url);
+
+  const locationSettings = (locationsWithChildren ?? []).map((loc: any) => ({
+    locationType: loc.location_type,
+    sku: loc.sku ?? "",
+    maxParticipants: loc.max_participants ?? undefined,
+    price:
+      typeof loc.price_cents === "number"
+        ? loc.price_cents / 100
+        : undefined,
+    discountType: loc.discount_type,
+    discountValue: loc.discount_value ?? undefined,
+    discountCap: loc.discount_cap ?? undefined,
+    hasFixedSchedule: !!loc.has_fixed_schedule,
+    expiryType: loc.expiry_type ?? "anytime",
+    expiryDurationUnit: loc.expiry_duration_unit ?? undefined,
+    expiryDurationValue: loc.expiry_duration_value ?? undefined,
+    timeSlots: (loc.timeSlots ?? []).map((s: any) => ({
+      start: s.start_at,
+      end: s.end_at,
+    })),
+    sessionOptions: (loc.sessionOptions ?? []).map((pkg: any, idx: number) => ({
+      label: pkg.label,
+      sessionsCount: pkg.sessions_count ?? idx + 1,
+      price:
+        typeof pkg.price_cents === "number"
+          ? pkg.price_cents / 100
+          : 0,
+    })),
+  }));
+
+  // 5) Flatten service row + children to match LoadedService
   return NextResponse.json({
-    service: srv,
-    descriptionTabs: tabs ?? [],
-    images: imgs ?? [],
+    id: srv.id,
+    sku: srv.sku,
+    name: srv.name,
+    description: srv.description ?? "",
+    status: srv.status,
+    serviceTypes: srv.service_types ?? [],
+    locationTypes: srv.location_types ?? [],
+    wellnessDimensions: srv.wellness_dimensions ?? [],
+    categories: srv.categories ?? [],
+    tags: srv.tags ?? [],
+    coverImageUrl: srv.cover_image_url ?? null,
+    images: imageUrls,
+    descriptionTabs,
     providerIds: (providers ?? []).map((p: any) => p.provider_id),
     spaceIds: (spaces ?? []).map((s: any) => s.space_id),
-    locationSettings: locationsWithChildren,
+    locationSettings,
   });
 }
 
@@ -89,7 +149,8 @@ export async function PUT(
 ) {
   const supabase = createRouteHandlerClient({ cookies });
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!auth.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const {
@@ -172,13 +233,23 @@ export async function PUT(
   if (providerIds?.length) {
     await supabase
       .from("service_providers")
-      .insert(providerIds.map((pid: string) => ({ service_id: params.id, provider_id: pid })));
+      .insert(
+        providerIds.map((pid: string) => ({
+          service_id: params.id,
+          provider_id: pid,
+        }))
+      );
   }
 
   if (spaceIds?.length) {
     await supabase
       .from("service_spaces")
-      .insert(spaceIds.map((sid: string) => ({ service_id: params.id, space_id: sid })));
+      .insert(
+        spaceIds.map((sid: string) => ({
+          service_id: params.id,
+          space_id: sid,
+        }))
+      );
   }
 
   if (locationSettings?.length) {
@@ -244,7 +315,8 @@ export async function DELETE(
 ) {
   const supabase = createRouteHandlerClient({ cookies });
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!auth.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { error } = await supabase
     .from("services")

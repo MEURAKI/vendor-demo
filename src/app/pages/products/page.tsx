@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import Sidebar from "../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
+import { Listbox, Transition,Popover } from "@headlessui/react";
+import { Fragment } from "react";
+import { ChevronDown, Filter, Search, Check } from "lucide-react";
 
 /* ---------- Types ---------- */
 
@@ -673,60 +676,75 @@ function AddProductChoiceModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fadeIn">
+      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl animate-slideUp">
+        {/* Header */}
         <div className="flex items-start justify-between">
-          <h2 className="text-lg font-semibold">
-            Choose how you’d like to add your product
+          <h2 className="text-lg font-semibold text-gray-900">
+            Add New Product
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="ml-4 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm"
+            className="ml-4 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm hover:bg-gray-200 transition"
           >
             ✕
           </button>
         </div>
 
+        <p className="mt-2 text-xs text-gray-500">
+          Choose the method you prefer for adding products.
+        </p>
+
+        {/* Option Buttons */}
         <div className="mt-6 space-y-4">
+          {/* Single */}
           <button
             type="button"
             onClick={onSingleProduct}
-            className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-[#F8F7FF] px-4 py-3 text-left shadow-sm hover:border-black"
+            className="group flex w-full items-center justify-between rounded-3xl border border-gray-200 bg-[#FAF9FF] px-4 py-4 text-left shadow-sm transition hover:border-purple-500 hover:shadow-md"
           >
             <div>
-              <div className="text-sm font-semibold">Single Product</div>
+              <div className="text-sm font-semibold text-gray-900">
+                Single Product
+              </div>
               <div className="text-xs text-gray-500">
-                Add one product manually
+                Add one product manually.
               </div>
             </div>
-            <div className="h-10 w-10 rounded-2xl bg-white text-center text-xl">
+
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl group-hover:scale-110 transition">
               🧾
             </div>
           </button>
 
+          {/* Bulk Upload */}
           <button
             type="button"
             onClick={onBulkUpload}
-            className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-[#F8F7FF] px-4 py-3 text-left shadow-sm hover:border-black"
+            className="group flex w-full items-center justify-between rounded-3xl border border-gray-200 bg-[#FAF9FF] px-4 py-4 text-left shadow-sm transition hover:border-purple-500 hover:shadow-md"
           >
             <div>
-              <div className="text-sm font-semibold">Bulk Upload</div>
+              <div className="text-sm font-semibold text-gray-900">
+                Bulk Upload
+              </div>
               <div className="text-xs text-gray-500">
-                Import multiple products at once
+                Import multiple products at once.
               </div>
             </div>
-            <div className="flex h-10 w-14 items-center justify-center">
-              <span className="inline-block h-9 w-7 rounded-2xl bg-white" />
-              <span className="inline-block h-9 w-7 -ml-3 rounded-2xl bg-white" />
-              <span className="inline-block h-9 w-7 -ml-3 rounded-2xl bg-white" />
+
+            <div className="flex h-12 w-16 items-center justify-center gap-[2px]">
+              <span className="inline-block h-10 w-7 rounded-2xl bg-white group-hover:scale-105 transition" />
+              <span className="inline-block h-10 w-7 -ml-3 rounded-2xl bg-white group-hover:scale-105 transition" />
+              <span className="inline-block h-10 w-7 -ml-3 rounded-2xl bg-white group-hover:scale-105 transition" />
             </div>
           </button>
         </div>
 
+        {/* Download Button */}
         <button
           type="button"
-          className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-gray-700 underline"
+          className="mt-6 inline-flex items-center gap-2 text-xs font-semibold text-gray-700 underline hover:text-black transition"
           onClick={() => {
             window.location.href = "/templates/products-bulk-template.csv";
           }}
@@ -734,6 +752,36 @@ function AddProductChoiceModal({
           ⬇ Download CSV Template
         </button>
       </div>
+
+      {/* Animations */}
+      <style jsx>{`
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-slideUp {
+          animation: slideUp 0.25s ease-out;
+        }
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            backdrop-filter: blur(0px);
+          }
+          to {
+            opacity: 1;
+            backdrop-filter: blur(4px);
+          }
+        }
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -787,11 +835,15 @@ type BulkUploadModalProps = {
   mode: BulkUploadMode; // 👈 NEW: choose which upload this modal is for
 };
 
-function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalProps) {
+function BulkUploadModal({
+  open,
+  onClose,
+  onUploaded,
+  mode,
+}: BulkUploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
 
-  // separate mappings for products vs variants
   const [productMapping, setProductMapping] = useState<
     Record<ProductCsvMappingKey, string>
   >({
@@ -820,6 +872,15 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
   });
 
   const [uploading, setUploading] = useState(false);
+
+  // allow switching mode inside modal
+  const [currentMode, setCurrentMode] = useState<"products" | "variants">(
+    mode ?? "products"
+  );
+
+  useEffect(() => {
+    if (mode) setCurrentMode(mode);
+  }, [mode]);
 
   if (!open) return null;
 
@@ -859,14 +920,13 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
       const formData = new FormData();
       formData.append("file", file);
 
-      // pick endpoint + mapping based on mode
       const endpoint =
-        mode === "products"
+        currentMode === "products"
           ? "/api/products/bulk-upload"
           : "/api/products/variants-bulk-upload";
 
       const mappingToSend =
-        mode === "products" ? productMapping : variantMapping;
+        currentMode === "products" ? productMapping : variantMapping;
 
       formData.append("mapping", JSON.stringify(mappingToSend));
 
@@ -910,40 +970,87 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
     </>
   );
 
-  const isProducts = mode === "products";
+  const isProducts = currentMode === "products";
 
   return (
-    <div className="fixed inset-0 z-[70] flex.items-center justify-center bg-black/40">
-      <div className="w-full max-w-5xl rounded-3xl bg-white p-8 shadow-2xl">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">
-            {isProducts ? "CSV Bulk Upload – Products" : "CSV Bulk Upload – Variants"}
-          </h2>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-5xl rounded-[28px] border border-gray-100 bg-white/95 p-8 shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              CSV Bulk Upload
+            </h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Map your CSV columns to product fields before importing.
+            </p>
+          </div>
+
+          {/* Close */}
           <button
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm text-gray-700 hover:bg-gray-200 transition"
             onClick={onClose}
           >
             ✕
           </button>
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-[#F8F7FF] px-4 py-3">
-          <div className="text-xs text-gray-600">
-            <div className="font-semibold">Upload your CSV file</div>
-            <div>We’ll read the first row and show the columns here.</div>
+        {/* Mode Toggle */}
+        <div className="mt-4 flex justify-end">
+          <div className="inline-flex rounded-full bg-gray-100 p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setCurrentMode("products")}
+              className={clsx(
+                "rounded-full px-3 py-1.5 font-semibold transition",
+                isProducts
+                  ? "bg-black text-white shadow-sm"
+                  : "text-gray-600 hover:bg-white"
+              )}
+            >
+              Products
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentMode("variants")}
+              className={clsx(
+                "rounded-full px-3 py-1.5 font-semibold transition",
+                !isProducts
+                  ? "bg-black text-white shadow-sm"
+                  : "text-gray-600 hover:bg-white"
+              )}
+            >
+              Variants
+            </button>
           </div>
-          <input
-            type="file"
-            accept=".csv"
-            onChange={handleFileChange}
-            className="text-xs"
-          />
         </div>
 
-        {/* Mapping UI changes based on mode */}
-        <div className="mt-6 grid grid-cols-1 gap-4 text-xs md:grid-cols-2">
+        {/* File Upload Row */}
+        <div className="mt-4 flex items-center justify-between gap-4 rounded-3xl bg-[#F8F7FF] px-5 py-4">
+          <div className="text-xs text-gray-600">
+            <div className="font-semibold text-gray-800">
+              Upload your CSV file
+            </div>
+            <div className="mt-1">
+              We’ll read the first row and show the column headers for mapping.
+            </div>
+          </div>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-black px-4 py-2 text-xs font-semibold text-white hover:bg-gray-900 transition">
+            Choose CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        {/* Mapping */}
+        <div className="mt-6 grid grid-cols-1 gap-6 text-xs md:grid-cols-2">
+          {/* LEFT: Description of fields */}
           <div>
-            <div className="mb-2 text-[11px] font-semibold text-gray-500">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
               {isProducts
                 ? "Import to Products (Vendor Portal)"
                 : "Import to Product Variants (Vendor Portal)"}
@@ -996,7 +1103,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
                   Option: Color
                 </div>
-                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
                   Option: Volume
                 </div>
                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
@@ -1009,9 +1116,10 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
             )}
           </div>
 
+          {/* RIGHT: Select headers */}
           <div>
-            <div className="mb-2 text-[11px] font-semibold text-gray-500">
-              What (CSV) column field matches best?
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Match to CSV columns
             </div>
 
             {isProducts ? (
@@ -1019,9 +1127,12 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                 <select
                   value={productMapping.productUniqueCode}
                   onChange={(e) =>
-                    handleChangeProductMapping("productUniqueCode", e.target.value)
+                    handleChangeProductMapping(
+                      "productUniqueCode",
+                      e.target.value
+                    )
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1031,7 +1142,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeProductMapping("sku", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1041,7 +1152,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeProductMapping("name", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1051,7 +1162,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeProductMapping("type", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1061,7 +1172,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeProductMapping("category", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1071,7 +1182,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeProductMapping("wellness", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1081,7 +1192,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeProductMapping("price", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1091,7 +1202,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeProductMapping("inventory", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1103,7 +1214,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeVariantMapping("productBaseSku", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1113,7 +1224,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeVariantMapping("variantSku", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1123,7 +1234,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeVariantMapping("price", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1133,7 +1244,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeVariantMapping("inventory", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg-white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1143,7 +1254,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeVariantMapping("optionSize", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1153,34 +1264,37 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
                   onChange={(e) =>
                     handleChangeVariantMapping("optionColor", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
+
                 <select
                   value={variantMapping.optionVolume}
                   onChange={(e) =>
                     handleChangeVariantMapping("optionVolume", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
+
                 <select
                   value={variantMapping.optionWeight}
                   onChange={(e) =>
                     handleChangeVariantMapping("optionWeight", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
+
                 <select
                   value={variantMapping.customOption}
                   onChange={(e) =>
                     handleChangeVariantMapping("customOption", e.target.value)
                   }
-                  className="h-9 w-full rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
                   {headerOptions}
                 </select>
@@ -1189,11 +1303,12 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
           </div>
         </div>
 
+        {/* Footer */}
         <div className="mt-6 flex justify-end gap-2 text-xs">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-gray-300 px-4 py-2"
+            className="rounded-full border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 transition"
             disabled={uploading}
           >
             Cancel
@@ -1202,7 +1317,7 @@ function BulkUploadModal({ open, onClose, onUploaded, mode }: BulkUploadModalPro
             type="button"
             onClick={handleUpload}
             disabled={uploading || !file}
-            className="rounded-full bg-black px-6 py-2 font-semibold text-white.disabled:opacity-60"
+            className="rounded-full bg-black px-6 py-2 font-semibold text-white hover:bg-gray-900 disabled:opacity-60 transition"
           >
             {uploading ? "Uploading…" : "Upload"}
           </button>
@@ -1245,6 +1360,8 @@ export default function AllProductsPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
+
+  const pageOptions = [15, 25, 50];
 
   const [filters, setFilters] = useState({
     type: [] as string[],
@@ -1396,7 +1513,7 @@ export default function AllProductsPage() {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-        status: "Incomplete Registration",
+        status: profile?.status ?? "active",
       }),
     [profile]
   );
@@ -1482,6 +1599,13 @@ export default function AllProductsPage() {
       alert("Failed to move product to trash");
     }
   }
+
+  const activeFilterCount =
+  filters.type.length +
+  filters.status.length +
+  filters.discount.length;
+
+const hasActiveFilters = activeFilterCount > 0;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
@@ -1702,21 +1826,40 @@ export default function AllProductsPage() {
               </div>
 
               {/* Search box + button */}
-              <div className="flex items-center rounded-full border border-gray-200 bg-[#F5F5F8] px-3 py-1">
-                <span className="mr-1 text-xs text-gray-400">🔍</span>
-                <input
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setSearch(searchInput);
-                      setCurrentPage(1);
-                    }
-                  }}
-                  placeholder="Search Product"
-                  className="w-48 bg-transparent text-xs text-gray-700 focus:outline-none"
-                />
-              </div>
+             <div className="relative">
+  <Search
+    className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+  />
+  <input
+    value={searchInput}
+    onChange={(e) => setSearchInput(e.target.value)}
+    onKeyDown={(e) => {
+      if (e.key === "Enter") {
+        setSearch(searchInput);
+        setCurrentPage(1);
+      }
+    }}
+    placeholder="Search product…"
+    className="
+      w-60
+      rounded-full
+      bg-white
+      pl-11
+      pr-4
+      py-2
+      text-xs
+      text-gray-700
+      shadow-sm
+      border border-gray-200
+      placeholder:text-gray-400
+      focus:border-[#7C3AED]
+      focus:ring-2 
+      focus:ring-[#E9D8FD] 
+      focus:outline-none
+      transition-all
+    "
+  />
+</div>
 
               <button
                 type="button"
@@ -1951,21 +2094,58 @@ export default function AllProductsPage() {
                   Next &gt;
                 </button>
 
-                <div className="ml-3 flex items-center gap-1">
-                  <span>Result per page</span>
-                  <select
-                    className="rounded-md border border-gray-300 bg-white px-2 py-1"
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                  >
-                    <option value={15}>15</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                </div>
+                <div className="ml-3 flex items-center gap-2 text-xs text-gray-600">
+      <span className="whitespace-nowrap">Results per page</span>
+
+      <Listbox value={pageSize} onChange={(v) => setPageSize(v)}>
+        <div className="relative">
+          <Listbox.Button className="relative w-28 cursor-pointer rounded-full border border-gray-200 bg-white py-1.5 pl-3 pr-10 text-left text-xs text-gray-800 shadow-sm focus:outline-none">
+            <span className="block truncate">{pageSize}</span>
+            <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+              <ChevronDown className="h-3 w-3 text-gray-400" />
+            </span>
+          </Listbox.Button>
+
+          <Transition
+            as={Fragment}
+            leave="transition ease-in duration-150"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl border border-gray-200 bg-white py-2 shadow-lg focus:outline-none">
+              {pageOptions.map((opt) => (
+                <Listbox.Option
+                  key={opt}
+                  value={opt}
+                  className={({ active }) =>
+                    `relative cursor-pointer select-none py-2 pl-4 pr-8 text-xs ${
+                      active ? "bg-gray-100" : "text-gray-700"
+                    }`
+                  }
+                >
+                  {({ selected }) => (
+                    <>
+                      <span
+                        className={`block truncate ${
+                          selected ? "font-semibold text-gray-900" : ""
+                        }`}
+                      >
+                        {opt}
+                      </span>
+                      {selected && (
+                        <span className="absolute inset-y-0 right-3 flex items-center text-purple-600">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      )}
+                    </>
+                  )}
+                </Listbox.Option>
+              ))}
+            </Listbox.Options>
+          </Transition>
+        </div>
+      </Listbox>
+    </div>
               </div>
             </div>
           </div>

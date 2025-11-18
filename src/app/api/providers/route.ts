@@ -5,6 +5,12 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
 type ProviderStatus = "draft" | "active" | "unavailable";
 
+type Qualification = {
+  title: string;
+  institute: string;
+  year: string;
+};
+
 export async function GET(req: Request) {
   const supabase = createRouteHandlerClient({ cookies });
 
@@ -26,7 +32,15 @@ export async function GET(req: Request) {
       whatsapp_country_code,
       whatsapp_number,
       status,
-      cover_image_url
+      cover_image_url,
+      qualifications,
+      categories,
+      tags,
+      specialisation_areas,
+      wellness_dimensions,
+      total_images,
+      created_at,
+      updated_at
     `
     )
     .eq("vendor_id", auth.user.id)
@@ -66,6 +80,7 @@ export async function POST(req: Request) {
     categories,
     tags,
     images,
+    qualifications,
   } = body as {
     name: string;
     specialisationAreas?: string;
@@ -77,6 +92,7 @@ export async function POST(req: Request) {
     categories?: string[];
     tags?: string[];
     images?: string[];
+    qualifications?: Qualification[];  // 👈 fix type here
   };
 
   const cleanImages = (images ?? []).filter(
@@ -99,6 +115,8 @@ export async function POST(req: Request) {
       tags: tags ?? [],
       cover_image_url: cover,
       total_images: cleanImages.length,
+      // 👇 this now goes into the jsonb column we added
+      qualifications: qualifications ?? [],
     })
     .select("id")
     .single();

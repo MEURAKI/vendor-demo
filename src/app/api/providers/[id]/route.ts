@@ -37,7 +37,8 @@ export async function GET(
         id,
         image_url,
         position
-      )
+      ),
+      qualifications
     `
     )
     .eq("id", params.id)
@@ -72,12 +73,19 @@ export async function GET(
     cover_image_url,
     gallery_image_urls,
     images: imgs,
+    qualifications: provider.qualifications || [],
     created_at: provider.created_at,
     updated_at: provider.updated_at,
   };
 
   return NextResponse.json({ provider: payload });
 }
+
+type Qualification = {
+  title: string;
+  institute: string;
+  year: string;
+};
 
 export async function PUT(
   req: Request,
@@ -102,6 +110,7 @@ export async function PUT(
     categories,
     tags,
     images,
+    qualifications,
   } = body as {
     name?: string;
     specialisationAreas?: string;
@@ -113,6 +122,7 @@ export async function PUT(
     categories?: string[];
     tags?: string[];
     images?: string[];
+    qualifications?: Qualification[];
   };
 
   const updatePayload: Record<string, any> = {
@@ -125,6 +135,7 @@ export async function PUT(
     wellness_dimensions: wellnessDimensions ?? [],
     categories: categories ?? [],
     tags: tags ?? [],
+    qualifications: qualifications ?? [],
   };
 
   let cleanedImages: string[] = [];

@@ -37,6 +37,12 @@ type SessionOption = {
   price: number;
 };
 
+type WellnessDimension = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
 type LocationSettingsState = {
   id: string;
   locationType: LocationType;
@@ -61,6 +67,63 @@ function uuid() {
   return Math.random().toString(36).slice(2);
 }
 
+function ChipsInput({
+  items,
+  onChange,
+  placeholder,
+}: {
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder?: string;
+}) {
+  const [value, setValue] = useState("");
+
+  function commitValue() {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (!items.includes(trimmed)) {
+      onChange([...items, trimmed]);
+    }
+    setValue("");
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-2">
+      {items.map((item) => (
+        <span
+          key={item}
+          className="inline-flex items-center gap-1 rounded-full bg-[#EFEDFF] px-3 py-1 text-xs font-medium text-gray-800"
+        >
+          {item}
+          <button
+            type="button"
+            className="ml-1 text-[10px] text-gray-500 hover:text-gray-800"
+            onClick={() => onChange(items.filter((x) => x !== item))}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+
+      <input
+        className="min-w-[120px] flex-1 border-none bg-transparent px-2 py-1 text-xs focus:outline-none"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commitValue();
+          } else if (e.key === "Backspace" && !value && items.length > 0) {
+            onChange(items.slice(0, -1));
+          }
+        }}
+        onBlur={commitValue}
+      />
+    </div>
+  );
+}
+
 export default function NewServicePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -74,7 +137,7 @@ export default function NewServicePage() {
   const [locationTypes, setLocationTypes] = useState<LocationType[]>(["in_person"]);
   const [wellness, setWellness] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [tags, setTags] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
 
   // description tabs
   const [tabs, setTabs] = useState<DescriptionTab[]>([
@@ -92,6 +155,13 @@ export default function NewServicePage() {
   // fake option lists – replace with real fetch from /api/providers & /api/spaces
   const [allProviders, setAllProviders] = useState<{ id: string; name: string }[]>([]);
   const [allSpaces, setAllSpaces] = useState<{ id: string; name: string }[]>([]);
+
+  // taxonomy
+
+  // wellness like product (IDs from DB)
+  const [wellnessOptions, setWellnessOptions] = useState<WellnessDimension[]>([]);
+  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
+
 
   // per-location settings
   const [locationSettings, setLocationSettings] = useState<LocationSettingsState[]>([
@@ -115,6 +185,31 @@ export default function NewServicePage() {
   const [activeLocationTab, setActiveLocationTab] = useState<LocationType>("in_person");
 
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+  let mounted = true;
+
+  async function loadWellnessDimensions() {
+    const { data, error } = await supabase
+      .from("wellness_dimensions")
+      .select("id,name,slug")
+      .order("id", { ascending: true });
+
+    if (error) {
+      console.error("Error loading wellness dimensions", error);
+      return;
+    }
+
+    if (mounted && data) {
+      setWellnessOptions(data as WellnessDimension[]);
+    }
+  }
+
+  void loadWellnessDimensions();
+  return () => {
+    mounted = false;
+  };
+}, []);
 
   // load profile (for sidebar)
   useEffect(() => {
@@ -202,7 +297,7 @@ useEffect(() => {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-        status: "Incomplete Registration",
+       status: profile?.status ?? "active"
       }),
     [profile]
   );
@@ -277,50 +372,47 @@ useEffect(() => {
     setSaving(true);
 
     const payload = {
-      sku: sku || null,
-      name,
-      description,
-      status,
-      serviceTypes,
-      locationTypes,
-      wellnessDimensions: wellness,
-      categories,
-      tags: tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-      coverImageUrl,
-      images,
-      descriptionTabs: tabs.map((t, idx) => ({
-        title: t.title,
-        body: t.body,
-        position: idx,
-      })),
-      providerIds,
-      spaceIds,
-      locationSettings: locationSettings.map((loc) => ({
-        locationType: loc.locationType,
-        sku: loc.sku,
-        maxParticipants: loc.maxParticipants,
-        price: loc.price,
-        discountType: loc.discountType,
-        discountValue: loc.discountValue,
-        discountCap: loc.discountCap,
-        hasFixedSchedule: loc.hasFixedSchedule,
-        expiryType: loc.expiryType,
-        expiryDurationUnit: loc.expiryDurationUnit,
-        expiryDurationValue: loc.expiryDurationValue,
-        timeSlots: loc.timeSlots.map((s) => ({
-          start: s.start,
-          end: s.end,
-        })),
-        sessionOptions: loc.sessionOptions.map((p) => ({
-          label: p.label,
-          sessionsCount: p.sessionsCount,
-          price: p.price,
-        })),
-      })),
-    };
+  sku: sku || null,
+  name,
+  description,
+  status,
+  serviceTypes,
+  locationTypes,
+  wellnessDimensions: selectedWellnessIds,
+  categories,          // array of strings
+  tags,                // array of strings
+  coverImageUrl,
+  images,
+  descriptionTabs: tabs.map((t, idx) => ({
+    title: t.title,
+    body: t.body,
+    position: idx,
+  })),
+  providerIds,
+  spaceIds,
+  locationSettings: locationSettings.map((loc) => ({
+    locationType: loc.locationType,
+    sku: loc.sku,
+    maxParticipants: loc.maxParticipants,
+    price: loc.price,
+    discountType: loc.discountType,
+    discountValue: loc.discountValue,
+    discountCap: loc.discountCap,
+    hasFixedSchedule: loc.hasFixedSchedule,
+    expiryType: loc.expiryType,
+    expiryDurationUnit: loc.expiryDurationUnit,
+    expiryDurationValue: loc.expiryDurationValue,
+    timeSlots: loc.timeSlots.map((s) => ({
+      start: s.start,
+      end: s.end,
+    })),
+    sessionOptions: loc.sessionOptions.map((p) => ({
+      label: p.label,
+      sessionsCount: p.sessionsCount,
+      price: p.price,
+    })),
+  })),
+};
 
     try {
       const res = await fetch("/api/services", {
@@ -1130,59 +1222,85 @@ useEffect(() => {
 
                 {/* Wellness / Categories / Tags */}
                 <section className="rounded-3xl border border-[#ECECFB] bg-white p-5">
-                  <h2 className="mb-3 text-sm font-semibold text-gray-900">
-                    Wellness Dimension, Category &amp; Tags
-                  </h2>
-                  <div className="space-y-4 text-xs">
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Wellness Dimension
-                      </label>
-                      <input
-                        placeholder="Emotional, Physical"
-                        value={wellness.join(", ")}
-                        onChange={(e) =>
-                          setWellness(
-                            e.target.value
-                              .split(",")
-                              .map((x) => x.trim())
-                              .filter(Boolean)
-                          )
-                        }
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Menu Categories
-                      </label>
-                      <input
-                        placeholder="Choose 1 or more categories"
-                        value={categories.join(", ")}
-                        onChange={(e) =>
-                          setCategories(
-                            e.target.value
-                              .split(",")
-                              .map((x) => x.trim())
-                              .filter(Boolean)
-                          )
-                        }
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Tags
-                      </label>
-                      <input
-                        placeholder="Use ',' to add more tags"
-                        value={tags}
-                        onChange={(e) => setTags(e.target.value)}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
+                <h2 className="mb-3 text-sm font-semibold text-gray-900">
+                  Wellness Dimension, Category &amp; Tags
+                </h2>
+                <div className="space-y-4 text-xs">
+                  {/* Wellness dimensions – chips from DB, like products */}
+                  <div>
+                    <label className="font-semibold text-gray-800">
+                      Wellness Dimensions
+                    </label>
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      Choose one or more wellness dimensions for this service.
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {wellnessOptions.map((w) => {
+                        const active = selectedWellnessIds.includes(w.id);
+                        const iconSrc = `/images/wellness/${w.slug}`;
+                        return (
+                          <button
+                            key={w.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedWellnessIds((prev) =>
+                                prev.includes(w.id)
+                                  ? prev.filter((id) => id !== w.id)
+                                  : [...prev, w.id]
+                              );
+                            }}
+                            className={clsx(
+                              "flex items-center gap-2 rounded-2xl border px-2 py-2 text-left text-[11px] transition",
+                              active
+                                ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
+                                : "border-gray-200 bg-[#FBFBFE] text-gray-700 hover:border-[#C4B5FF]"
+                            )}
+                          >
+                            <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
+                              <img
+                                src={iconSrc}
+                                alt={w.name}
+                                className="h-full w-full object-contain"
+                              />
+                            </div>
+                            <span className="line-clamp-2">{w.name}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                </section>
+
+                  {/* Categories as chips */}
+                  <div>
+                    <label className="font-semibold text-gray-800">
+                      Menu Categories
+                    </label>
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      Type a category and press Enter to add.
+                    </p>
+                    <ChipsInput
+                      items={categories}
+                      onChange={setCategories}
+                      placeholder="e.g. Bodywork, Breathwork"
+                    />
+                  </div>
+
+                  {/* Tags as chips */}
+                  <div>
+                    <label className="font-semibold text-gray-800">
+                      Tags
+                    </label>
+                    <p className="mt-1 text.[11px] text-gray-500">
+                      Use tags to help customers find this service. Press Enter to add each tag.
+                    </p>
+                    <ChipsInput
+                      items={tags}
+                      onChange={setTags}
+                      placeholder="e.g. Beginners, Evening, Women-led"
+                    />
+                  </div>
+                </div>
+              </section>
               </div>
             </div>
           </div>

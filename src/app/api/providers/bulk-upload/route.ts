@@ -12,23 +12,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // Node runtime
 export const runtime = "nodejs";
 
-/* ---------- Types ---------- */
-
 type ProviderStatus = "draft" | "active" | "unavailable";
-
-type CsvMappingKey =
-  | "name"
-  | "specialisationAreas"
-  | "description"
-  | "status"
-  | "whatsappCountryCode"
-  | "whatsappNumber"
-  | "wellnessDimensions"
-  | "categories"
-  | "tags"
-  | "images";
-
-type Mapping = Record<CsvMappingKey, string>;
 
 type PreparedRow = {
   providerInsert: {
@@ -48,31 +32,39 @@ type PreparedRow = {
   imageUrls: string[];
 };
 
-/* ---------- Helpers ---------- */
-
-function getMappedValue(
-  row: Record<string, string>,
-  mapping: Partial<Mapping>,
-  key: CsvMappingKey
-): string {
-  const headerName = mapping[key];
-  if (!headerName) return "";
-  return (row[headerName] ?? "").trim();
-}
-
-function parseListCell(value: string): string[] {
+// split on comma / semicolon, trim, remove empties
+function parseListCell(value: string | undefined | null): string[] {
   if (!value) return [];
   return value
-    .split(/[;,]/) // support comma OR semicolon separated
+    .split(/[;,]/)
     .map((x) => x.trim())
     .filter(Boolean);
 }
 
-/* ---------- POST handler ---------- */
+// crude parser for "65 8233 3832" → { code: "65", number: "82333832" }
+function parseWhatsapp(raw: string | undefined | null): {
+  countryCode: string | null;
+  number: string | null;
+} {
+  if (!raw) return { countryCode: null, number: null };
+  const digits = raw.replace(/[^\d]/g, ""); // keep only numbers
+
+  if (!digits) return { countryCode: null, number: null };
+
+  // If more than 8 digits, treat first part as country code, last 8 as number
+  if (digits.length > 8) {
+    const number = digits.slice(-8);
+    const countryCode = digits.slice(0, digits.length - 8);
+    return { countryCode, number };
+  }
+
+  // Otherwise, treat as number only
+  return { countryCode: null, number: digits };
+}
 
 export async function POST(req: NextRequest) {
   try {
-    /* 0) Auth – use Bearer token from Authorization header */
+    // 0) Auth via Bearer token
     const authHeader = req.headers.get("authorization") || "";
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
@@ -97,11 +89,9 @@ export async function POST(req: NextRequest) {
 
     const vendorId = user.id;
 
-    /* 1) Read CSV + mapping from multipart form-data */
-
+    // 1) Read CSV from multipart form-data
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const mappingJson = formData.get("mapping") as string | null;
 
     if (!file) {
       return NextResponse.json(
@@ -109,15 +99,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    if (!mappingJson) {
-      return NextResponse.json(
-        { error: "Column mapping is required" },
-        { status: 400 }
-      );
-    }
-
-    const mapping = JSON.parse(mappingJson || "{}") as Partial<Mapping>;
 
     const text = await file.text();
     if (!text.trim()) {
@@ -127,6 +108,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2) Parse CSV (header row as columns)
     const records = parse(text, {
       columns: true,
       skip_empty_lines: true,
@@ -140,68 +122,56 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /* 2) Map CSV rows -> provider inserts */
-
+    // 3) Map CSV rows -> provider inserts
     const prepared: PreparedRow[] = [];
 
     records.forEach((row, index) => {
       const rowNumber = index + 2; // header is row 1
 
-      const name = getMappedValue(row, mapping, "name");
+      const name = (row["Provider_Name"] || "").trim();
       if (!name) {
-        console.warn(
-          `[providers bulk] Skipping row ${rowNumber} – missing name`
-        );
+        console.warn(`[providers bulk] Skipping row ${rowNumber} – missing Provider_Name`);
         return;
       }
 
-      const specialisationAreas = getMappedValue(
-        row,
-        mapping,
-        "specialisationAreas"
-      );
-      const description = getMappedValue(row, mapping, "description");
+      const specialisationAreas = (row["Specialisation_Areas"] || "").trim() || null;
+      const description = (row["Profile_Paragraphs"] || "").trim() || null;
 
-      const statusRaw = getMappedValue(row, mapping, "status").toLowerCase();
-      const status: ProviderStatus =
-        statusRaw === "draft"
-          ? "draft"
-          : statusRaw === "unavailable"
-          ? "unavailable"
-          : "active"; // default
+      const whatsappRaw = (row["Contact_Whatsapp_Number"] || "").trim();
+      const { countryCode, number } = parseWhatsapp(whatsappRaw);
 
-      const whatsappCountryCode = getMappedValue(
-        row,
-        mapping,
-        "whatsappCountryCode"
-      );
-      const whatsappNumber = getMappedValue(row, mapping, "whatsappNumber");
+      // arrays
+      const categories = parseListCell(row["Provider_Categories"]);
+      const wellnessDimensions = parseListCell(row["Provider_Wellness_Dimension"]);
 
-      const wellnessDimensions = parseListCell(
-        getMappedValue(row, mapping, "wellnessDimensions")
-      );
-      const categories = parseListCell(
-        getMappedValue(row, mapping, "categories")
-      );
-      const tags = parseListCell(getMappedValue(row, mapping, "tags"));
+      // make some tags from linked services / availability / instagram
+      const linkedServices = parseListCell(row["Linked_Services"]);
+      const availabilityTags = parseListCell(row["Provider_Availability"]);
+      const instagramLink = (row["Provider_Instagram_Link"] || "").trim();
+      const extraTags: string[] = [];
+      if (instagramLink) extraTags.push(instagramLink);
 
-      const imageCell = getMappedValue(row, mapping, "images");
-      const rawImages = parseListCell(imageCell);
+      const tags = [...linkedServices, ...availabilityTags, ...extraTags];
 
-      const cleanImages = rawImages.filter(
+      // images: could be one or multiple URLs separated by comma
+      const imageUrls = parseListCell(row["Provider_Image"]);
+      const cleanImages = imageUrls.filter(
         (url) => url && !url.startsWith("blob:")
       );
       const cover = cleanImages[0] ?? null;
+
+      // default all imported providers as active
+      const status: ProviderStatus = "active";
 
       prepared.push({
         providerInsert: {
           vendor_id: vendorId,
           name,
-          specialisation_areas: specialisationAreas || null,
-          description: description || null,
+          specialisation_areas: specialisationAreas,
+          description,
           status,
-          whatsapp_country_code: whatsappCountryCode || null,
-          whatsapp_number: whatsappNumber || null,
+          whatsapp_country_code: countryCode,
+          whatsapp_number: number,
           wellness_dimensions: wellnessDimensions,
           categories,
           tags,
@@ -219,8 +189,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /* 3) Insert into providers */
-
+    // 4) Insert into providers
     const providerRows = prepared.map((p) => p.providerInsert);
 
     const { data: inserted, error: insertError } = await supabase
@@ -238,10 +207,8 @@ export async function POST(req: NextRequest) {
 
     const insertedProviders = (inserted ?? []) as { id: string }[];
 
-    /* 4) Insert provider_images */
-
-    const imageRows: { provider_id: string; image_url: string; position: number }[] =
-      [];
+    // 5) Insert provider_images
+    const imageRows: { provider_id: string; image_url: string; position: number }[] = [];
 
     insertedProviders.forEach((prov, idx) => {
       const imgs = prepared[idx]?.imageUrls ?? [];

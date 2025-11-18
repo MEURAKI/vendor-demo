@@ -660,7 +660,7 @@ export default function NewProductPage() {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-        status: "Incomplete Registration",
+       status: profile?.status ?? "active"
       }),
     [profile]
   );

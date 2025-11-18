@@ -6,6 +6,7 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 export async function GET(req: Request) {
   const supabase = createRouteHandlerClient({ cookies });
   const { data: auth } = await supabase.auth.getUser();
+
   if (!auth.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -39,7 +40,39 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ services: data });
+  // Normalize cover_image_url -> imageUrl (string)
+  const services = (data ?? []).map((p: any) => {
+    let imageUrl: string | null = null;
+    const raw = p.cover_image_url;
+
+    if (raw) {
+      if (typeof raw === "string") {
+        // could be a plain URL or a JSON string of the image row
+        try {
+          const parsed = JSON.parse(raw);
+          imageUrl = parsed.image_url ?? parsed.url ?? null;
+        } catch {
+          // not JSON → assume it's already a URL
+          imageUrl = raw;
+        }
+      } else if (typeof raw === "object") {
+        // if the column is jsonb instead of text
+        imageUrl = raw.image_url ?? raw.url ?? null;
+      }
+    }
+
+    return {
+      id: p.id,
+      name: p.name,
+      status: p.status,
+      type: "Service",
+      serviceTypes: p.service_types ?? [],
+      locationTypes: p.location_types ?? [],
+      imageUrl, // <- clean URL for your UI
+    };
+  });
+
+  return NextResponse.json({ services });
 }
 
 export async function POST(req: Request) {
@@ -127,11 +160,42 @@ export async function POST(req: Request) {
       .insert(providerIds.map((pid: string) => ({ service_id: serviceId, provider_id: pid })));
   }
 
-  // spaces
-  if (spaceIds?.length) {
-    await supabase
-      .from("service_spaces")
-      .insert(spaceIds.map((sid: string) => ({ service_id: serviceId, space_id: sid })));
+
+  // wellness
+if (Array.isArray(wellnessDimensions) && wellnessDimensions.length) {
+  await supabase.from("service_wellness_dimensions").insert(
+    wellnessDimensions.map((id: string | number) => ({
+      service_id: serviceId,
+      dimension_id: id,
+    }))
+  );
+}
+
+// categories (free text)
+if (Array.isArray(categories) && categories.length) {
+  await supabase.from("service_categories").insert(
+    categories.map((cat: string) => ({
+      service_id: serviceId,
+      category: cat,
+    }))
+  );
+}
+
+// tags (free text)
+if (Array.isArray(tags) && tags.length) {
+  await supabase.from("service_tags").insert(
+    tags.map((tag: string) => ({
+      service_id: serviceId,
+      tag,
+    }))
+  );
+}
+
+// spaces
+if (Array.isArray(spaceIds) && spaceIds.length) {
+  await supabase
+    .from("service_spaces")
+    .insert(spaceIds.map((sid: string) => ({ service_id: serviceId, space_id: sid })));
   }
 
   // per-location settings

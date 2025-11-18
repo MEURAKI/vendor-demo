@@ -213,7 +213,7 @@ function BillingSettingsPageInner() {
         fullName: me?.full_name || me?.email || "User",
         email: me?.email || "",
         role: "Vendor",
-        status: "Incomplete Registration",
+       status: profile?.status ?? "active"
       }),
     [me]
   );
