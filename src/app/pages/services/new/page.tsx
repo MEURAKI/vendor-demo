@@ -7,6 +7,9 @@ import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.confi
 import { supabase } from "../../../../lib/supabase/client";
 import { uploadProviderImage } from "../../../../lib/uploadProviderImage";
 import MultiSelect from "../../../../components/inputs/MultiSelect";
+import WellnessCategoryTagsSection, {
+  WellnessOption,
+} from "../../../../components/taxonomy/WellnessCategoryTagsSection";
 
 type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
@@ -1223,86 +1226,16 @@ useEffect(() => {
                 </section>
 
                 {/* Wellness / Categories / Tags */}
-                <section className="rounded-3xl border border-[#ECECFB] bg-white p-5">
-                <h2 className="mb-3 text-sm font-semibold text-gray-900">
-                  Wellness Dimension, Category &amp; Tags
-                </h2>
-                <div className="space-y-4 text-xs">
-                  {/* Wellness dimensions – chips from DB, like products */}
-                  <div>
-                    <label className="font-semibold text-gray-800">
-                      Wellness Dimensions
-                    </label>
-                    <p className="mt-1 text-[11px] text-gray-500">
-                      Choose one or more wellness dimensions for this service.
-                    </p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {wellnessOptions.map((w) => {
-                        const active = selectedWellnessIds.includes(w.id);
-                        const iconSrc = `/images/wellness/${w.slug}`;
-                        return (
-                          <button
-                            key={w.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedWellnessIds((prev) =>
-                                prev.includes(w.id)
-                                  ? prev.filter((id) => id !== w.id)
-                                  : [...prev, w.id]
-                              );
-                            }}
-                            className={clsx(
-                              "flex items-center gap-2 rounded-2xl border px-2 py-2 text-left text-[11px] transition",
-                              active
-                                ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
-                                : "border-gray-200 bg-[#FBFBFE] text-gray-700 hover:border-[#C4B5FF]"
-                            )}
-                          >
-                            <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
-                              <img
-                                src={iconSrc}
-                                alt={w.name}
-                                className="h-full w-full object-contain"
-                              />
-                            </div>
-                            <span className="line-clamp-2">{w.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Categories as chips */}
-                  <div>
-                    <label className="font-semibold text-gray-800">
-                      Menu Categories
-                    </label>
-                    <p className="mt-1 text-[11px] text-gray-500">
-                      Type a category and press Enter to add.
-                    </p>
-                    <ChipsInput
-                      items={categories}
-                      onChange={setCategories}
-                      placeholder="e.g. Bodywork, Breathwork"
-                    />
-                  </div>
-
-                  {/* Tags as chips */}
-                  <div>
-                    <label className="font-semibold text-gray-800">
-                      Tags
-                    </label>
-                    <p className="mt-1 text.[11px] text-gray-500">
-                      Use tags to help customers find this service. Press Enter to add each tag.
-                    </p>
-                    <ChipsInput
-                      items={tags}
-                      onChange={setTags}
-                      placeholder="e.g. Beginners, Evening, Women-led"
-                    />
-                  </div>
-                </div>
-              </section>
+                <WellnessCategoryTagsSection
+                                 title="Wellness Dimension, Category & Tags"
+                                 wellnessOptions={wellnessOptions}
+                                 selectedWellnessIds={selectedWellnessIds}
+                                 onChangeWellness={setSelectedWellnessIds}
+                                 categories={categories}
+                                 onChangeCategories={setCategories}
+                                 tags={tags}
+                                 onChangeTags={setTags}
+                               />
               </div>
             </div>
           </div>

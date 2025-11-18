@@ -24,6 +24,10 @@ import {
   ProductImage,
 } from "../../../../../components/product/ProductImagesGallery";
 
+import WellnessCategoryTagsSection, {
+  WellnessOption,
+} from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
+
 /* ---------- Types ---------- */
 
 type DiscountType = "fixed" | "percent";
@@ -276,12 +280,6 @@ export default function EditProductPage({
   const [discountEnd, setDiscountEnd] = useState<string>("");
   const [discountAllVariants, setDiscountAllVariants] = useState(false);
 
-  // taxonomy
-  const [wellnessOptions, setWellnessOptions] = useState<WellnessDimension[]>([]);
-  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
-
   // description sections
   const [sections, setSections] = useState<DescriptionSection[]>([
     { id: uuid(), title: "Product Details", body: "" },
@@ -303,6 +301,11 @@ export default function EditProductPage({
     useState<number | undefined>(undefined);
 
   const [variantsCollapsed, setVariantsCollapsed] = useState(false);
+
+  const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
+const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
+const [categories, setCategories] = useState<string[]>([]);
+const [tags, setTags] = useState<string[]>([]);
 
   /* ---------- Sidebar config ---------- */
 
@@ -904,13 +907,9 @@ export default function EditProductPage({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <Image
-                        src="/images/auth-hero.svg"
-                        alt=""
-                        width={640}
-                        height={480}
-                        className="h-full w-full object-cover"
-                      />
+                      <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
+                        Main product image
+                      </div>
                     )}
                   </div>
 
@@ -951,86 +950,16 @@ export default function EditProductPage({
 
                 {/* Wellness / category / tags */}
                {/* Wellness / category / tags */}
-<section className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6">
-  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-700 sm:mb-4 sm:text-sm">
-    Wellness Dimension, Category &amp; Tags
-  </h2>
-
-  <div className="space-y-4 text-xs sm:space-y-5">
-    {/* Wellness dimensions from DB */}
-    <div>
-      <label className="font-semibold text-gray-800">
-        Wellness Dimensions
-      </label>
-      <p className="mt-1 text-[11px] text-gray-500">
-        Choose one or more wellness dimensions for this product.
-      </p>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {wellnessOptions.map((w) => {
-          const active = selectedWellnessIds.includes(w.id);
-          const iconSrc = `/images/wellness/${w.slug}`;
-          return (
-            <button
-              key={w.id}
-              type="button"
-              onClick={() => {
-                setSelectedWellnessIds((prev) =>
-                  prev.includes(w.id)
-                    ? prev.filter((id) => id !== w.id)
-                    : [...prev, w.id]
-                );
-              }}
-              className={clsx(
-                "flex items-center gap-2 rounded-2xl border px-2 py-2 text-left text-[11px] transition",
-                active
-                  ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
-                  : "border-gray-200 bg-white text-gray-700 hover:border-[#C4B5FF]"
-              )}
-            >
-              <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
-                <Image
-                  src={iconSrc}
-                  alt={w.name}
-                  width={28}
-                  height={28}
-                  className="h-full w-full object-contain"
+                <WellnessCategoryTagsSection
+                  title="Wellness Dimension, Category & Tags"
+                  wellnessOptions={wellnessOptions}
+                  selectedWellnessIds={selectedWellnessIds}
+                  onChangeWellness={setSelectedWellnessIds}
+                  categories={categories}
+                  onChangeCategories={setCategories}
+                  tags={tags}
+                  onChangeTags={setTags}
                 />
-              </div>
-              <span className="line-clamp-2">{w.name}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-
-    {/* Categories as chips */}
-    <div>
-      <label className="font-semibold text-gray-800">Categories</label>
-      <p className="mt-1 text-[11px] text-gray-500">
-        Type a category and press Enter to add.
-      </p>
-      <ChipsInput
-        items={categories}
-        onChange={setCategories}
-        placeholder="e.g. Apparel, Classes"
-      />
-    </div>
-
-    {/* Tags as chips */}
-    <div>
-      <label className="font-semibold text-gray-800">Tags</label>
-      <p className="mt-1 text-[11px] text-gray-500">
-        Use tags to help customers find this product. Press Enter to add each
-        tag.
-      </p>
-      <ChipsInput
-        items={tags}
-        onChange={setTags}
-        placeholder="e.g. Limited Edition, Bestseller"
-      />
-    </div>
-  </div>
-</section>
               </div>
             </div>
           </div>

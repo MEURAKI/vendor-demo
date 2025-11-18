@@ -11,6 +11,10 @@ import { supabase } from "../../../../../lib/supabase/client";
 import { uploadProviderImage } from "../../../../../lib/uploadProviderImage";
 import MultiSelect from "../../../../../components/inputs/MultiSelect";
 
+import WellnessCategoryTagsSection, {
+  WellnessOption,
+} from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
+
 type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
 type ServiceStatus = "draft" | "active" | "unavailable";
@@ -127,9 +131,6 @@ export default function EditServicePage() {
   const [serviceTypes, setServiceTypes] = useState<string[]>([]);
   const [locationTypes, setLocationTypes] = useState<LocationType[]>(["in_person"]);
 
-  const [wellnessOptions, setWellnessOptions] = useState<WellnessDimension[]>([]);
-  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
-
   // categories & tags as comma-separated strings in the UI
   const [categoriesInput, setCategoriesInput] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -151,6 +152,10 @@ export default function EditServicePage() {
   const [locationSettings, setLocationSettings] = useState<LocationSettingsState[]>([]);
   const [activeLocationTab, setActiveLocationTab] = useState<LocationType>("in_person");
 
+    const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
+    const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
+    const [tags, setTags] = useState<string[]>([]);
   // sidebar profile
   useEffect(() => {
     (async () => {
@@ -190,7 +195,7 @@ export default function EditServicePage() {
         console.error("Error loading wellness dimensions", error);
         return;
       }
-      if (data) setWellnessOptions(data as WellnessDimension[]);
+      if (data) setWellnessOptions(data as WellnessOption[]);
     }
     void loadWellness();
     return () => {
@@ -1318,49 +1323,16 @@ export default function EditServicePage() {
                   </section>
 
                   {/* Wellness / Categories / Tags */}
-                  <section className="rounded-3xl border border-[#ECECFB] bg-white p-5">
-                    <h2 className="mb-3 text-sm font-semibold text-gray-900">
-                      Wellness Dimension, Category &amp; Tags
-                    </h2>
-                    <div className="space-y-4 text-xs">
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Wellness Dimension
-                        </label>
-                        <MultiSelect
-                          label=""
-                          options={wellnessOptions.map((w) => ({
-                            id: String(w.id),
-                            name: w.name,
-                          }))}
-                          selected={selectedWellnessIds}
-                          onChange={setSelectedWellnessIds}
-                        />
-                      </div>
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Menu Categories
-                        </label>
-                        <input
-                          placeholder="Choose 1 or more categories"
-                          value={categoriesInput}
-                          onChange={(e) => setCategoriesInput(e.target.value)}
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Tags
-                        </label>
-                        <input
-                          placeholder="Use ',' to add more tags"
-                          value={tagsInput}
-                          onChange={(e) => setTagsInput(e.target.value)}
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  </section>
+                 <WellnessCategoryTagsSection
+                                  title="Wellness Dimension, Category & Tags"
+                                  wellnessOptions={wellnessOptions}
+                                  selectedWellnessIds={selectedWellnessIds}
+                                  onChangeWellness={setSelectedWellnessIds}
+                                  categories={categories}
+                                  onChangeCategories={setCategories}
+                                  tags={tags}
+                                  onChangeTags={setTags}
+                                />
                 </div>
               </div>
             </div>

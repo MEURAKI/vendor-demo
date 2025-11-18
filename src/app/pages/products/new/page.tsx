@@ -701,8 +701,6 @@ export default function NewProductPage() {
     };
   }, []);
 
-  console.log("Option Groups:", wellnessOptions);
-
   // base kinds only (no "custom") – matches ProductVariantChooser
   const selectedKinds: BaseOptionGroupKind[] = optionGroups
     .filter(

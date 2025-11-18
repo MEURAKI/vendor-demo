@@ -161,7 +161,7 @@ export async function GET(
   const categoryIds = (categoryRows ?? []).map((row) => row.category);
 
   // 8) tags (simple product_tags table)
-  const { data: tagRows, error: tErr } = await client
+const { data: tagRows, error: tErr } = await client
     .from("product_tags")
     .select("tag")
     .eq("product_id", productId);
@@ -170,8 +170,25 @@ export async function GET(
     return NextResponse.json({ error: tErr.message }, { status: 400 });
   }
 
-  const tags = (tagRows ?? []).map((row) => row.tag);
+  // Normalize: handle plain strings or old JSON like {"name":"sdf"}
+  const tags =
+    (tagRows ?? []).map((row) => {
+      const raw = row.tag;
+      if (!raw) return "";
 
+      // if it was stored as JSON string, try to parse
+      try {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === "string") return parsed;
+        if (parsed && typeof parsed === "object" && "name" in parsed) {
+          return (parsed as any).name ?? raw;
+        }
+      } catch {
+        // not JSON, just return as-is
+      }
+
+      return raw;
+    }).filter(Boolean);
   // Final response
   return NextResponse.json({
     id: (product as any).id || "",
@@ -269,35 +286,73 @@ export async function PUT(
 
   /* ------------------ 4) Wellness dimensions --------------------- */
 
-  if (Array.isArray(body.wellnessIds) && body.wellnessIds.length) {
-    await client.from("product_wellness_dimensions").insert(
-      body.wellnessIds.map((dimensionId: string | number) => ({
-        product_id: productId,
-        dimension_id: dimensionId,
-      }))
+/* ------------------ 4) Wellness dimensions --------------------- */
+
+if (Array.isArray(body.wellnessIds) && body.wellnessIds.length) {
+  const wellnessRows = body.wellnessIds.map((dimensionId: string | number) => ({
+    product_id: productId,
+    // force to number in case frontend sends "1", "4", "7"
+    dimension_id:
+      typeof dimensionId === "string" ? Number(dimensionId) : dimensionId,
+  }));
+
+  const { error: wInsertErr } = await client
+    .from("product_wellness_dimensions")
+    .insert(wellnessRows);
+
+  if (wInsertErr) {
+    console.error("Wellness insert error:", wInsertErr);
+    return NextResponse.json(
+      { error: "Failed to insert wellness dimensions", details: wInsertErr.message },
+      { status: 400 }
     );
   }
+}
 
-  /* ---------------------- 5) Categories -------------------------- */
+/* ---------------------- 5) Categories -------------------------- */
 
-  if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
-    await client.from("product_categories").insert(
-      body.categoryIds.map((categoryId: string | number) => ({
-        product_id: productId,
-        category: categoryId,
-      }))
+if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
+  const categoryRows = body.categoryIds.map((categoryId: string | number) => ({
+    product_id: productId,
+    // force to string so it always matches `category` TEXT column
+    category: String(categoryId),
+  }));
+
+  const { error: cInsertErr } = await client
+    .from("product_categories")
+    .insert(categoryRows);
+
+  if (cInsertErr) {
+    console.error("Category insert error:", cInsertErr);
+    return NextResponse.json(
+      { error: "Failed to insert categories", details: cInsertErr.message },
+      { status: 400 }
     );
   }
+}
 
   /* ---------------------- 6) Tags (NEW) -------------------------- */
 
+  
   if (Array.isArray(body.tags) && body.tags.length) {
-    await client.from("product_tags").insert(
-      body.tags.map((tag: string) => ({
-        product_id: productId,
-        tag,
-      }))
-    );
+    // normalize: support ["tag"] or [{ name: "tag" }]
+    const normalizedTags: string[] = body.tags
+      .map((t: any) => {
+        if (!t) return null;
+        if (typeof t === "string") return t;
+        if (typeof t === "object" && "name" in t) return String(t.name);
+        return null;
+      })
+      .filter((t: any): t is string => !!t);
+
+    if (normalizedTags.length) {
+      await client.from("product_tags").insert(
+        normalizedTags.map((tag) => ({
+          product_id: productId,
+          tag,
+        }))
+      );
+    }
   }
 
   /* ------------------- 7) Gallery images ------------------------- */

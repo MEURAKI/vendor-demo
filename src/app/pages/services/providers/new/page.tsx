@@ -9,6 +9,7 @@ import Sidebar from "../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
 import { uploadProviderImage } from "../../../../../lib/uploadProviderImage";
+import WellnessCategoryTagsSection, { WellnessOption } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
 
 type ProviderStatus = "draft" | "active" | "unavailable";
 
@@ -36,9 +37,7 @@ export default function NewProviderPage() {
   const [whatsCountry, setWhatsCountry] = useState("+65");
   const [whatsNumber, setWhatsNumber] = useState("");
 
-  const [wellness, setWellness] = useState<string[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [tags, setTags] = useState("");
+  const [wellness, setWellness] = useState<string[]>([])
 
   // images – first item is the main provider image
   const [images, setImages] = useState<string[]>([]);
@@ -50,6 +49,10 @@ export default function NewProviderPage() {
     { title: "", institute: "", year: "" },
   ]);
 
+    const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
+  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   // --------- load profile for sidebar ----------
   useEffect(() => {
     (async () => {
@@ -61,6 +64,13 @@ export default function NewProviderPage() {
         .eq("id", auth.user.id)
         .maybeSingle();
       if (data) setProfile(data as Profile);
+
+              const { data: wellnessData } = await supabase
+                .from("wellness_dimensions")
+                .select("id,name,slug");
+      
+              setWellnessOptions((wellnessData ?? []) as WellnessOption[]);
+      
     })();
   }, []);
 
@@ -171,10 +181,7 @@ export default function NewProviderPage() {
       whatsappNumber: whatsNumber,
       wellnessDimensions: wellness,
       categories,
-      tags: tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
+      tags,
       images,
       qualifications: cleanedQualifications,
     };
@@ -520,61 +527,16 @@ export default function NewProviderPage() {
                   </div>
                 </section>
 
-                {/* Wellness + Categories + Tags */}
-                <section className="rounded-3xl border border-[#ECECFB] bg-white p-5">
-                  <h2 className="mb-3 text-sm font-semibold text-gray-900">
-                    Wellness Dimension &amp; Categories
-                  </h2>
-                  <div className="space-y-4 text-xs">
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Wellness Dimension
-                      </label>
-                      <input
-                        placeholder="Emotional, Physical"
-                        value={wellness.join(", ")}
-                        onChange={(e) =>
-                          setWellness(
-                            e.target.value
-                              .split(",")
-                              .map((x) => x.trim())
-                              .filter(Boolean)
-                          )
-                        }
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Categories
-                      </label>
-                      <input
-                        placeholder="Doula, Therapist"
-                        value={categories.join(", ")}
-                        onChange={(e) =>
-                          setCategories(
-                            e.target.value
-                              .split(",")
-                              .map((x) => x.trim())
-                              .filter(Boolean)
-                          )
-                        }
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Tags
-                      </label>
-                      <input
-                        placeholder="Use ',' to add more tags"
-                        value={tags}
-                        onChange={(e) => setTags(e.target.value)}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </section>
+              <WellnessCategoryTagsSection
+                                title="Wellness Dimension, Category & Tags"
+                                wellnessOptions={wellnessOptions}
+                                selectedWellnessIds={selectedWellnessIds}
+                                onChangeWellness={setSelectedWellnessIds}
+                                categories={categories}
+                                onChangeCategories={setCategories}
+                                tags={tags}
+                                onChangeTags={setTags}
+                              />
               </div>
             </div>
           </main>

@@ -8,6 +8,7 @@ import clsx from "clsx";
 import Sidebar from "../../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../../lib/supabase/client";
+import WellnessCategoryTagsSection, { WellnessOption } from "../../../../../../components/taxonomy/WellnessCategoryTagsSection";
 
 type SpaceType = "in_person" | "online" | "hybrid";
 type SpaceStatus = "draft" | "active" | "unavailable";
@@ -72,8 +73,12 @@ export default function EditSpacePage({
   const [status, setStatus] = useState<SpaceStatus>("draft");
 
   const [wellness, setWellness] = useState<string[]>([]);
+
+
+    const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
+  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [tags, setTags] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
 
   // ------- profile for sidebar -------
   useEffect(() => {
@@ -86,6 +91,14 @@ export default function EditSpacePage({
         .eq("id", auth.user.id)
         .maybeSingle();
       if (prof) setProfile(prof as Profile);
+
+              // wellness dimensions (for UI cards)
+              const { data: wellnessData } = await supabase
+                .from("wellness_dimensions")
+                .select("id,name,slug");
+      
+              setWellnessOptions((wellnessData ?? []) as WellnessOption[]);
+      
     })();
   }, []);
 
@@ -131,7 +144,7 @@ export default function EditSpacePage({
         setGallery(s.gallery_image_urls ?? []);
         setWellness(s.wellness_dimensions ?? []);
         setCategories(s.categories ?? []);
-        setTags((s.tags ?? []).join(", "));
+        setTags((s.tags ?? []));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -191,10 +204,7 @@ export default function EditSpacePage({
         gallery_image_urls: gallery,
         wellness_dimensions: wellness,
         categories,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        tags,
       };
 
       const res = await fetch(`/api/spaces/${spaceId}`, {
@@ -512,58 +522,16 @@ export default function EditSpacePage({
               </section>
 
               {/* Tags */}
-              <section className="rounded-2xl border bg-[#FBFBFE] p-6">
-                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                  Wellness Dimension, Category &amp; Tags
-                </h2>
-                <div className="space-y-4 text-xs">
-                  <div>
-                    <label className="font-semibold text-gray-800">
-                      Wellness Dimension
-                    </label>
-                    <input
-                      placeholder="Physical, Emotional"
-                      value={wellness.join(", ")}
-                      onChange={(e) =>
-                        setWellness(
-                          e.target.value
-                            .split(",")
-                            .map((x) => x.trim())
-                            .filter(Boolean)
-                        )
-                      }
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-gray-800">
-                      Categories
-                    </label>
-                    <input
-                      placeholder="Choose 1 or more categories"
-                      value={categories.join(", ")}
-                      onChange={(e) =>
-                        setCategories(
-                          e.target.value
-                            .split(",")
-                            .map((x) => x.trim())
-                            .filter(Boolean)
-                        )
-                      }
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-gray-800">Tags</label>
-                    <input
-                      placeholder="Use ',' to add more tags"
-                      value={tags}
-                      onChange={(e) => setTags(e.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </section>
+            <WellnessCategoryTagsSection
+                              title="Wellness Dimension, Category & Tags"
+                              wellnessOptions={wellnessOptions}
+                              selectedWellnessIds={selectedWellnessIds}
+                              onChangeWellness={setSelectedWellnessIds}
+                              categories={categories}
+                              onChangeCategories={setCategories}
+                              tags={tags}
+                              onChangeTags={setTags}
+                            />
             </div>
           </div>
         </div>
