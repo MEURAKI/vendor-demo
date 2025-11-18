@@ -136,6 +136,43 @@ export async function GET(
 
   const galleryImageUrls = galleryRows?.map((r) => r.url) ?? [];
 
+  // 6) wellness dimensions (join table product_wellness_dimensions)
+  const { data: wellnessRows, error: wErr } = await client
+    .from("product_wellness_dimensions")
+    .select("dimension_id")
+    .eq("product_id", productId);
+
+  if (wErr) {
+    return NextResponse.json({ error: wErr.message }, { status: 400 });
+  }
+
+  const wellnessIds = (wellnessRows ?? []).map((row) => row.dimension_id);
+
+  // 7) categories (join table product_categories)
+  const { data: categoryRows, error: cErr } = await client
+    .from("product_categories")
+    .select("category")
+    .eq("product_id", productId);
+
+  if (cErr) {
+    return NextResponse.json({ error: cErr.message }, { status: 400 });
+  }
+
+  const categoryIds = (categoryRows ?? []).map((row) => row.category);
+
+  // 8) tags (simple product_tags table)
+  const { data: tagRows, error: tErr } = await client
+    .from("product_tags")
+    .select("tag")
+    .eq("product_id", productId);
+
+  if (tErr) {
+    return NextResponse.json({ error: tErr.message }, { status: 400 });
+  }
+
+  const tags = (tagRows ?? []).map((row) => row.tag);
+
+  // Final response
   return NextResponse.json({
     id: (product as any).id || "",
     name: (product as any).name,
@@ -158,9 +195,9 @@ export async function GET(
     optionGroups,
     variants,
     galleryImageUrls,
-    wellnessIds: [], // fill from product_wellness_dimensions if you want
-    categoryIds: [], // fill from product_categories if you want
-    tags: [], // if you later add tags
+    wellnessIds,
+    categoryIds,
+    tags,
     productImageUrl: (product as any).image_url ?? null,
   });
 }
@@ -177,7 +214,8 @@ export async function PUT(
   const body = await req.json();
   const client = supa();
 
-  // 1) Update main product
+  /* ---------------------- 1) Update product ---------------------- */
+
   const { data: product, error } = await client
     .from("products")
     .update({
@@ -206,25 +244,18 @@ export async function PUT(
     );
   }
 
-  // 2) Clear related tables
-  await client
-    .from("product_description_sections")
-    .delete()
-    .eq("product_id", productId);
-  await client
-    .from("product_wellness_dimensions")
-    .delete()
-    .eq("product_id", productId);
+  /* ------------------ 2) Clear related tables ------------------- */
+
+  await client.from("product_description_sections").delete().eq("product_id", productId);
+  await client.from("product_wellness_dimensions").delete().eq("product_id", productId);
   await client.from("product_categories").delete().eq("product_id", productId);
+  await client.from("product_tags").delete().eq("product_id", productId);
   await client.from("product_images").delete().eq("product_id", productId);
   await client.from("product_variants").delete().eq("product_id", productId);
-  await client
-    .from("product_option_groups")
-    .delete()
-    .eq("product_id", productId);
-  // variant_option_values rows should be cascade-deleted if FK is set up that way
+  await client.from("product_option_groups").delete().eq("product_id", productId);
 
-  // 3) Reinsert sections
+  /* ---------------- 3) Insert description sections --------------- */
+
   if (Array.isArray(body.sections) && body.sections.length) {
     await client.from("product_description_sections").insert(
       body.sections.map((s: any, idx: number) => ({
@@ -236,26 +267,41 @@ export async function PUT(
     );
   }
 
-  // 4) wellness / categories
+  /* ------------------ 4) Wellness dimensions --------------------- */
+
   if (Array.isArray(body.wellnessIds) && body.wellnessIds.length) {
     await client.from("product_wellness_dimensions").insert(
-      body.wellnessIds.map((id: number | string) => ({
+      body.wellnessIds.map((dimensionId: string | number) => ({
         product_id: productId,
-        dimension_id: id,
+        dimension_id: dimensionId,
       }))
     );
   }
+
+  /* ---------------------- 5) Categories -------------------------- */
 
   if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
     await client.from("product_categories").insert(
-      body.categoryIds.map((id: number | string) => ({
+      body.categoryIds.map((categoryId: string | number) => ({
         product_id: productId,
-        category_id: id,
+        category: categoryId,
       }))
     );
   }
 
-  // 5) gallery images
+  /* ---------------------- 6) Tags (NEW) -------------------------- */
+
+  if (Array.isArray(body.tags) && body.tags.length) {
+    await client.from("product_tags").insert(
+      body.tags.map((tag: string) => ({
+        product_id: productId,
+        tag,
+      }))
+    );
+  }
+
+  /* ------------------- 7) Gallery images ------------------------- */
+
   if (Array.isArray(body.galleryImageUrls) && body.galleryImageUrls.length) {
     await client.from("product_images").insert(
       body.galleryImageUrls.map((url: string, idx: number) => ({
@@ -266,9 +312,10 @@ export async function PUT(
     );
   }
 
-  // 6) variants & options
+  /* ------------------- 8) Variants + Options --------------------- */
+
   if (body.isVariant) {
-    // groups
+    // Insert option groups
     const { data: groups, error: gErr } = await client
       .from("product_option_groups")
       .insert(
@@ -290,11 +337,12 @@ export async function PUT(
       groupIdByName[g.name] = g.id;
     });
 
-    // values
+    // Insert option values
     const allValueRows: any[] = [];
     (body.optionGroups ?? []).forEach((g: any) => {
       const dbGroupId = groupIdByName[g.name];
       if (!dbGroupId) return;
+
       (g.values ?? []).forEach((v: any, idx: number) => {
         allValueRows.push({
           group_id: dbGroupId,
@@ -307,7 +355,7 @@ export async function PUT(
 
     let values: any[] = [];
     if (allValueRows.length) {
-      const { data: valueData, error: vErr } = await client
+      const { data: vData, error: vErr } = await client
         .from("product_option_values")
         .insert(allValueRows)
         .select();
@@ -315,7 +363,8 @@ export async function PUT(
       if (vErr) {
         return NextResponse.json({ error: vErr.message }, { status: 400 });
       }
-      values = valueData ?? [];
+
+      values = vData ?? [];
     }
 
     const valueIdByKey: Record<string, string> = {};
@@ -323,9 +372,8 @@ export async function PUT(
       valueIdByKey[`${v.group_id}:${v.label}`] = v.id;
     });
 
-    const rawVariants: any[] = Array.isArray(body.variants)
-      ? body.variants
-      : [];
+    // Insert variants
+    const rawVariants: any[] = Array.isArray(body.variants) ? body.variants : [];
 
     const variantRows = rawVariants.map((vr, idx: number) => ({
       product_id: productId,
@@ -347,27 +395,27 @@ export async function PUT(
       return NextResponse.json({ error: varErr.message }, { status: 400 });
     }
 
+    // Variant → option values join table
     const vovRows: any[] = [];
+
     (createdVariants ?? []).forEach((v: any, idx: number) => {
       const formVariant = rawVariants[idx];
       if (!formVariant?.options) return;
 
-      Object.entries(formVariant.options).forEach(
-        ([groupName, valueLabel]) => {
-          const group = (groups ?? []).find(
-            (g: any) => g.name === groupName
-          );
-          if (!group) return;
-          const key = `${group.id}:${valueLabel}`;
-          const dbValueId = valueIdByKey[key];
-          if (dbValueId) {
-            vovRows.push({
-              variant_id: v.id,
-              value_id: dbValueId,
-            });
-          }
+      Object.entries(formVariant.options).forEach(([groupName, valueLabel]) => {
+        const group = (groups ?? []).find((g: any) => g.name === groupName);
+        if (!group) return;
+
+        const key = `${group.id}:${valueLabel}`;
+        const dbValueId = valueIdByKey[key];
+
+        if (dbValueId) {
+          vovRows.push({
+            variant_id: v.id,
+            value_id: dbValueId,
+          });
         }
-      );
+      });
     });
 
     if (vovRows.length) {

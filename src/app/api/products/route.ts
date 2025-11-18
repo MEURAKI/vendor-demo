@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   const { data: products, error } = await client
     .from("products")
     .select(
-      "id, name, base_sku, is_variant, price_cents, inventory_qty, status, image_url"
+      "id, name, base_sku, is_variant, price_cents, inventory_qty, status, image_url "
     )
     .eq("vendor_id", user.id)
     .order("created_at", { ascending: false });
@@ -145,8 +145,8 @@ export async function POST(req: NextRequest) {
       discount_all_variants: !!discount?.applyToVariants,
       inventory_qty: isVariant ? null : inventoryQty,
       status,
-      image_url: productImageUrl ?? null, // store main image URL
-      // if you have a tags column (e.g. text[]), you can add:
+      image_url: productImageUrl ?? null,
+      // if you later add a tags column on products (e.g. text[]), you can also set it here
       // tags,
     })
     .select()
@@ -193,7 +193,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 5) Gallery images → product_images table
+  // 5) Tags (join table product_tags)
+  if (Array.isArray(tags) && tags.length) {
+    await client.from("product_tags").insert(
+      tags.map((tag: string) => ({
+        product_id: productId,
+        tag,
+      }))
+    );
+  }
+
+  // 6) Gallery images → product_images table
   if (Array.isArray(galleryImageUrls) && galleryImageUrls.length) {
     await client.from("product_images").insert(
       galleryImageUrls.map((url: string, idx: number) => ({
@@ -204,7 +214,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 6) Variants & options (only if isVariant)
+  // 7) Variants & options (only if isVariant)
   if (isVariant) {
     // --- option groups ---
     const { data: groups, error: gErr } = await client

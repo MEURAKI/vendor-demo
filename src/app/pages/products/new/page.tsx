@@ -621,7 +621,8 @@ export default function NewProductPage() {
 
   // taxonomy
   const [wellnessOptions, setWellnessOptions] = useState<WellnessDimension[]>(
-    []
+    [
+    ]
   );
   const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -699,6 +700,8 @@ export default function NewProductPage() {
       isMounted = false;
     };
   }, []);
+
+  console.log("Option Groups:", wellnessOptions);
 
   // base kinds only (no "custom") – matches ProductVariantChooser
   const selectedKinds: BaseOptionGroupKind[] = optionGroups
@@ -867,6 +870,19 @@ export default function NewProductPage() {
         });
       }
 
+      // Build wellness with id + name + slug
+    const selectedWellness = wellnessOptions
+      .filter((w) => selectedWellnessIds.includes(w.id))
+      .map((w) => ({
+        id: w.id,
+        name: w.name,
+        slug: w.slug,
+      }));
+
+    // Categories and tags currently only have the name
+    const categoriesPayload = categories.map((name) => ({ name }));
+    const tagsPayload = tags.map((name) => ({ name }));
+
       const body = {
         status,
         vendorId,
@@ -885,9 +901,9 @@ export default function NewProductPage() {
               applyToVariants: discountAllVariants,
             }
           : null,
-        wellnessIds: selectedWellnessIds,
-        categoryIds: categories,
-        tags,
+        wellnessIds: selectedWellness,
+        categoryIds: categoriesPayload,
+        tags:tagsPayload,
         sections: sections.map((s, idx) => ({
           title: s.title,
           body: s.body,
@@ -1198,7 +1214,7 @@ export default function NewProductPage() {
                       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {wellnessOptions.map((w) => {
                           const active = selectedWellnessIds.includes(w.id);
-                          const iconSrc = `/images/wellness/${w.slug}.png`;
+                          const iconSrc = `/images/wellness/${w.slug}`;
                           return (
                             <button
                               key={w.id}

@@ -42,6 +42,12 @@ type OptionValue = {
   colorHex?: string;
 };
 
+type WellnessDimension = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
 type OptionGroup = {
   id: string;
   name: string;
@@ -68,6 +74,62 @@ type Profile = {
 };
 
 /* ---------- Helpers ---------- */
+function ChipsInput({
+  items,
+  onChange,
+  placeholder,
+}: {
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder?: string;
+}) {
+  const [value, setValue] = useState("");
+
+  function commitValue() {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (!items.includes(trimmed)) {
+      onChange([...items, trimmed]);
+    }
+    setValue("");
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-2">
+      {items.map((item) => (
+        <span
+          key={item}
+          className="inline-flex items-center gap-1 rounded-full bg-[#EFEDFF] px-3 py-1 text-xs font-medium text-gray-800"
+        >
+          {item}
+          <button
+            type="button"
+            className="ml-1 text-[10px] text-gray-500 hover:text-gray-800"
+            onClick={() => onChange(items.filter((x) => x !== item))}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+
+      <input
+        className="min-w-[120px] flex-1 border-none bg-transparent px-2 py-1 text-xs focus:outline-none"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commitValue();
+          } else if (e.key === "Backspace" && !value && items.length > 0) {
+            onChange(items.slice(0, -1));
+          }
+        }}
+        onBlur={commitValue}
+      />
+    </div>
+  );
+}
 
 function uuid() {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
@@ -215,9 +277,10 @@ export default function EditProductPage({
   const [discountAllVariants, setDiscountAllVariants] = useState(false);
 
   // taxonomy
-  const [wellness, setWellness] = useState<string[]>([]);
+  const [wellnessOptions, setWellnessOptions] = useState<WellnessDimension[]>([]);
+  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [tags, setTags] = useState<string>("");
+  const [tags, setTags] = useState<string[]>([]);
 
   // description sections
   const [sections, setSections] = useState<DescriptionSection[]>([
@@ -387,9 +450,16 @@ export default function EditProductPage({
         );
 
         // taxonomy / meta
-        setWellness(data.wellnessIds ?? []);
+        setSelectedWellnessIds(data.wellnessIds ?? []);
         setCategories(data.categoryIds ?? []);
-        setTags((data.tags ?? []).join(", "));
+        setTags(data.tags ?? []);
+
+        // wellness dimensions (for UI cards)
+        const { data: wellnessData } = await supabase
+          .from("wellness_dimensions")
+          .select("id,name,slug");
+
+        setWellnessOptions((wellnessData ?? []) as WellnessDimension[]);
 
         // images
         setProductImageUrl(data.productImageUrl ?? null);
@@ -589,12 +659,9 @@ export default function EditProductPage({
               applyToVariants: discountAllVariants,
             }
           : null,
-        wellnessIds: wellness,
+        wellnessIds: selectedWellnessIds,
         categoryIds: categories,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        tags,
         sections: sections.map((s, idx) => ({
           id: s.id ?? uuid(),
           title: s.title,
@@ -883,61 +950,87 @@ export default function EditProductPage({
                 </section>
 
                 {/* Wellness / category / tags */}
-                <section className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6">
-                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-700 sm:mb-4 sm:text-sm">
-                    Wellness Dimension, Category &amp; Tags
-                  </h2>
+               {/* Wellness / category / tags */}
+<section className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6">
+  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-700 sm:mb-4 sm:text-sm">
+    Wellness Dimension, Category &amp; Tags
+  </h2>
 
-                  <div className="space-y-3 text-xs sm:space-y-4">
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Wellness Dimensions
-                      </label>
-                      <input
-                        placeholder="Emotional, Physical"
-                        value={wellness.join(", ")}
-                        onChange={(e) =>
-                          setWellness(
-                            e.target.value
-                              .split(",")
-                              .map((x) => x.trim())
-                              .filter(Boolean)
-                          )
-                        }
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Categories
-                      </label>
-                      <input
-                        placeholder="Tops, Graphic Tees"
-                        value={categories.join(", ")}
-                        onChange={(e) =>
-                          setCategories(
-                            e.target.value
-                              .split(",")
-                              .map((x) => x.trim())
-                              .filter(Boolean)
-                          )
-                        }
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-semibold text-gray-800">
-                        Tags
-                      </label>
-                      <input
-                        placeholder="Use ',' to add more tags"
-                        value={tags}
-                        onChange={(e) => setTags(e.target.value)}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </section>
+  <div className="space-y-4 text-xs sm:space-y-5">
+    {/* Wellness dimensions from DB */}
+    <div>
+      <label className="font-semibold text-gray-800">
+        Wellness Dimensions
+      </label>
+      <p className="mt-1 text-[11px] text-gray-500">
+        Choose one or more wellness dimensions for this product.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {wellnessOptions.map((w) => {
+          const active = selectedWellnessIds.includes(w.id);
+          const iconSrc = `/images/wellness/${w.slug}`;
+          return (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => {
+                setSelectedWellnessIds((prev) =>
+                  prev.includes(w.id)
+                    ? prev.filter((id) => id !== w.id)
+                    : [...prev, w.id]
+                );
+              }}
+              className={clsx(
+                "flex items-center gap-2 rounded-2xl border px-2 py-2 text-left text-[11px] transition",
+                active
+                  ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-[#C4B5FF]"
+              )}
+            >
+              <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
+                <Image
+                  src={iconSrc}
+                  alt={w.name}
+                  width={28}
+                  height={28}
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <span className="line-clamp-2">{w.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+
+    {/* Categories as chips */}
+    <div>
+      <label className="font-semibold text-gray-800">Categories</label>
+      <p className="mt-1 text-[11px] text-gray-500">
+        Type a category and press Enter to add.
+      </p>
+      <ChipsInput
+        items={categories}
+        onChange={setCategories}
+        placeholder="e.g. Apparel, Classes"
+      />
+    </div>
+
+    {/* Tags as chips */}
+    <div>
+      <label className="font-semibold text-gray-800">Tags</label>
+      <p className="mt-1 text-[11px] text-gray-500">
+        Use tags to help customers find this product. Press Enter to add each
+        tag.
+      </p>
+      <ChipsInput
+        items={tags}
+        onChange={setTags}
+        placeholder="e.g. Limited Edition, Bestseller"
+      />
+    </div>
+  </div>
+</section>
               </div>
             </div>
           </div>
