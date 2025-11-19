@@ -1079,6 +1079,9 @@ function BulkUploadModal({
                   Wellness Dimension
                 </div>
                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                   Tags
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
                   Price (SGD)
                 </div>
                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
