@@ -199,7 +199,7 @@ export default function DashboardPage() {
               { id: "p-add", label: "Add Product", href: "/pages/products/new" },
               { id: "p-inv", label: "Inventory", href: "/pages/products/inventory" },
               { id: "p-bundles", label: "Bundles", href: "/pages/products/bundles" },
-              { id: "p-cats", label: "Categories", href: "/pages/products/categories" },
+              // { id: "p-cats", label: "Categories", href: "/pages/products/categories" },
               ],
             },
             {
