@@ -813,7 +813,8 @@ type ProductCsvMappingKey =
   | "category"
   | "wellness"
   | "price"
-  | "inventory";
+  | "inventory"
+  | "tags";
 
 type VariantCsvMappingKey =
   | "productBaseSku" // parent product base_sku
@@ -855,6 +856,7 @@ function BulkUploadModal({
     wellness: "",
     price: "",
     inventory: "",
+    tags: "",
   });
 
   const [variantMapping, setVariantMapping] = useState<
@@ -1181,6 +1183,16 @@ function BulkUploadModal({
                   value={productMapping.wellness}
                   onChange={(e) =>
                     handleChangeProductMapping("wellness", e.target.value)
+                  }
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={productMapping.tags}
+                  onChange={(e) =>
+                    handleChangeProductMapping("tags", e.target.value)
                   }
                   className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >

@@ -3,15 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { parse } from "csv-parse/sync";
 
-// ---------- Supabase server client ----------
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// DO NOT expose service key anywhere client-side.
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-// Make sure this runs on the Node runtime (not edge)
 export const runtime = "nodejs";
 
 // ---------- Types for mapping ----------
@@ -24,7 +18,8 @@ type CsvMappingKey =
   | "category"
   | "wellness"
   | "price"
-  | "inventory";
+  | "inventory"
+  | "tags"; // 👈 NEW
 
 type Mapping = Record<CsvMappingKey, string>;
 
@@ -38,6 +33,13 @@ type ProductInsert = {
   vendor_id: string;
 };
 
+type ParsedRow = {
+  product: ProductInsert;
+  wellnessNames: string[];
+  categoryNames: string[];
+  tags: string[];
+};
+
 // Helper to safely get a mapped field from a row
 function getMappedValue(
   row: Record<string, string>,
@@ -46,8 +48,15 @@ function getMappedValue(
 ): string {
   const headerName = mapping[key];
   if (!headerName) return "";
-  // headerName should exactly match the CSV column header
   return (row[headerName] ?? "").trim();
+}
+
+function parseList(str: string): string[] {
+  if (!str) return [];
+  return str
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 // ---------- POST handler ----------
@@ -124,7 +133,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const productsToInsert: ProductInsert[] = [];
+    const parsedRows: ParsedRow[] = [];
 
     records.forEach((row, index) => {
       const rowNumber = index + 2; // +2 because row 1 is header
@@ -135,7 +144,6 @@ export async function POST(req: NextRequest) {
         getMappedValue(row, mapping, "productUniqueCode");
 
       const inventoryRaw = getMappedValue(row, mapping, "inventory");
-      console.log(`Processing row ${rowNumber}:`, inventoryRaw);
 
       // Skip rows missing key fields
       if (!name || !sku) {
@@ -158,44 +166,120 @@ export async function POST(req: NextRequest) {
         is_variant: typeRaw === "variant" || typeRaw === "variants",
         price_cents: Number.isNaN(priceNumber)
           ? null
-          : Math.round(priceNumber * 100), // assume SGD
+          : Math.round(priceNumber * 100),
         inventory_qty: Number.isNaN(inventoryNumber)
           ? null
           : Math.round(inventoryNumber),
         status: "published",
-        vendor_id: vendorId, // 👈 attach authenticated vendor
+        vendor_id: vendorId,
       };
 
-      productsToInsert.push(product);
+      const wellnessStr = getMappedValue(row, mapping, "wellness");
+      const categoryStr = getMappedValue(row, mapping, "category");
+      const tagsStr = getMappedValue(row, mapping, "tags");
+
+      parsedRows.push({
+        product,
+        wellnessNames: parseList(wellnessStr),
+        categoryNames: parseList(categoryStr),
+        tags: parseList(tagsStr),
+      });
     });
 
-    if (productsToInsert.length === 0) {
+    if (parsedRows.length === 0) {
       return NextResponse.json(
         { error: "No valid rows found in CSV" },
         { status: 400 }
       );
     }
 
-    // 4) Insert into products table
-    const { data, error } = await supabase
+    // 4) Insert products
+    const { data: insertedProducts, error } = await supabase
       .from("products")
-      .insert(productsToInsert)
+      .insert(parsedRows.map((r) => r.product))
       .select();
 
-    if (error) {
+    if (error || !insertedProducts) {
       console.error("Supabase insert error:", error);
       return NextResponse.json(
-        { error: "Failed to insert products", details: error.message },
+        { error: "Failed to insert products", details: error?.message },
         { status: 500 }
       );
     }
 
-    // TODO: handle categories / wellness via mapping.category / mapping.wellness
+    // Build lookup by base_sku to match inserted rows back to parsedRows
+    const insertedBySku: Record<string, any> = {};
+    insertedProducts.forEach((p: any) => {
+      insertedBySku[p.base_sku] = p;
+    });
+
+    // 5) Fetch wellness + category master data to map by name
+    const [wellnessRes, categoryRes] = await Promise.all([
+      supabase.from("wellness_dimensions").select("id, name"),
+      supabase.from("categories").select("id, name"),
+    ]);
+
+    const wellnessRows = wellnessRes.data ?? [];
+    const categoryRows = categoryRes.data ?? [];
+
+    const wellnessIdByName: Record<string, string> = {};
+    wellnessRows.forEach((w: any) => {
+      wellnessIdByName[w.name.trim().toLowerCase()] = w.id;
+    });
+
+    const categoryIdByName: Record<string, string> = {};
+    categoryRows.forEach((c: any) => {
+      categoryIdByName[c.name.trim().toLowerCase()] = c.id;
+    });
+    
+
+    // 6) Build join-table rows
+    const wellnessJoins: { product_id: string; dimension_id: string }[] = [];
+    const categoryJoins: { product_id: string; category_id: string }[] = [];
+    const tagJoins: { product_id: string; tag: string }[] = [];
+
+    parsedRows.forEach((row) => {
+      const inserted = insertedBySku[row.product.base_sku];
+      if (!inserted) return;
+      const productId = inserted.id;
+
+      // wellness
+      row.wellnessNames.forEach((n) => {
+        const id = wellnessIdByName[n.toLowerCase()];
+        if (id) {
+          wellnessJoins.push({ product_id: productId, dimension_id: id });
+        }
+      });
+
+      // categories
+      row.categoryNames.forEach((n) => {
+        const id = categoryIdByName[n.toLowerCase()];
+        if (id) {
+          categoryJoins.push({ product_id: productId, category_id: id });
+        }
+      });
+
+      // tags (free text)
+      row.tags.forEach((t) => {
+        tagJoins.push({ product_id: productId, tag: t });
+      });
+    });
+
+    // 7) Insert into join tables (if any)
+    if (wellnessJoins.length) {
+      await supabase.from("product_wellness_dimensions").insert(wellnessJoins);
+    }
+    if (categoryJoins.length) {
+      await supabase.from("product_categories").insert(categoryJoins);
+    }
+    if (tagJoins.length) {
+      await supabase.from("product_tags").insert(tagJoins);
+    }
 
     return NextResponse.json({
       ok: true,
-      insertedCount: data?.length ?? 0,
-      products: data,
+      insertedCount: insertedProducts.length,
+      products: insertedProducts,
     });
   } catch (err: any) {
     console.error("Bulk upload unexpected error:", err);
