@@ -134,6 +134,8 @@ export async function GET(
     .eq("product_id", productId)
     .order("sort_order", { ascending: true });
 
+    console.log("galleryRows:", galleryRows);
+
   const galleryImageUrls = galleryRows?.map((r) => r.url) ?? [];
 
   // 6) wellness dimensions (join table product_wellness_dimensions)
@@ -358,14 +360,14 @@ if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
   /* ------------------- 7) Gallery images ------------------------- */
 
   if (Array.isArray(body.galleryImageUrls) && body.galleryImageUrls.length) {
-    await client.from("product_images").insert(
-      body.galleryImageUrls.map((url: string, idx: number) => ({
-        product_id: productId,
-        url,
-        sort_order: idx,
-      }))
-    );
-  }
+  await client.from("product_images").insert(
+    body.galleryImageUrls.map((url: string, idx: number) => ({
+      product_id: productId,
+      url,                      // 👈 inserted as "url"
+      sort_order: idx,
+    }))
+  );
+}
 
   /* ------------------- 8) Variants + Options --------------------- */
 

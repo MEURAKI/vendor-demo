@@ -260,12 +260,34 @@ export default function LoginForm() {
       </div>
 
       {/* Right – hero panel */}
-      <div className="hidden lg:block lg:w-1/2 relative">
-        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
-          <Image src="/images/auth-hero.svg" alt="Fashion model" fill priority className="object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
+    <div className="hidden lg:block lg:w-1/2 relative">
+          <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
+        
+            {/* --- GIF Background --- */}
+            <Image
+              src="/images/hero-bg.gif"
+              alt="Animated background"
+              fill
+              priority
+              unoptimized
+              className="object-cover"
+            />
+        
+            {/* --- PNG Overlay (logo, text, etc.) --- */}
+             <div className="absolute inset-0 flex items-center justify-center">
+                        <Image
+                          src="/images/hero-overlay.png"
+                          alt="Meuraki overlay"
+                          width={320} // adjust if needed
+                          height={640}
+                          className="rounded-[28px] pointer-events-none"
+                        />
+                      </div>
+        
+            {/* Optional gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
+          </div>
         </div>
-      </div>
     </div>
   );
 }

@@ -1327,6 +1327,8 @@ function BulkUploadModal({
   );
 }
 
+
+
 /* ---------- Main page ---------- */
 
 export default function AllProductsPage() {
@@ -1452,6 +1454,39 @@ export default function AllProductsPage() {
       isMounted = false;
     };
   }, []);
+
+  async function handleStatusChange(productId: string, newStatus: ProductStatus) {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    await fetch("/api/products/bulk-update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: session?.access_token
+          ? `Bearer ${session.access_token}`
+          : "",
+      },
+      body: JSON.stringify({
+        productIds: [productId],
+        status: newStatus,
+        trash: false,
+      }),
+    });
+
+    // Update local state so UI reflects change immediately
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === productId ? { ...p, status: newStatus } : p
+      )
+    );
+  } catch (err) {
+    console.error(err);
+    alert("Failed to update product status");
+  }
+}
 
   async function handleOpenVariants(product: ProductRow) {
     setSelectedProduct(product);
@@ -2001,28 +2036,39 @@ const hasActiveFilters = activeFilterCount > 0;
                             {p.sku}
                           </td>
 
-                          <td className="px-3 py-3 text-center">
-                            <span
-                              className={clsx(
-                                "inline-flex h-7 items-center rounded-full px-3 text-[11px] font-semibold",
-                                (p.status === "active" ||
-                                  p.status === "published") &&
-                                  "bg-[#DCFCE7] text-[#166534]",
-                                p.status === "draft" &&
-                                  "bg-gray-200 text-gray-700",
-                                p.status === "out_of_stock" &&
-                                  "bg-[#FEE2E2] text-[#B91C1C]"
-                              )}
-                            >
-                              {p.status === "out_of_stock"
-                                ? "Out of Stock"
-                                : p.status === "active"
-                                ? "Active"
-                                : p.status === "published"
-                                ? "Published"
-                                : "Draft"}
-                            </span>
-                          </td>
+                     <td className="px-3 py-4 text-center">
+  <div className="relative inline-flex">
+    <select
+      value={p.status}
+      onChange={(e) =>
+        handleStatusChange(p.id, e.target.value as ProductStatus)
+      }
+      className={clsx(
+        // removed h-8 → allow padding to define height
+        "rounded-full border pl-3 pr-8 py-1.5 text-[11px] font-semibold focus:outline-none appearance-none",
+
+        (p.status === "active" || p.status === "published") &&
+          "border-transparent bg-[#DCFCE7] text-[#166534]",
+        p.status === "draft" &&
+          "border-transparent bg-gray-200 text-gray-700",
+        p.status === "out_of_stock" &&
+          "border-transparent bg-[#FEE2E2] text-[#B91C1C]",
+        p.status === "inactive" &&
+          "border-transparent bg-gray-300 text-gray-700"
+      )}
+    >
+      <option value="draft">Draft</option>
+      <option value="active">Active</option>
+      <option value="published">Published</option>
+      <option value="inactive">Inactive</option>
+    </select>
+
+    {/* custom caret */}
+    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">
+      ▾
+    </span>
+  </div>
+</td>
 
                           <td className="px-3 py-3 text-center">
                             <div className="flex items-center justify-center gap-2">

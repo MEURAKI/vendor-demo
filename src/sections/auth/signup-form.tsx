@@ -4,10 +4,12 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase/client"; // keep your path
+import { supabase } from "../../lib/supabase/client";
 import { useToast } from "../../components/toast/ToastProvider";
 
-const redirectTo = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || "https://vendor.meuraki.com.sg/pages/auth/callback";
+const redirectTo =
+  process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI ||
+  "https://vendor.meuraki.com.sg/pages/auth/callback";
 
 export default function SignupForm() {
   const router = useRouter();
@@ -18,7 +20,6 @@ export default function SignupForm() {
     acceptTerms: false,
   });
 
-  // Password checks
   const checks = useMemo(() => {
     const p = formData.password || "";
     return {
@@ -39,82 +40,82 @@ export default function SignupForm() {
     formData.acceptTerms;
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (!formData.acceptTerms) {
-    errorToast({ title: "Error", description: "Please accept the terms and conditions" });
-    return;
-  }
-
-  const { email, password } = formData;
-
-  // 1) Create the user in Supabase (no need for emailRedirectTo anymore)
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-  });
-
-  if (error) {
-    console.error("Signup error:", error.message);
-    errorToast({ title: "Error", description: error.message });
-    return;
-  }
-
-  // 2) Send verification email via your Mandrill endpoint
-  try {
-    const r = await fetch("/api/auth/send-verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, userName: email.split("@")[0] }),
-    });
-
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
-      console.error("send-verify error:", j);
+    if (!formData.acceptTerms) {
       errorToast({
         title: "Error",
-        description: j.error || "Couldn’t send verification email.",
+        description: "Please accept the terms and conditions",
       });
-      return; // don't redirect if email didn't send
+      return;
     }
 
-    // Optional: toast to confirm we sent it
-    successToast({
-      title: "Check your email",
-      description: "We’ve sent a verification link to your inbox.",
+    const { email, password } = formData;
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
     });
 
-    // 3) Clear form
-    setFormData({
-      email: "",
-      password: "",
-      acceptTerms: false,
-    });
+    if (error) {
+      console.error("Signup error:", error.message);
+      errorToast({ title: "Error", description: error.message });
+      return;
+    }
 
-    // 4) Redirect, pass email so Verify page can display & resend
-    router.push(`/pages/auth/verify-email?email=${encodeURIComponent(email)}`);
-  } catch (err) {
-    console.error("Network error sending verify email:", err);
-    errorToast({
-      title: "Error",
-      description: "Network error. Please try again.",
-    });
-  }
-};
+    try {
+      const r = await fetch("/api/auth/send-verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, userName: email.split("@")[0] }),
+      });
+
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        console.error("send-verify error:", j);
+        errorToast({
+          title: "Error",
+          description: j.error || "Couldn’t send verification email.",
+        });
+        return;
+      }
+
+      successToast({
+        title: "Check your email",
+        description: "We’ve sent a verification link to your inbox.",
+      });
+
+      setFormData({
+        email: "",
+        password: "",
+        acceptTerms: false,
+      });
+
+      router.push(
+        `/pages/auth/verify-email?email=${encodeURIComponent(email)}`
+      );
+    } catch (err) {
+      console.error("Network error sending verify email:", err);
+      errorToast({
+        title: "Error",
+        description: "Network error. Please try again.",
+      });
+    }
+  };
 
   const handleGoogleSignup = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: redirectTo },
+      options: { redirectTo },
     });
     if (error) errorToast({ title: "Error", description: error.message });
   };
 
   return (
-    // Whole page is scrollable; right hero sticks on desktop
-    <div className="min-h-[100svh] bg-white lg:grid lg:grid-cols-2">
-      {/* Left – Form (scrolls naturally when tall) */}
-      <div className="flex items-center justify-center px-6 sm:px-10 lg:px-16 py-10 overflow-y-auto">
+    // Full-screen 2-column layout on desktop
+    <div className="min-h-screen lg:h-screen bg-white lg:grid lg:grid-cols-2">
+      {/* Left – Form */}
+      <div className="flex h-full items-center justify-center px-6 sm:px-10 lg:px-16 py-10 overflow-y-auto">
         <div className="w-full max-w-md">
           {/* Header */}
           <div className="mb-8">
@@ -171,7 +172,6 @@ export default function SignupForm() {
                 aria-describedby="password-hints"
               />
 
-              {/* Hints only when typing */}
               {formData.password.length > 0 && (
                 <div id="password-hints" className="mt-3">
                   <p className="text-xs text-gray-500 mb-2">
@@ -194,7 +194,10 @@ export default function SignupForm() {
                 type="checkbox"
                 checked={formData.acceptTerms}
                 onChange={(e) =>
-                  setFormData((s) => ({ ...s, acceptTerms: e.target.checked }))
+                  setFormData((s) => ({
+                    ...s,
+                    acceptTerms: e.target.checked,
+                  }))
                 }
                 className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
               />
@@ -272,7 +275,6 @@ export default function SignupForm() {
               Continue with Google
             </button>
 
-
             {/* Switch to login */}
             <p className="text-center text-sm text-gray-600">
               Already have an account?{" "}
@@ -298,30 +300,31 @@ export default function SignupForm() {
         </div>
       </div>
 
-      {/* Right – Hero (sticky on desktop) */}
-      <aside className="hidden lg:block relative">
-        <div className="sticky top-0 h-[100svh] lg:rounded-l-[28px] overflow-hidden">
+      {/* Right – hero panel (full height, no gap) */}
+      <div className="hidden lg:block relative">
+        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
+          {/* GIF background – full column */}
           <Image
-            src="/images/auth-hero.svg"
-            alt="Fashion model"
+            src="/images/hero-bg.gif"
+            alt="Animated background"
             fill
             priority
+            unoptimized
             className="object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
-          {/* <div className="absolute bottom-10 left-10 right-10 text-white">
-            <p className="text-lg leading-relaxed font-medium max-w-[480px]">
-              “Untitled Laboratory: a haven of avant-garde. With unceasing
-              innovation, we transform abstract ideas into tangible reality.”
-            </p>
-            <p className="mt-4 text-white/80 text-sm">
-              Amelia Laurent
-              <br />
-              <span className="text-white/60">Founder, Elevatar</span>
-            </p>
-          </div> */}
+
+          {/* PNG overlay – centered card, not stretched */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Image
+              src="/images/hero-overlay.png"
+              alt="Meuraki overlay"
+              width={320} // adjust if needed
+              height={640}
+              className="rounded-[28px] pointer-events-none"
+            />
+          </div>
         </div>
-      </aside>
+      </div>
     </div>
   );
 }
