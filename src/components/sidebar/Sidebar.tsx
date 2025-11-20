@@ -231,7 +231,7 @@ export default function Sidebar({
   </Link>
 
   {/* HELP */}
-  <Link
+  {/* <Link
     href="/help"
     className={[
       "flex items-center gap-3 rounded-lg px-2.5 py-2 text-neu-200 hover:bg-ink-700",
@@ -241,7 +241,7 @@ export default function Sidebar({
   >
     <HelpCircle className="h-5 w-5 text-neu-300" />
     {!collapsed && <span className="text-sm">Help</span>}
-  </Link>
+  </Link> */}
 
   {/* LOGOUT */}
   <button
