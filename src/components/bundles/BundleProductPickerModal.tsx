@@ -190,12 +190,12 @@ export function BundleProductPickerModal({
           {showEmptyState ? (
             <div className="flex h-full flex-col items-center justify-center gap-4 py-10 text-center">
               <div className="flex h-32 w-32 items-center justify-center rounded-full bg-[#F7F7FB] text-5xl">
-                <Image
+                {/* <Image
                   src="/images/search-icon.svg"
                   alt="Bundle Illustration"
                   width={80}
                   height={80}
-                />
+                /> */}
               </div>
               <div>
                 <p className="text-lg font-semibold text-gray-900">
