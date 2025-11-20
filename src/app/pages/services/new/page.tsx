@@ -738,7 +738,7 @@ export default function NewServicePage() {
                             className={clsx(
                               "rounded-full border px-3 py-1 text-[11px]",
                               serviceTypes.includes(label)
-                                ? "border-black bg-black text.white"
+                                ? "border-black bg-black text-white"
                                 : "border-gray-300 bg-[#FBFBFE] text-gray-700"
                             )}
                           >

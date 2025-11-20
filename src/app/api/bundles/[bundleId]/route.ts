@@ -10,7 +10,6 @@ const supa = () =>
   );
 
 // ---------------- GET ONE BUNDLE ----------------
-
 export async function GET(
   _req: Request,
   context: { params: { bundleId: string } }
@@ -18,7 +17,7 @@ export async function GET(
   const client = supa();
   const { bundleId } = context.params;
 
-  // 1) Load main bundle row (correct column names)
+  // 1) Load bundle
   const { data: bundle, error: bundleErr } = await client
     .from("bundles")
     .select(
@@ -43,64 +42,46 @@ export async function GET(
 
   if (bundleErr) {
     console.error("[bundle GET] bundle error:", bundleErr);
-    return NextResponse.json(
-      { error: bundleErr.message },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: bundleErr.message }, { status: 400 });
   }
-
   if (!bundle) {
-    return NextResponse.json(
-      { error: "Bundle not found" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Bundle not found" }, { status: 404 });
   }
 
-  // 2) Wellness dimensions (junction table)
-  const { data: wellnessRows, error: wellnessErr } = await client
+  // 2) Wellness
+  const { data: wellnessRows } = await client
     .from("bundle_wellness_dimensions")
     .select("dimension_id")
     .eq("bundle_id", bundleId);
 
-  if (wellnessErr) {
-    console.error("[bundle GET] wellness error:", wellnessErr);
-  }
-
   const wellnessIds: number[] =
     wellnessRows?.map((row: any) => row.dimension_id) ?? [];
 
-  // 3) Categories (junction table)
-  const { data: categoryRows, error: catErr } = await client
+  // 3) Categories
+  const { data: categoryRows } = await client
     .from("bundle_categories")
     .select("category_id")
     .eq("bundle_id", bundleId);
 
-  if (catErr) {
-    console.error("[bundle GET] categories error:", catErr);
-  }
-
   const categoryIds: number[] =
     categoryRows?.map((row: any) => row.category_id) ?? [];
 
-  // 4) Tags (simple table)
-  const { data: tagRows, error: tagErr } = await client
+  // 4) Tags
+  const { data: tagRows } = await client
     .from("bundle_tags")
     .select("tag")
     .eq("bundle_id", bundleId);
 
-  if (tagErr) {
-    console.error("[bundle GET] tags error:", tagErr);
-  }
-
   const tags: string[] = tagRows?.map((row: any) => row.tag) ?? [];
 
-  // 5) Items – join variant → product for live price / stock / options
+  // 5) Items – join to BOTH variants and products
   const { data: itemRows, error: itemsErr } = await client
     .from("bundle_items")
     .select(
       `
         id,
         bundle_id,
+        product_id,
         variant_id,
         quantity,
         position,
@@ -119,6 +100,12 @@ export async function GET(
             base_sku,
             image_url
           )
+        ),
+        products:product_id (
+          id,
+          name,
+          base_sku,
+          image_url
         )
       `
     )
@@ -127,16 +114,15 @@ export async function GET(
 
   if (itemsErr) {
     console.error("[bundle GET] items error:", itemsErr);
-    return NextResponse.json(
-      { error: itemsErr.message },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: itemsErr.message }, { status: 400 });
   }
 
   const items =
     itemRows?.map((row: any) => {
       const variant = row.product_variants;
-      const product = variant?.products;
+      const productFromVariant = variant?.products;
+      const productDirect = row.products;
+      const product = productDirect ?? productFromVariant ?? null;
 
       const baseName =
         row.item_name ??
@@ -144,10 +130,7 @@ export async function GET(
         "Unnamed product";
 
       let suffix = "";
-      if (
-        variant?.options_json &&
-        typeof variant.options_json === "object"
-      ) {
+      if (variant?.options_json && typeof variant.options_json === "object") {
         const parts = Object.values(
           variant.options_json as Record<string, string>
         );
@@ -157,22 +140,21 @@ export async function GET(
       }
 
       return {
-        // BundleCandidateItem + quantity
-        id: String(row.variant_id ?? row.id), // we use variant id as UI id
-        productId: product ? String(product.id) : undefined,
+        // UI key
+        id: String(row.id),
+        // 🔑 IDs we need for PUT
+        productId: product ? String(product.id) : row.product_id ? String(row.product_id) : null,
+        variantId: row.variant_id ? String(row.variant_id) : null,
+
         name: baseName + suffix,
         sku: variant?.sku ?? product?.base_sku ?? "",
-        priceCents:
-          row.item_price_cents ??
-          variant?.price_cents ??
-          0,
+        priceCents: row.item_price_cents ?? variant?.price_cents ?? 0,
         stock: variant?.inventory_qty ?? 0,
         imageUrl: variant?.image_url ?? product?.image_url ?? null,
         quantity: row.quantity ?? 1,
       };
     }) ?? [];
 
-  // 6) Return shape expected by EditBundlePage (LoadedBundle)
   return NextResponse.json({
     id: bundle.id as string,
     vendorId: bundle.vendor_id as string | null,
@@ -283,28 +265,27 @@ export async function PUT(
   await client.from("bundle_items").delete().eq("bundle_id", bundleId);
 
   if (Array.isArray(items) && items.length) {
-    const rows = items.map((item: any, idx: number) => ({
-      bundle_id: bundleId,
-      // 🔑 IMPORTANT: set BOTH product_id and variant_id correctly
-      product_id: item.productId ?? null,
-      variant_id: item.variantId ?? null,
-      item_name: item.itemName,
-      item_price_cents: item.itemPriceCents ?? 0,
-      quantity: item.quantity ?? 1,
-      position: idx,
-    }));
+    const rows = items.map((item: any, idx: number) => {
+      const variantId = item.variantId ?? null;
+      const productId = item.productId ?? variantId; // ✅ fallback
 
-    const { error: itemsErr } = await client
-      .from("bundle_items")
-      .insert(rows);
+      return {
+        bundle_id: bundleId,
+        product_id: productId,
+        variant_id: variantId,
+        item_name: item.itemName,
+        item_price_cents: item.itemPriceCents ?? 0,
+        quantity: item.quantity ?? 1,
+        position: idx,
+      };
+    });
 
-    if (itemsErr) {
-      console.error("[bundle PUT] items error:", itemsErr);
-      return NextResponse.json(
-        { error: itemsErr.message },
-        { status: 400 }
-      );
-    }
+  const { error: itemsErr } = await client.from("bundle_items").insert(rows);
+
+  if (itemsErr) {
+    console.error("[bundle PUT] items error:", itemsErr);
+    return NextResponse.json({ error: itemsErr.message }, { status: 400 });
+  }
   }
 
   return NextResponse.json({ ok: true, bundleId });

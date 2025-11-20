@@ -123,34 +123,30 @@ export async function POST(req: Request) {
     );
   }
 
-  // --- 2. Insert bundle items ---
-  if (Array.isArray(body.items) && body.items.length > 0) {
-    const itemRows = body.items.map((item: any, idx: number) => {
-      const isVariant = !!item.variantId;
+  // --- 2. Insert bundle items (products / variants) ---
+if (Array.isArray(body.items) && body.items.length > 0) {
+  const itemRows = body.items.map((item: any, idx: number) => {
+    const variantId = item.variantId ?? null;
+    const productId = item.productId ?? variantId; // ✅ fallback so one is always set
 
-      return {
-        bundle_id: bundle.id,
-        product_id: isVariant ? null : item.productId ?? null,
-        variant_id: isVariant ? item.variantId : null,
-        item_name: item.itemName ?? "Untitled item",
-        item_price_cents: item.itemPriceCents ?? 0,
-        quantity: item.quantity ?? 1,
-        position: item.position ?? idx,
-      };
-    });
+    return {
+      bundle_id: bundle.id,
+      product_id: productId,          // ✅ always something
+      variant_id: variantId,          // null for singles
+      item_name: item.itemName,
+      item_price_cents: item.itemPriceCents ?? 0,
+      quantity: item.quantity ?? 1,
+      position: idx,
+    };
+  });
 
-    const { error: itemsErr } = await client
-      .from("bundle_items")
-      .insert(itemRows);
+  const { error: itemsErr } = await client.from("bundle_items").insert(itemRows);
 
-    if (itemsErr) {
-      console.error("[bundles POST] items error:", itemsErr);
-      return NextResponse.json(
-        { error: itemsErr.message },
-        { status: 400 }
-      );
-    }
+  if (itemsErr) {
+    console.error("[bundles POST] items error:", itemsErr);
+    return NextResponse.json({ error: itemsErr.message }, { status: 400 });
   }
+}
 
   // --- 3. Wellness / categories / tags ---
 
