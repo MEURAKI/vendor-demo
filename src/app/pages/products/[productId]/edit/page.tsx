@@ -548,7 +548,7 @@ export default function EditProductPage({
               ...g,
               values: [
                 ...g.values,
-                { id: uuid(), label: `Option ${g.values.length + 1}` },
+                { id: uuid(), label: `` },
               ],
             }
           : g
