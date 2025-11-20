@@ -224,7 +224,7 @@ export default function DashboardPage() {
   if (loading || !profile || redirectPath || !sidebarConfig) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <ClipLoader size={55} color="#6B46C1" />
+        <ClipLoader size={55} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
       </div>
     );
   }

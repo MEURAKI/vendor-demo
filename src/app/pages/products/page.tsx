@@ -549,7 +549,8 @@ function ProductVariantsModal({
         <div className="max-h-[60vh] overflow-auto px-6 py-4 text-xs">
           {loading ? (
             <p className="py-10 text-center text-xs text-gray-500">
-                      <ClipLoader size={55} color="#6B46C1" />
+                      <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
+
 
             </p>
           ) : variants.length === 0 ? (
@@ -1982,7 +1983,8 @@ const hasActiveFilters = activeFilterCount > 0;
                         colSpan={10}
                         className="px-4 py-10 text-center text-xs text-gray-500"
                       >
-                                <ClipLoader size={55} color="#6B46C1" />
+                                <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
+
 
                       </td>
                     </tr>

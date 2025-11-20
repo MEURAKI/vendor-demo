@@ -376,7 +376,8 @@ export default function EditBundlePage() {
           {/* Body */}
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
-              <ClipLoader size={55} color="#6B46C1" />
+              <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
+
             </div>
           ) : (
             <div className="flex-1 overflow-auto p-6">

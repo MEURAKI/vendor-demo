@@ -245,7 +245,8 @@ async function handleConfirmTrash() {
                         colSpan={9}
                         className="px-4 py-10 text-center text-xs text-gray-500"
                       >
-                                <ClipLoader size={55} color="#6B46C1" />
+                                <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
+
 
                       </td>
                     </tr>
