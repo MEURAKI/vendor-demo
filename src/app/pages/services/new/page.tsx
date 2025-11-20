@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState,useRef } from "react";
 import clsx from "clsx";
+import Image from "next/image";
 import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
@@ -10,6 +11,8 @@ import MultiSelect from "../../../../components/inputs/MultiSelect";
 import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../components/taxonomy/WellnessCategoryTagsSection";
+import AppModal from "../../../../components/common/AppModal";
+
 
 type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
@@ -143,6 +146,9 @@ export default function NewServicePage() {
   const [wellness, setWellness] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+
+  const [showCategoryErrorModal, setShowCategoryErrorModal] = useState(false);
+  const categorySectionRef = useRef<HTMLDivElement | null>(null);
 
   // description tabs
   const [tabs, setTabs] = useState<DescriptionTab[]>([
@@ -537,97 +543,106 @@ useEffect(() => {
                 </section>
 
                 {/* Description Tabs */}
-                <section className="rounded-3xl border border-[#ECECFB] bg-white p-6">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-gray-900">
-                      Description Tabs
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setTabs((prev) => [
-                          ...prev,
-                          {
-                            id: uuid(),
-                            title: `Section ${prev.length + 1}`,
-                            body: "",
-                          },
-                        ])
-                      }
-                      disabled={tabs.length >= 5}
-                      className="rounded-full bg-black px-3 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
-                    >
-                      + Add Section
-                    </button>
-                  </div>
+               <section className="rounded-3xl border border-[#ECECFB] bg-white p-6">
+  <div className="mb-3 flex items-center justify-between">
+    <h2 className="text-sm font-semibold text-gray-900">
+      Description Tabs
+    </h2>
 
-                  <div className="space-y-4 text-xs">
-                    {tabs.map((tab, idx) => (
-                      <div
-                        key={tab.id}
-                        className="rounded-2xl border border-gray-200 bg-[#FBFBFE] p-4"
-                      >
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-purple-700">
-                            {`Section ${idx + 1}`}
-                          </span>
-                          {tabs.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setTabs((prev) =>
-                                  prev.filter((t) => t.id !== tab.id)
-                                )
-                              }
-                              className="text-xs text-gray-400 hover:text-black"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-[11px] font-semibold text-gray-800">
-                              Section Title (Displayed on app)
-                            </label>
-                            <input
-                              value={tab.title}
-                              onChange={(e) =>
-                                setTabs((prev) =>
-                                  prev.map((t) =>
-                                    t.id === tab.id
-                                      ? { ...t, title: e.target.value }
-                                      : t
-                                  )
-                                )
-                              }
-                              className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-semibold text-gray-800">
-                              Section Description
-                            </label>
-                            <textarea
-                              rows={3}
-                              value={tab.body}
-                              onChange={(e) =>
-                                setTabs((prev) =>
-                                  prev.map((t) =>
-                                    t.id === tab.id
-                                      ? { ...t, body: e.target.value }
-                                      : t
-                                  )
-                                )
-                              }
-                              className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+    <button
+      type="button"
+      onClick={() =>
+        setTabs((prev) => [
+          ...prev,
+          {
+            id: uuid(),
+            title: `Section ${prev.length + 1}`,
+            body: "",
+          },
+        ])
+      }
+      disabled={tabs.length >= 5}
+      className="inline-flex items-center gap-2 rounded-full bg-black px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <Image
+        src="/images/common/plus-button.svg"
+        alt="Add Section"
+        width={14}
+        height={14}
+      />
+      <span>Add Section</span>
+    </button>
+  </div>
+
+  <div className="space-y-4 text-xs">
+    {tabs.map((tab, idx) => (
+      <div
+        key={tab.id}
+        className="rounded-2xl border border-gray-200 bg-[#FBFBFE] p-4"
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-purple-700">
+            {`Section ${idx + 1}`}
+          </span>
+
+          {tabs.length > 1 && (
+            <button
+              type="button"
+              onClick={() =>
+                setTabs((prev) => prev.filter((t) => t.id !== tab.id))
+              }
+              className="p-1 hover:opacity-80 transition"
+            >
+              <Image
+                src="/images/common/close-button.svg"
+                alt="Remove section"
+                width={16}
+                height={16}
+              />
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div>
+            <label className="text-[11px] font-semibold text-gray-800">
+              Section Title (Displayed on app)
+            </label>
+            <input
+              value={tab.title}
+              onChange={(e) =>
+                setTabs((prev) =>
+                  prev.map((t) =>
+                    t.id === tab.id ? { ...t, title: e.target.value } : t
+                  )
+                )
+              }
+              className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-gray-800">
+              Section Description
+            </label>
+            <textarea
+              rows={3}
+              value={tab.body}
+              onChange={(e) =>
+                setTabs((prev) =>
+                  prev.map((t) =>
+                    t.id === tab.id ? { ...t, body: e.target.value } : t
+                  )
+                )
+              }
+              className="mt-1 w-full rounded-2xl border border-gray-200 bg.white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+</section>
 
                 {/* Service Type, Providers, Spaces, Location types */}
                 <section className="rounded-3xl border border-[#ECECFB] bg-white p-6">

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type BundleStatus = "draft" | "active" | "out_of_stock";
 
@@ -174,7 +175,8 @@ export default function AllBundlesPage() {
                         colSpan={9}
                         className="px-4 py-10 text-center text-xs text-gray-500"
                       >
-                        Loading bundles…
+                                <ClipLoader size={55} color="#6B46C1" />
+
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (

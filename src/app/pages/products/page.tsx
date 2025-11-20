@@ -10,6 +10,7 @@ import { supabase } from "../../../lib/supabase/client";
 import { Listbox, Transition,Popover } from "@headlessui/react";
 import { Fragment } from "react";
 import { ChevronDown, Filter, Search, Check } from "lucide-react";
+import ClipLoader from "react-spinners/ClipLoader";
 
 /* ---------- Types ---------- */
 
@@ -548,7 +549,8 @@ function ProductVariantsModal({
         <div className="max-h-[60vh] overflow-auto px-6 py-4 text-xs">
           {loading ? (
             <p className="py-10 text-center text-xs text-gray-500">
-              Loading variants…
+                      <ClipLoader size={55} color="#6B46C1" />
+
             </p>
           ) : variants.length === 0 ? (
             <p className="py-10 text-center text-xs text-gray-500">
@@ -1965,7 +1967,8 @@ const hasActiveFilters = activeFilterCount > 0;
                         colSpan={10}
                         className="px-4 py-10 text-center text-xs text-gray-500"
                       >
-                        Loading products…
+                                <ClipLoader size={55} color="#6B46C1" />
+
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (

@@ -1,7 +1,7 @@
 // app/pages/products/new/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -22,6 +22,7 @@ import {
   ProductImagesGallery,
   ProductImage,
 } from "../../../../components/product/ProductImagesGallery";
+import AppModal from "../../../../components/common/AppModal";
 
 /* ---------- Types ---------- */
 
@@ -628,6 +629,11 @@ export default function NewProductPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
 
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [showCategoryErrorModal, setShowCategoryErrorModal] = useState(false);
+  const categorySectionRef = useRef<HTMLDivElement | null>(null);
+
+
   // description accordions
   const [sections, setSections] = useState<DescriptionSection[]>([
     { id: uuid(), title: "Product Details", body: "" },
@@ -819,9 +825,15 @@ export default function NewProductPage() {
     setProductImageFile(file);
   }
 
-  /* ---------- Save ---------- */
 
   async function handleSave(status: "draft" | "published") {
+    if (status === "published" && categories.length === 0) {
+    setCategoryError("Please add at least one category.");
+    setShowCategoryErrorModal(true);
+    return;
+  } else {
+    setCategoryError(null);
+  }
     if (!canSave) return;
     if (!vendorId) {
       alert("You must be logged in as a vendor to save a product.");
@@ -829,7 +841,6 @@ export default function NewProductPage() {
     }
 
     try {
-      // 1) upload main image (single)
       let imageUrlToSave = productImageUrl;
 
       if (productImageFile) {
@@ -1194,7 +1205,7 @@ export default function NewProductPage() {
                 </section>
 
                 {/* Wellness / category / tags */}
-                <section className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6">
+                <section ref={categorySectionRef} className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6">
                   <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-700 sm:mb-4 sm:text-sm">
                     Wellness Dimension, Category &amp; Tags
                   </h2>
@@ -1260,6 +1271,32 @@ export default function NewProductPage() {
                         onChange={setCategories}
                         placeholder="e.g. Apparel, Classes"
                       />
+                         {showCategoryErrorModal && (
+                      <AppModal
+                        open={showCategoryErrorModal}
+                        title="Category Required"
+                        message={
+                          <>
+                            To publish this product, please add at least one category in the{" "}
+                            <span className="font-medium text-[#5B33FF]">
+                              Wellness Dimension, Category &amp; Tags
+                            </span>{" "}
+                            section.
+                          </>
+                        }
+                        primaryLabel="Go to Category"
+                        onPrimaryClick={() => {
+                          setShowCategoryErrorModal(false);
+                          categorySectionRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                          });
+                        }}
+                        onClose={() => {
+                          setShowCategoryErrorModal(false);
+                        }}
+                      />
+                      )}
                     </div>
 
                     {/* Tags as chips */}

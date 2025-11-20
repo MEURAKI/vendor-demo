@@ -14,6 +14,7 @@ import MultiSelect from "../../../../../components/inputs/MultiSelect";
 import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
@@ -552,7 +553,8 @@ export default function EditServicePage() {
           {/* Body */}
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
-              Loading service…
+                      <ClipLoader size={55} color="#6B46C1" />
+
             </div>
           ) : (
             <div className="flex-1 overflow-auto px-6 py-6">

@@ -11,6 +11,7 @@ import { supabase } from "../../../../../../lib/supabase/client";
 import Sidebar from "../../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../../components/sidebar/sidebar.config";
 import { ProductImagesGallery, ProductImage } from "../../../../../../components/product/ProductImagesGallery";
+import ClipLoader from "react-spinners/ClipLoader";
 
 
 type DiscountType = "fixed" | "percent" | null;
@@ -336,7 +337,8 @@ export default function EditBundlePage() {
           {/* Body */}
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
-              Loading bundle…
+                      <ClipLoader size={55} color="#6B46C1" />
+
             </div>
           ) : (
             <div className="flex-1 overflow-auto p-6">

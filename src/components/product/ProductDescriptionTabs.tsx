@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import clsx from "clsx";
+import Image from "next/image";
 
 export type DescriptionSection = {
   id: string;
@@ -15,10 +16,8 @@ interface ProductDescriptionTabsProps {
   maxSections?: number;
 }
 
-
-
 function newId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
   return Math.random().toString(36).slice(2);
@@ -56,66 +55,88 @@ export function ProductDescriptionTabs({
     );
   };
 
-  
-
   return (
-    <section className="rounded-2xl border border-[#ECECFB] bg-[#FBFBFE] p-6 md:p-7">
-      {/* Header / collapse toggle */}
+    <section className="rounded-3xl border border-[#ECECFB] bg-white p-6 shadow-sm">
+      {/* Header */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between"
       >
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
+        <h2 className="text-sm font-semibold text-gray-900">
           Description Tabs
         </h2>
+
         <span
           className={clsx(
-            "inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm text-xs text-gray-500 transition-transform",
+            "inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#F4F3FF] text-xs shadow-sm transition-transform",
             open ? "rotate-0" : "rotate-180"
           )}
         >
-          ˄
+          <Image
+            src="/images/common/down-arrow.svg"
+            alt="Toggle"
+            width={16}
+            height={16}
+          />
         </span>
       </button>
 
+      {/* Body */}
       {open && (
         <>
-          <div className="mt-3 flex justify-end">
+          {/* Add Section */}
+          <div className="mt-4 flex justify-end">
             <button
               type="button"
               onClick={handleAdd}
               disabled={!canAdd}
-              className="rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              + Add section
+              <Image
+                src="/images/common/plus-button.svg"
+                alt="Add"
+                width={14}
+                height={14}
+              />
+              Add Section
             </button>
           </div>
 
+          {/* Sections */}
           <div className="mt-4 space-y-5">
             {sections.map((s, idx) => (
               <div
                 key={s.id}
-                className="rounded-2xl border border-gray-200 bg-white p-4 md:p-5"
+                className="rounded-2xl border border-gray-200 bg-[#FBFBFE] p-5"
               >
+                {/* Header row */}
                 <div className="mb-3 flex items-center justify-between">
-                  <div className="text-xs font-semibold text-gray-800">
+                  <span className="text-xs font-semibold text-purple-700">
                     Section {idx + 1}
-                  </div>
+                  </span>
+
                   {sections.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemove(s.id)}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F5FB] text-xs text-gray-400 hover:text-red-500"
+                      className="p-1 hover:opacity-70 transition"
                     >
-                      ×
+                      <Image
+                        src="/images/common/close-button.svg"
+                        alt="Remove"
+                        width={18}
+                        height={18}
+                      />
                     </button>
                   )}
                 </div>
 
-                <div className="space-y-3">
+                {/* Fields */}
+                <div className="space-y-4">
+                  {/* Section Title */}
                   <div>
-                    <label className="text-xs font-semibold text-gray-800">
+                    <label className="text-[11px] font-semibold text-gray-800">
                       Section Title (Displayed on app)
                     </label>
                     <input
@@ -123,13 +144,14 @@ export function ProductDescriptionTabs({
                       onChange={(e) =>
                         updateSection(s.id, { title: e.target.value })
                       }
-                      className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+                      className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs text-gray-900 placeholder:text-gray-400 focus:border-purple-500 focus:outline-none"
                       placeholder="Product Details"
                     />
                   </div>
 
+                  {/* Section Description */}
                   <div>
-                    <label className="text-xs font-semibold text-gray-800">
+                    <label className="text-[11px] font-semibold text-gray-800">
                       Section Description
                     </label>
                     <textarea
@@ -138,7 +160,7 @@ export function ProductDescriptionTabs({
                       onChange={(e) =>
                         updateSection(s.id, { body: e.target.value })
                       }
-                      className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+                      className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:border-purple-500 focus:outline-none"
                       placeholder="• Bullet points, fit guide, care instructions, etc."
                     />
                   </div>

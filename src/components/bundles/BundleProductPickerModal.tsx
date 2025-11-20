@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 import type { BundleCandidateItem } from "../../types/bundles.types";
+import ClipLoader from "react-spinners/ClipLoader";
 
 const MAX_BUNDLE_ITEMS = 5;
 
@@ -195,7 +196,8 @@ export function BundleProductPickerModal({
                         colSpan={4}
                         className="px-4 py-6 text-center text-gray-500"
                       >
-                        Searching products…
+                                <ClipLoader size={55} color="#6B46C1" />
+
                       </td>
                     </tr>
                   )}

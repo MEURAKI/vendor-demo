@@ -8,6 +8,7 @@ import clsx from "clsx";
 import Sidebar from "../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type ServiceStatus = "draft" | "active" | "unavailable";
 type LocationType = "online" | "in_person";
@@ -579,7 +580,8 @@ className="
                         colSpan={11}
                         className="px-4 py-10 text-center text-xs text-gray-500"
                       >
-                        Loading services…
+                                <ClipLoader size={55} color="#6B46C1" />
+
                       </td>
                     </tr>
                   ) : filteredRows.length === 0 ? (

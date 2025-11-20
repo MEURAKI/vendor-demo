@@ -9,6 +9,7 @@ import { Search, Pencil } from "lucide-react";
 import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type InventoryStatus = "draft" | "active" | "out_of_stock" | "published" | "inactive";
 
@@ -238,7 +239,8 @@ export default function InventoryPage() {
                         colSpan={8}
                         className="px-4 py-10 text-center text-xs text-gray-500"
                       >
-                        Loading inventory…
+                                <ClipLoader size={55} color="#6B46C1" />
+
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (

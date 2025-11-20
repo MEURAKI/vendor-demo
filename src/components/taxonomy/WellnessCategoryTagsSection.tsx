@@ -118,6 +118,7 @@ export default function WellnessCategoryTagsSection({
             onChange={onChangeCategories}
             placeholder={categoryPlaceholder}
           />
+
         </div>
 
         {/* Tags as chips */}

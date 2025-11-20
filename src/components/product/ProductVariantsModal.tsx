@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import Image from "next/image";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type VariantOptionGroup = {
   id: string;
@@ -70,7 +71,8 @@ export function ProductVariantsModal({
         <div className="max-h-[60vh] overflow-auto px-6 py-4 text-xs">
           {loading ? (
             <p className="py-10 text-center text-xs text-gray-500">
-              Loading variants…
+                      <ClipLoader size={55} color="#6B46C1" />
+
             </p>
           ) : variants.length === 0 ? (
             <p className="py-10 text-center text-xs text-gray-500">
