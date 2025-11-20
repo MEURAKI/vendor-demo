@@ -216,14 +216,22 @@ export default function NewBundlePage() {
 
       // 2) Prepare items for API
       const itemPayload = items.map((it, idx) => ({
-        // if your table expects variant_id only, use id as variantId
-        variantId: it.variantId,
-        productId: it.productId,
+        // variantId: it.variantId ?? null,
+        productId: it.productId ?? null,
         itemName: it.name,
         itemPriceCents: it.priceCents,
         quantity: it.quantity,
         position: idx,
       }));
+
+      // 🔥 Clean wellness dimensions: numbers only, unique
+      const cleanWellnessDimensions = Array.from(
+        new Set(
+          (selectedWellnessIds ?? [])
+            .map((v) => Number(String(v).trim()))
+            .filter((n) => Number.isFinite(n))
+        )
+      );
 
       // 3) Build body
       const body = {
@@ -245,8 +253,7 @@ export default function NewBundlePage() {
         startAt: startDate || null,
         endAt: endDate || null,
         imageUrl: finalBundleImageUrl,
-        // 🔹 wellness / categories / tags same shape as products
-        wellnessDimensions: selectedWellnessIds,
+        wellnessDimensions: cleanWellnessDimensions,
         categories,
         tags,
         items: itemPayload,
@@ -265,7 +272,6 @@ export default function NewBundlePage() {
         return;
       }
 
-      // Go back to bundles list
       router.push("/pages/products/bundles");
     } catch (err) {
       console.error("Error saving bundle", err);
@@ -282,7 +288,7 @@ export default function NewBundlePage() {
       <Sidebar config={sidebarConfig} />
 
       {/* Tablet container */}
-      <div className="flex flex-1.items-stretch justify-center px-6 py-4">
+      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Top bar inside tablet – matches other pages */}
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
@@ -375,7 +381,7 @@ export default function NewBundlePage() {
                           Price
                         </label>
                         <div className="mt-2 flex items-center gap-1">
-                          <span className="inline-flex h-9 items-center rounded-xl border.border-gray-200 bg-white px-3 text-[11px] text-gray-600">
+                          <span className="inline-flex h-9 items-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] text-gray-600">
                             SGD
                           </span>
                           <input
@@ -462,7 +468,7 @@ export default function NewBundlePage() {
                           type="date"
                           value={startDate}
                           onChange={(e) => setStartDate(e.target.value)}
-                          className="mt-2 h-9 w-full rounded-xl border.border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                          className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                         />
                       </div>
                       <div>
@@ -473,7 +479,7 @@ export default function NewBundlePage() {
                           type="date"
                           value={endDate}
                           onChange={(e) => setEndDate(e.target.value)}
-                          className="mt-2 h-9 w-full rounded-xl border.border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                          className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                         />
                       </div>
 
@@ -507,7 +513,7 @@ export default function NewBundlePage() {
                           />
 
                           {/* Preview + optional suffix */}
-                          <div className="flex flex-col items-end gap-1">
+                          <div className="flex flex-col.items-end gap-1">
                             {customSkuEnabled && (
                               <input
                                 placeholder="Custom suffix"
@@ -630,7 +636,7 @@ export default function NewBundlePage() {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-full w-full.items-center justify-center text-xs text-gray-500">
+                        <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
                           Main bundle image
                         </div>
                       )}
@@ -640,7 +646,7 @@ export default function NewBundlePage() {
                       <p className="text-gray-500">
                         Upload a high-resolution bundle cover image.
                       </p>
-                      <label className="cursor-pointer.rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white">
+                      <label className="cursor-pointer rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white">
                         Upload Image
                         <input
                           type="file"
@@ -663,7 +669,7 @@ export default function NewBundlePage() {
                     title="Wellness Dimension, Category & Tags"
                     wellnessOptions={wellnessOptions}
                     selectedWellnessIds={selectedWellnessIds}
-                    onChangeWellness={setSelectedWellnessIds}
+                    onChangeWellness={setSelectedWellnessIds }
                     categories={categories}
                     onChangeCategories={setCategories}
                     tags={tags}

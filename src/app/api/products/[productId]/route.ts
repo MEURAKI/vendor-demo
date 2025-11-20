@@ -134,8 +134,6 @@ export async function GET(
     .eq("product_id", productId)
     .order("sort_order", { ascending: true });
 
-    console.log("galleryRows:", galleryRows);
-
   const galleryImageUrls = galleryRows?.map((r) => r.url) ?? [];
 
   // 6) wellness dimensions (join table product_wellness_dimensions)

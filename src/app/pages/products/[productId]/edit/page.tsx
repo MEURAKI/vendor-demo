@@ -307,6 +307,15 @@ export default function EditProductPage({
   const [baseVariantPrice, setBaseVariantPrice] =
     useState<number | undefined>(undefined);
 
+  // ✅ remember original base price for variants from the DB
+  const [originalBaseVariantPrice, setOriginalBaseVariantPrice] =
+    useState<number | undefined>(undefined);
+
+  // ✅ modal state when baseVariantPrice changed
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [pendingStatus, setPendingStatus] =
+    useState<"draft" | "published" | null>(null);
+
   const [variantsCollapsed, setVariantsCollapsed] = useState(false);
 
   const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
@@ -417,8 +426,9 @@ export default function EditProductPage({
         if (data.isVariant) {
           setPrice(undefined);
           setInventory(undefined);
-          setVariants(
-            (data.variants ?? []).map((v: any) => ({
+
+          const loadedVariants: VariantRow[] = (data.variants ?? []).map(
+            (v: any) => ({
               id: String(v.id),
               sku: v.sku,
               price: (v.priceCents ?? 0) / 100,
@@ -426,8 +436,10 @@ export default function EditProductPage({
               imageUrl: v.imageUrl ?? null,
               imageFile: null,
               options: v.options ?? {},
-            }))
+            })
           );
+          setVariants(loadedVariants);
+
           setOptionGroups(
             (data.optionGroups ?? []).map((g: any) => ({
               id: String(g.id),
@@ -440,6 +452,22 @@ export default function EditProductPage({
               })),
             }))
           );
+
+          // ✅ derive base variant price from existing variants
+          const variantPrices = loadedVariants
+            .map((v) => v.price)
+            .filter(
+              (p) => typeof p === "number" && !Number.isNaN(p as number)
+            ) as number[];
+
+          if (variantPrices.length > 0) {
+            const priceFromVariants = variantPrices[0]; // or Math.min(...variantPrices)
+            setBaseVariantPrice(priceFromVariants);
+            setOriginalBaseVariantPrice(priceFromVariants);
+          } else {
+            setBaseVariantPrice(undefined);
+            setOriginalBaseVariantPrice(undefined);
+          }
         } else {
           setPrice(
             typeof data.priceCents === "number"
@@ -449,6 +477,8 @@ export default function EditProductPage({
           setInventory(data.inventoryQty ?? undefined);
           setVariants([]);
           setOptionGroups([]);
+          setBaseVariantPrice(undefined);
+          setOriginalBaseVariantPrice(undefined);
         }
 
         // sections
@@ -622,28 +652,12 @@ export default function EditProductPage({
     setProductImageFile(file);
   }
 
-  /* ---------- Save ---------- */
+  /* ---------- Internal save helper ---------- */
 
-  async function handleSave(status: "draft" | "published") {
-    setSubmitAttempted(true);
-
-    // 1) Validate description sections – no empty titles
-    if (!validateDescriptionSections(sections)) {
-      setShowDescriptionErrorModal(true);
-      return;
-    }
-
-    // 2) Validate categories for published products
-    if (status === "published" && categories.length === 0) {
-      setCategoryError("Please add at least one category.");
-      setShowCategoryErrorModal(true);
-      return;
-    } else {
-      setCategoryError(null);
-    }
-
-    if (!canSave) return;
-
+  async function performSave(
+    status: "draft" | "published",
+    applyBasePriceToVariants: boolean
+  ) {
     try {
       // 1) Upload main product image if changed
       let finalProductImageUrl = productImageUrl;
@@ -665,9 +679,19 @@ export default function EditProductPage({
         }
       }
 
-      // 3) Upload any variant images that have new files
+      // 3) Prepare variants (optionally override prices with baseVariantPrice)
+      const variantsToSave = isVariant
+        ? variants.map((v) => ({
+            ...v,
+            price:
+              applyBasePriceToVariants && baseVariantPrice != null
+                ? baseVariantPrice
+                : v.price,
+          }))
+        : [];
+
       const variantUploads = await Promise.all(
-        variants.map(async (v) => {
+        variantsToSave.map(async (v) => {
           let imageUrl = v.imageUrl ?? null;
           if (v.imageFile && vendorId) {
             imageUrl = await uploadImageToSupabase(v.imageFile, vendorId);
@@ -734,11 +758,57 @@ export default function EditProductPage({
         return;
       }
 
+      // after successful save, update "original" baseline to current value
+      if (isVariant) {
+        setOriginalBaseVariantPrice(baseVariantPrice);
+      }
+
       router.push("/pages/products");
     } catch (err) {
       console.error(err);
       alert("Error uploading image or saving product");
     }
+  }
+
+  /* ---------- Save (with modal decision) ---------- */
+
+  async function handleSave(status: "draft" | "published") {
+    setSubmitAttempted(true);
+
+    // 1) Validate description sections – no empty titles
+    if (!validateDescriptionSections(sections)) {
+      setShowDescriptionErrorModal(true);
+      return;
+    }
+
+    // 2) Validate categories for published products
+    if (status === "published" && categories.length === 0) {
+      setCategoryError("Please add at least one category.");
+      setShowCategoryErrorModal(true);
+      return;
+    } else {
+      setCategoryError(null);
+    }
+
+    if (!canSave) return;
+
+    // 3) If product has variants and base price changed, show modal
+    const hasVariants = isVariant && variants.length > 0;
+    const bothPricesDefined =
+      originalBaseVariantPrice != null && baseVariantPrice != null;
+    const basePriceChanged =
+      bothPricesDefined &&
+      Math.round(originalBaseVariantPrice! * 100) !==
+        Math.round(baseVariantPrice! * 100);
+
+    if (hasVariants && basePriceChanged) {
+      setPendingStatus(status);
+      setShowRegenerateModal(true);
+      return;
+    }
+
+    // 4) Normal save – keep current variant prices
+    await performSave(status, false);
   }
 
   /* ---------- Loading state ---------- */
@@ -750,7 +820,7 @@ export default function EditProductPage({
         <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
           <div className="flex h-full w-full items-center justify-center rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
             <p className="w-full text-center text-sm text-gray-500">
-              <ClipLoader size={55} color="#8884ff" /> 
+              <ClipLoader size={55} color="#8884ff" />
             </p>
           </div>
         </div>
@@ -766,7 +836,7 @@ export default function EditProductPage({
       <Sidebar config={sidebarConfig} />
 
       {/* Black bezel + tablet */}
-      <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
+      <div className="flex flex-1 items-stretch justify.center px-3 py-3 sm:px-6 sm:py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Sticky header */}
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient.to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
@@ -1168,7 +1238,7 @@ export default function EditProductPage({
                         <td className="rounded-r-xl bg-[#F7F7FB] px-3 py-2">
                           <label
                             htmlFor={inputId}
-                            className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-gray-300 bg-white text-lg text-gray-400"
+                            className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-gray-300 bg.white text-lg text-gray-400"
                           >
                             {v.imageUrl ? (
                               <img
@@ -1254,6 +1324,74 @@ export default function EditProductPage({
           });
         }}
         onClose={() => setShowCategoryErrorModal(false)}
+      />
+
+      {/* Base variant price changed modal */}
+      <AppModal
+        open={showRegenerateModal}
+        title="Update Variant Prices?"
+        // we build our own buttons inside the message
+        message={
+          <div className="space-y-3 text-xs text-gray-700">
+            <p>
+              You changed the{" "}
+              <span className="font-semibold text-[#5B33FF]">
+                base price for variants
+              </span>
+              .
+            </p>
+            <p>
+              How would you like to apply this change to your existing variants?
+            </p>
+            <ul className="ml-4 list-disc text-[11px] text-gray-600">
+              <li>
+                <span className="font-semibold">
+                  Apply base price to all variants
+                </span>{" "}
+                – every variant&apos;s price will be set to the new base price.
+              </li>
+              <li>
+                <span className="font-semibold">
+                  Keep existing variant prices
+                </span>{" "}
+                – no changes will be made to individual variant prices.
+              </li>
+            </ul>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!pendingStatus) return;
+                  setShowRegenerateModal(false);
+                  const statusToUse = pendingStatus;
+                  setPendingStatus(null);
+                  await performSave(statusToUse, false); // keep current prices
+                }}
+                className="w-full rounded-full border border-gray-300 bg-white px-4 py-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 sm:w-auto"
+              >
+                Keep current prices &amp; Save
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!pendingStatus) return;
+                  setShowRegenerateModal(false);
+                  const statusToUse = pendingStatus;
+                  setPendingStatus(null);
+                  await performSave(statusToUse, true); // apply base price
+                }}
+                className="w-full rounded-full bg-[#5B33FF] px-4 py-2 text-[11px] font-semibold text-white hover:bg-[#4a2bd6] sm:w-auto"
+              >
+                Apply base price to all variants
+              </button>
+            </div>
+          </div>
+        }
+        onClose={() => {
+          setShowRegenerateModal(false);
+          setPendingStatus(null);
+        }}
       />
     </div>
   );

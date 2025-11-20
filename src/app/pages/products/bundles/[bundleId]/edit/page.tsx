@@ -15,7 +15,6 @@ import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../../../components/taxonomy/WellnessCategoryTagsSection";
 import { uploadProviderImage } from "../../../../../../lib/uploadProviderImage";
-import { useAuthGuard } from "../../../../../../hooks/useAuthGuard";
 
 type DiscountType = "fixed" | "percent" | null;
 
@@ -218,7 +217,7 @@ export default function EditBundlePage() {
         setSkuBase(data.baseSku || "BUNDLE");
         setBundleImageUrl(data.imageUrl ?? null);
 
-        // wellness / categories / tags
+        // wellness / categories / tags (keep ALL selected IDs)
         setSelectedWellnessIds((data.wellnessIds ?? []).map(String));
         setCategories((data.categoryIds ?? []).map(String));
         setTags(data.tags ?? []);
@@ -227,8 +226,7 @@ export default function EditBundlePage() {
         setItems(
           (data.items ?? []).map((it) => ({
             ...it,
-            // use variant id as key if present, otherwise fall back
-            id: it.id || it.productId || it.variantId!,
+            id: it.id || it.productId,
             quantity: it.quantity ?? 1,
           }))
         );
@@ -276,6 +274,15 @@ export default function EditBundlePage() {
   async function handleSave(nextStatus: "draft" | "active") {
     if (!canSave) return;
 
+    // ✅ MULTI-SELECT WELLNESS: keep *all* selected IDs, just normalised and deduped
+    const cleanWellnessDimensions = Array.from(
+      new Set(
+        (selectedWellnessIds ?? [])
+          .map((v) => Number(String(v).trim()))
+          .filter((n) => Number.isFinite(n))
+      )
+    );
+
     const body = {
       vendorId,
       name,
@@ -295,16 +302,16 @@ export default function EditBundlePage() {
       startAt: startDate || null,
       endAt: endDate || null,
       imageUrl: bundleImageUrl,
-      wellnessDimensions: selectedWellnessIds,
+      wellnessDimensions: cleanWellnessDimensions, // 👈 sends [1,4,7,...] – multiple values
       categories,
-      tags, // already string[]
-      items: items.map((i) => ({
-        productId: i.productId,          // ✅ always set
-        variantId: i.variantId,          // ✅ variantId or null
+      tags,
+      items: items.map((i, idx) => ({
+        productId: i.productId,
+        variantId: null,
         itemName: i.name,
         itemPriceCents: i.priceCents,
         quantity: i.quantity,
-        position: 0, // or idx if you want ordering
+        position: idx,
       })),
     };
 
@@ -319,16 +326,16 @@ export default function EditBundlePage() {
       return;
     }
 
-    // Go back to list or just notify
     router.push("/pages/products/bundles");
   }
+
 
   // ---------- UI ----------
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
 
-      <div className="flex flex-1.items-stretch justify-center px-6 py-4">
+      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Top bar */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-5">
@@ -376,8 +383,11 @@ export default function EditBundlePage() {
           {/* Body */}
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
-              <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
-
+              <ClipLoader
+                size={40}
+                color="#6B46C1"
+                cssOverride={{ animationDuration: "3s" }}
+              />
             </div>
           ) : (
             <div className="flex-1 overflow-auto p-6">
@@ -425,7 +435,7 @@ export default function EditBundlePage() {
                         <label className="text-[11px] font-semibold text-gray-700">
                           Price
                         </label>
-                        <div className="mt-2 flex items-center gap-1">
+                        <div className="mt-2 flex items.center gap-1">
                           <span className="inline-flex h-9 items-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] text-gray-600">
                             SGD
                           </span>
@@ -602,7 +612,7 @@ export default function EditBundlePage() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex.items-center gap-2">
+                            <div className="flex items-center gap-2">
                               <span className="text-[11px] text-gray-500">
                                 QTY
                               </span>
@@ -685,7 +695,9 @@ export default function EditBundlePage() {
                     title="Wellness Dimension, Category & Tags"
                     wellnessOptions={wellnessOptions}
                     selectedWellnessIds={selectedWellnessIds}
-                    onChangeWellness={setSelectedWellnessIds}
+                    onChangeWellness={
+                      setSelectedWellnessIds
+                    }
                     categories={categories}
                     onChangeCategories={setCategories}
                     tags={tags}

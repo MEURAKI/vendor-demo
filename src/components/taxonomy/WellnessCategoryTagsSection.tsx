@@ -47,6 +47,7 @@ export default function WellnessCategoryTagsSection({
   categoryPlaceholder = "e.g. Apparel, Classes",
   tagPlaceholder = "e.g. Limited Edition, Bestseller",
 }: Props) {
+
   return (
     <section className="rounded-2xl border border-[#ECECFB] bg-[#FBFBFE] p-4 sm:p-6">
       <div className="mb-4">

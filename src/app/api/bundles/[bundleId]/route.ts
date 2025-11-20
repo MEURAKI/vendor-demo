@@ -88,11 +88,11 @@ export async function GET(
   // 3) Categories
   const { data: categoryRows } = await client
     .from("bundle_categories")
-    .select("category_id")
+    .select("category")
     .eq("bundle_id", bundleId);
 
   const categoryIds: number[] =
-    categoryRows?.map((row: any) => row.category_id) ?? [];
+    categoryRows?.map((row: any) => row.category) ?? [];
 
   // 4) Tags
   const { data: tagRows } = await client
@@ -183,6 +183,14 @@ export async function GET(
       };
     }) ?? [];
 
+      const cleanWellnessDimensions = Array.from(
+      new Set(
+        (categoryIds ?? [])
+          .map((v) => Number(String(v).trim()))
+          .filter((n) => Number.isFinite(n))
+      )
+    );
+
   return NextResponse.json({
     id: bundle.id as string,
     vendorId: bundle.vendor_id as string | null,
@@ -201,8 +209,8 @@ export async function GET(
         }
       : null,
     imageUrl: (bundle.image_url as string) ?? null,
-    wellnessDimensions: wellnessIds,
-    categories: categoryIds,
+    wellnessIds: wellnessIds,
+    categoryIds: cleanWellnessDimensions,
     tags,
     items,
   });
@@ -226,7 +234,42 @@ export async function PUT(
     ...bundle
   } = body;
 
-  // 1) Update bundle row (you already have this part correct)
+
+  const wellnessArray = Array.isArray(wellnessDimensions)
+    ? wellnessDimensions
+    : [];
+
+  // unique string IDs
+  const uniqueWellnessIdStrings = [
+    ...new Set(
+      wellnessArray
+        .map((v: any) => String(v).trim())
+        .filter((v) => v.length > 0)
+    ),
+  ];
+
+  // convert to numbers & drop NaN
+  const uniqueWellnessIds = uniqueWellnessIdStrings
+    .map((idStr) => Number(idStr))
+    .filter((n) => Number.isFinite(n));
+
+  // dedupe categories & tags too (optional but safe)
+  const uniqueCategories = [
+    ...new Set(
+      (Array.isArray(categories) ? categories : []).map((c: any) =>
+        String(c).trim()
+      )
+    ),
+  ].filter((c) => c.length > 0);
+
+  const uniqueTags = [
+    ...new Set(
+      (Array.isArray(tags) ? tags : []).map((t: any) => String(t).trim())
+    ),
+  ].filter((t) => t.length > 0);
+
+  // --- 2) UPDATE BUNDLE ROW ---
+
   const { data: updated, error: updateErr } = await client
     .from("bundles")
     .update({
@@ -255,47 +298,55 @@ export async function PUT(
     );
   }
 
-  // 2) Reset wellness / categories / tags (your logic here is fine)
+  // --- 3) RESET WELLNESS / CATEGORIES / TAGS ---
+
+  // wellness
   await client
     .from("bundle_wellness_dimensions")
     .delete()
     .eq("bundle_id", bundleId);
-  if (Array.isArray(wellnessDimensions) && wellnessDimensions.length) {
-    await client.from("bundle_wellness_dimensions").insert(
-      wellnessDimensions.map((id: string | number) => ({
-        bundle_id: bundleId,
-        dimension_id: Number(id),
-      }))
-    );
+
+  if (uniqueWellnessIds.length > 0) {
+    const wellnessRows = uniqueWellnessIds.map((idNum) => ({
+      bundle_id: bundleId,
+      dimension_id: idNum,
+    }));
+
+    await client.from("bundle_wellness_dimensions").insert(wellnessRows);
   }
 
+  // categories
   await client.from("bundle_categories").delete().eq("bundle_id", bundleId);
-  if (Array.isArray(categories) && categories.length) {
+
+  if (uniqueCategories.length > 0) {
     await client.from("bundle_categories").insert(
-      categories.map((id: string | number) => ({
+      uniqueCategories.map((category) => ({
         bundle_id: bundleId,
-        category_id: Number(id),
+        category,
       }))
     );
   }
 
+  // tags
   await client.from("bundle_tags").delete().eq("bundle_id", bundleId);
-  if (Array.isArray(tags) && tags.length) {
+
+  if (uniqueTags.length > 0) {
     await client.from("bundle_tags").insert(
-      tags.map((tag: string) => ({
+      uniqueTags.map((tag) => ({
         bundle_id: bundleId,
         tag,
       }))
     );
   }
 
-  // 3) Reset items
+  // --- 4) RESET ITEMS ---
+
   await client.from("bundle_items").delete().eq("bundle_id", bundleId);
 
   if (Array.isArray(items) && items.length) {
     const rows = items.map((item: any, idx: number) => {
       const variantId = item.variantId ?? null;
-      const productId = item.productId ?? variantId; // ✅ fallback
+      const productId = item.productId ?? variantId; // fallback
 
       return {
         bundle_id: bundleId,
@@ -308,12 +359,12 @@ export async function PUT(
       };
     });
 
-  const { error: itemsErr } = await client.from("bundle_items").insert(rows);
+    const { error: itemsErr } = await client.from("bundle_items").insert(rows);
 
-  if (itemsErr) {
-    console.error("[bundle PUT] items error:", itemsErr);
-    return NextResponse.json({ error: itemsErr.message }, { status: 400 });
-  }
+    if (itemsErr) {
+      console.error("[bundle PUT] items error:", itemsErr);
+      return NextResponse.json({ error: itemsErr.message }, { status: 400 });
+    }
   }
 
   return NextResponse.json({ ok: true, bundleId });
