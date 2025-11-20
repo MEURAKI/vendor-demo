@@ -159,20 +159,18 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
+    <div className="min-h-screen bg-white flex flex-col lg:flex-row">
       {/* LEFT – FORM; scrolls on smaller/short screens */}
       <div className="flex-1 flex justify-center lg:items-center">
         <div
-          className="
-            w-full max-w-sm
-            sm:max-w-md
-            xl:max-w-lg
-            h-full lg:h-auto
-            overflow-y-auto
-            px-4 sm:px-6 md:px-10 xl:px-16
-            py-5 sm:py-8 md:py-10 xl:py-12
-          "
-        >
+        className="
+          w-full max-w-sm
+          sm:max-w-md
+          xl:max-w-lg
+          px-4 sm:px-6 md:px-10 xl:px-16
+          py-5 sm:py-8 md:py-10 xl:py-12
+        "
+      >
           {/* Heading */}
           <div className="mb-5 sm:mb-7 md:mb-8">
             <h1
@@ -387,28 +385,28 @@ export default function LoginForm() {
       </div>
 
       {/* RIGHT – HERO (desktop only) */}
-      <div className="hidden lg:flex lg:flex-1 relative">
-        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
+      <div className="hidden lg:flex lg:flex-1 relative min-h-screen">
+      <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
+        <Image
+          src="/images/hero-bg.gif"
+          alt="Animated background"
+          fill
+          priority
+          unoptimized
+          className="object-cover"
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
           <Image
-            src="/images/hero-bg.gif"
-            alt="Animated background"
-            fill
-            priority
-            unoptimized
-            className="object-cover"
+            src="/images/hero-overlay.png"
+            alt="Meuraki overlay"
+            width={320}
+            height={640}
+            className="rounded-[28px] pointer-events-none"
           />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Image
-              src="/images/hero-overlay.png"
-              alt="Meuraki overlay"
-              width={320}
-              height={640}
-              className="rounded-[28px] pointer-events-none"
-            />
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
         </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
       </div>
+    </div>
     </div>
   );
 }
