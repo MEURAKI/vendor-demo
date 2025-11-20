@@ -856,140 +856,125 @@ export default function EditServicePage() {
                               : "In-Person Service Settings"}
                           </h3>
 
-                          <div className="grid gap-3 text-xs md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
-                            {/* SKU */}
-                            <div>
-                              <label className="text-[11px] font-semibold text-gray-800">
-                                SKU
-                              </label>
-                              <input
-                                value={loc.sku}
-                                onChange={(e) =>
-                                  updateLocation(loc.locationType, {
-                                    sku: e.target.value,
-                                  })
-                                }
-                                className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                              />
-                            </div>
+   {/* 2 rows → each row has exactly 2 columns */}
+<div className="grid gap-4 text-xs md:grid-cols-2">
 
-                            {/* Max Participants */}
-                            <div>
-                              <label className="text-[11px] font-semibold text-gray-800">
-                                Max Participants
-                              </label>
-                              <div className="mt-2 flex items-center gap-1">
-                                <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500">
-                                  QTY
-                                </span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={loc.maxParticipants ?? ""}
-                                  onChange={(e) =>
-                                    updateLocation(loc.locationType, {
-                                      maxParticipants:
-                                        e.target.value === ""
-                                          ? undefined
-                                          : Number(e.target.value),
-                                    })
-                                  }
-                                  className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-                                />
-                              </div>
-                            </div>
+  {/* ROW 1 — SKU */}
+  <div>
+    <label className="text-[11px] font-semibold text-gray-800">SKU</label>
+    <input
+      value={loc.sku}
+      onChange={(e) =>
+        updateLocation(loc.locationType, { sku: e.target.value })
+      }
+      className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+    />
+  </div>
 
-                            {/* Price */}
-                            <div>
-                              <label className="text-[11px] font-semibold text-gray-800">
-                                Price
-                              </label>
-                              <div className="mt-2 flex items-center gap-1">
-                                <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500">
-                                  SGD
-                                </span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={loc.price ?? ""}
-                                  onChange={(e) =>
-                                    updateLocation(loc.locationType, {
-                                      price:
-                                        e.target.value === ""
-                                          ? undefined
-                                          : Number(e.target.value),
-                                    })
-                                  }
-                                  className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-                                />
-                              </div>
-                            </div>
+  {/* ROW 1 — Max Participants */}
+  <div>
+    <label className="text-[11px] font-semibold text-gray-800">
+      Max Participants
+    </label>
+    <div className="mt-2 flex items-center gap-1">
+      <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
+        QTY
+      </span>
+      <input
+        type="number"
+        min={1}
+        value={loc.maxParticipants ?? ""}
+        onChange={(e) =>
+          updateLocation(loc.locationType, {
+            maxParticipants:
+              e.target.value === "" ? undefined : Number(e.target.value),
+          })
+        }
+        className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+  </div>
 
-                            {/* Discount */}
-                            <div>
-                              <label className="text-[11px] font-semibold text-gray-800">
-                                Discount
-                              </label>
-                              <div className="mt-2 flex items-center gap-1">
-                                <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px]">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateLocation(loc.locationType, {
-                                        discountType:
-                                          loc.discountType === "fixed"
-                                            ? null
-                                            : "fixed",
-                                      })
-                                    }
-                                    className={clsx(
-                                      "px-3 py-1.5 rounded-l-2xl",
-                                      loc.discountType === "fixed"
-                                        ? "bg-[#F5EBFF] text-purple-700"
-                                        : "text-gray-600"
-                                    )}
-                                  >
-                                    SGD
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateLocation(loc.locationType, {
-                                        discountType:
-                                          loc.discountType === "percent"
-                                            ? null
-                                            : "percent",
-                                      })
-                                    }
-                                    className={clsx(
-                                      "px-3 py-1.5 rounded-r-2xl",
-                                      loc.discountType === "percent"
-                                        ? "bg-[#F5EBFF] text-purple-700"
-                                        : "text-gray-600"
-                                    )}
-                                  >
-                                    %
-                                  </button>
-                                </div>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={loc.discountValue ?? ""}
-                                  onChange={(e) =>
-                                    updateLocation(loc.locationType, {
-                                      discountValue:
-                                        e.target.value === ""
-                                          ? undefined
-                                          : Number(e.target.value),
-                                    })
-                                  }
-                                  className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-                                />
-                              </div>
-                            </div>
-                          </div>
+  {/* ROW 2 — Price */}
+  <div>
+    <label className="text-[11px] font-semibold text-gray-800">Price</label>
+    <div className="mt-2 flex items-center gap-1">
+      <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
+        SGD
+      </span>
+      <input
+        type="number"
+        min={0}
+        step="0.01"
+        value={loc.price ?? ""}
+        onChange={(e) =>
+          updateLocation(loc.locationType, {
+            price: e.target.value === "" ? undefined : Number(e.target.value),
+          })
+        }
+        className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+  </div>
+
+  {/* ROW 2 — Discount */}
+  <div>
+    <label className="text-[11px] font-semibold text-gray-800">
+      Discount
+    </label>
+    <div className="mt-2 flex flex-wrap items-center gap-1">
+      <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px] shrink-0">
+        <button
+          type="button"
+          onClick={() =>
+            updateLocation(loc.locationType, {
+              discountType: loc.discountType === "fixed" ? null : "fixed",
+            })
+          }
+          className={clsx(
+            "px-3 py-1.5 rounded-l-2xl",
+            loc.discountType === "fixed"
+              ? "bg-[#F5EBFF] text-purple-700"
+              : "text-gray-600"
+          )}
+        >
+          SGD
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            updateLocation(loc.locationType, {
+              discountType: loc.discountType === "percent" ? null : "percent",
+            })
+          }
+          className={clsx(
+            "px-3 py-1.5 rounded-r-2xl",
+            loc.discountType === "percent"
+              ? "bg-[#F5EBFF] text-purple-700"
+              : "text-gray-600"
+          )}
+        >
+          %
+        </button>
+      </div>
+
+      <input
+        type="number"
+        min={0}
+        step="0.01"
+        value={loc.discountValue ?? ""}
+        onChange={(e) =>
+          updateLocation(loc.locationType, {
+            discountValue:
+              e.target.value === "" ? undefined : Number(e.target.value),
+          })
+        }
+        className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+  </div>
+
+</div>
 
                           {/* Availability Card */}
                           <div className="mt-6 rounded-2xl bg-[#FBFBFE] p-4 text-xs">
