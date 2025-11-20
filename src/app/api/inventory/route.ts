@@ -45,47 +45,12 @@ export async function GET(req: Request) {
     );
   }
 
-  // 👇 This assumes your products table has a `vendor_id` column
+  // assumes products.vendor_id references the logged-in vendor
   const vendorId = user.id;
 
-  /* ----------------- 1) VARIANT ROWS (FOR THIS VENDOR ONLY) ----------------- */
+  /* ----------------- 1) LOAD ALL PRODUCTS FOR THIS VENDOR ----------------- */
 
-  const { data: variantData, error: variantError } = await client
-    .from("product_variants")
-    .select(
-      `
-      id,
-      sku,
-      price_cents,
-      inventory_qty,
-      options_json,
-      products:product_id (
-        id,
-        name,
-        status,
-        is_variant,
-        base_sku,
-        vendor_id,
-        product_categories (
-          category
-        )
-      )
-    `
-    )
-    // filter by vendor on joined products
-    .eq("products.vendor_id", vendorId);
-
-  if (variantError) {
-    console.error("[inventory] variant error:", variantError);
-    return NextResponse.json(
-      { error: variantError.message },
-      { status: 400 }
-    );
-  }
-
-  /* ----------------- 2) SINGLE PRODUCTS (FOR THIS VENDOR ONLY) ----------------- */
-
-  const { data: singleData, error: singleError } = await client
+  const { data: productsData, error: productsError } = await client
     .from("products")
     .select(
       `
@@ -102,23 +67,67 @@ export async function GET(req: Request) {
       )
     `
     )
-    .eq("is_variant", false) // only plain products
-    .eq("vendor_id", vendorId); // ✅ only logged-in vendor's products
+    .eq("vendor_id", vendorId);
 
-  if (singleError) {
-    console.error("[inventory] single error:", singleError);
+  if (productsError) {
+    console.error("[inventory] products error:", productsError);
     return NextResponse.json(
-      { error: singleError.message },
+      { error: productsError.message },
       { status: 400 }
     );
   }
 
+  const products = productsData ?? [];
+
+  // split into single products and variant products
+  const singleProducts = products.filter((p: any) => !p.is_variant);
+  const variantParentProducts = products.filter((p: any) => p.is_variant);
+
+  const variantParentIds = variantParentProducts.map((p: any) => p.id);
+
+  /* ----------------- 2) LOAD VARIANTS FOR THIS VENDOR'S PRODUCTS ONLY ----------------- */
+
+  let variantData: any[] = [];
+
+  if (variantParentIds.length > 0) {
+    const { data: rawVariantData, error: variantError } = await client
+      .from("product_variants")
+      .select(
+        `
+        id,
+        sku,
+        price_cents,
+        inventory_qty,
+        options_json,
+        product_id
+      `
+      )
+      .in("product_id", variantParentIds);
+
+    if (variantError) {
+      console.error("[inventory] variant error:", variantError);
+      return NextResponse.json(
+        { error: variantError.message },
+        { status: 400 }
+      );
+    }
+
+    variantData = rawVariantData ?? [];
+  }
+
   /* ----------------- 3) MAP VARIANT ROWS ----------------- */
 
-  const variantRows = (variantData ?? []).map((v: any) => {
-    const product = v.products;
+  const variantRows = variantData.map((v: any) => {
+    const product = variantParentProducts.find(
+      (p: any) => p.id === v.product_id
+    );
 
-    const catRel = product?.product_categories?.[0];
+    // if for some reason there's no matching product, skip this row
+    if (!product) {
+      return null;
+    }
+
+    const catRel = product.product_categories?.[0];
     const categoryName = catRel?.category ?? "—";
 
     let variantLabel: string | null = null;
@@ -132,33 +141,42 @@ export async function GET(req: Request) {
     const stock = v.inventory_qty ?? 0;
 
     let status: InventoryStatus =
-      (product?.status as InventoryStatus) ?? "draft";
+      (product.status as InventoryStatus) ?? "draft";
     if (stock <= 0) status = "out_of_stock";
 
     return {
       id: String(v.id),
-      productId: String(product?.id),
-      productName: product?.name ?? "Untitled product",
+      productId: String(product.id),
+      productName: product.name ?? "Untitled product",
       variantLabel,
       category: categoryName,
       priceCents: v.price_cents ?? 0,
       stock,
-      sku: v.sku ?? product?.base_sku ?? "",
+      sku: v.sku ?? product.base_sku ?? "",
       status,
-      // imageUrl: v.image_url ?? product?.image_url ?? null,
+      // imageUrl: v.image_url ?? product.image_url ?? null,
     };
-  });
+  }).filter(Boolean) as {
+    id: string;
+    productId: string;
+    productName: string;
+    variantLabel: string | null;
+    category: string;
+    priceCents: number;
+    stock: number;
+    sku: string;
+    status: InventoryStatus;
+  }[];
 
   /* ----------------- 4) MAP SINGLE PRODUCT ROWS ----------------- */
 
-  const singleRows = (singleData ?? []).map((p: any) => {
+  const singleRows = singleProducts.map((p: any) => {
     const catRel = p.product_categories?.[0];
     const categoryName = catRel?.category ?? "—";
 
     const stock = p.inventory_qty ?? 0;
 
-    let status: InventoryStatus =
-      (p.status as InventoryStatus) ?? "draft";
+    let status: InventoryStatus = (p.status as InventoryStatus) ?? "draft";
     if (stock <= 0) status = "out_of_stock";
 
     return {

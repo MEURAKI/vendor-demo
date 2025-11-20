@@ -10,9 +10,11 @@ import type { BundleCandidateItem } from "../../../../../../types/bundles.types"
 import { supabase } from "../../../../../../lib/supabase/client";
 import Sidebar from "../../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../../components/sidebar/sidebar.config";
-import { ProductImagesGallery, ProductImage } from "../../../../../../components/product/ProductImagesGallery";
 import ClipLoader from "react-spinners/ClipLoader";
-
+import WellnessCategoryTagsSection, {
+  WellnessOption,
+} from "../../../../../../components/taxonomy/WellnessCategoryTagsSection";
+import { uploadProviderImage } from "../../../../../../lib/uploadProviderImage";
 
 type DiscountType = "fixed" | "percent" | null;
 
@@ -22,11 +24,10 @@ type BundleItem = BundleCandidateItem & {
 
 type LoadedBundle = {
   id: string;
-  vendorId: string | null;
   name: string;
+  description: string | null;
   baseSku: string;
-  sku: string;
-  description: string;
+  sku?: string;
   status: "draft" | "active";
   priceCents: number;
   discount: {
@@ -35,13 +36,13 @@ type LoadedBundle = {
     start: string | null;
     end: string | null;
   } | null;
-  startAt: string | null;
-  endAt: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
   imageUrl: string | null;
-  wellnessDimensions: (string | number)[];
-  categories: (string | number)[];
+  wellnessIds: (string | number)[];
+  categoryIds: (string | number)[];
   tags: string[];
-  items: (BundleCandidateItem & { quantity: number })[];
+  items: (BundleCandidateItem & { quantity?: number })[];
 };
 
 type UserStatus = "active" | "inactive" | "pending";
@@ -79,15 +80,19 @@ export default function EditBundlePage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  // SKU
   const [skuBase, setSkuBase] = useState("BUNDLE");
   const [customSkuEnabled, setCustomSkuEnabled] = useState(false);
   const [customSkuSuffix, setCustomSkuSuffix] = useState("");
 
   // right-column meta
   const [bundleImageUrl, setBundleImageUrl] = useState<string | null>(null);
-  const [wellness, setWellness] = useState<string[]>([]);
+
+  // wellness / categories / tags
+  const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
+  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [tags, setTags] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
 
   const [status, setStatus] = useState<"draft" | "active">("draft");
 
@@ -103,13 +108,13 @@ export default function EditBundlePage() {
   useEffect(() => {
     async function loadProfile() {
       const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return;
+      if (!auth?.user) return;
 
       const { data: profileRow } = await supabase
         .from("profiles")
         .select("id,email,full_name,status,onboarding_completed")
         .eq("id", auth.user.id)
-        .single();
+        .maybeSingle();
 
       if (profileRow) {
         setVendorId(profileRow.id);
@@ -123,7 +128,34 @@ export default function EditBundlePage() {
       }
     }
 
-    loadProfile();
+    void loadProfile();
+  }, []);
+
+  // ---------- Load wellness dimension options ----------
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadWellness() {
+      const { data, error } = await supabase
+        .from("wellness_dimensions")
+        .select("id,name,slug")
+        .order("id", { ascending: true });
+
+      if (!mounted) return;
+      if (error) {
+        console.error("Error loading wellness dimensions", error);
+        return;
+      }
+      if (data) {
+        setWellnessOptions(data as WellnessOption[]);
+      }
+    }
+
+    void loadWellness();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const sidebarConfig = useMemo(
@@ -132,25 +164,29 @@ export default function EditBundlePage() {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-       status: profile?.status ?? "active"
+        status: profile?.status ?? "active",
       }),
     [profile]
   );
 
   // ---------- Load existing bundle ----------
   useEffect(() => {
+    if (!bundleId) return;
+
     let isMounted = true;
 
     async function loadBundle() {
       try {
         setLoading(true);
+
         const res = await fetch(`/api/bundles/${bundleId}`);
-        const data: LoadedBundle = await res.json();
         if (!res.ok) {
-          console.error("Error loading bundle", data);
+          const text = await res.text().catch(() => "");
+          console.error("Error loading bundle", text);
           return;
         }
 
+        const data: LoadedBundle = await res.json();
         if (!isMounted) return;
 
         setName(data.name);
@@ -181,24 +217,28 @@ export default function EditBundlePage() {
         setSkuBase(data.baseSku || "BUNDLE");
         setBundleImageUrl(data.imageUrl ?? null);
 
-        setWellness((data.wellnessDimensions ?? []).map(String));
-        setCategories((data.categories ?? []).map(String));
-        setTags((data.tags ?? []).join(", "));
+        // wellness / categories / tags
+        setSelectedWellnessIds((data.wellnessIds ?? []).map(String));
+        setCategories((data.categoryIds ?? []).map(String));
+        setTags(data.tags ?? []);
 
+        // items
         setItems(
           (data.items ?? []).map((it) => ({
             ...it,
+            // use variant id as key if present, otherwise fall back
+            id: it.id || it.productId || it.variantId!,
             quantity: it.quantity ?? 1,
           }))
         );
+      } catch (err) {
+        console.error("Error loading bundle", err);
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    if (bundleId) {
-      void loadBundle();
-    }
+    void loadBundle();
 
     return () => {
       isMounted = false;
@@ -254,17 +294,16 @@ export default function EditBundlePage() {
       startAt: startDate || null,
       endAt: endDate || null,
       imageUrl: bundleImageUrl,
-      wellnessDimensions: wellness,
+      wellnessDimensions: selectedWellnessIds,
       categories,
-      tags: tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
+      tags, // already string[]
       items: items.map((i) => ({
-        variantId: i.id,
+        productId: i.productId,          // ✅ always set
+        variantId: i.variantId,          // ✅ variantId or null
         itemName: i.name,
         itemPriceCents: i.priceCents,
         quantity: i.quantity,
+        position: 0, // or idx if you want ordering
       })),
     };
 
@@ -279,17 +318,16 @@ export default function EditBundlePage() {
       return;
     }
 
-    // navigate back to bundles list if you want
-    // router.push("/pages/bundles");
-    alert("Bundle updated");
+    // Go back to list or just notify
+    router.push("/pages/products/bundles");
   }
 
   // ---------- UI ----------
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
 
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
+      <div className="flex flex-1.items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Top bar */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-5">
@@ -337,8 +375,7 @@ export default function EditBundlePage() {
           {/* Body */}
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
-                      <ClipLoader size={55} color="#6B46C1" />
-
+              <ClipLoader size={55} color="#6B46C1" />
             </div>
           ) : (
             <div className="flex-1 overflow-auto p-6">
@@ -558,12 +595,12 @@ export default function EditBundlePage() {
                                   {item.name}
                                 </p>
                                 <p className="text-[11px] text-gray-500">
-                                  Current Stock Level: {item.stock} · Item
-                                  Price: ${(item.priceCents / 100).toFixed(2)}
+                                  Current Stock Level: {item.stock} · Item Price: $
+                                  {(item.priceCents / 100).toFixed(2)}
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex.items-center gap-2">
                               <span className="text-[11px] text-gray-500">
                                 QTY
                               </span>
@@ -630,11 +667,11 @@ export default function EditBundlePage() {
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (!file) return;
-                            const url = URL.createObjectURL(file);
-                            setBundleImageUrl(url);
+                            const url = await uploadProviderImage(file);
+                            if (url) setBundleImageUrl(url);
                           }}
                         />
                       </label>
@@ -642,61 +679,16 @@ export default function EditBundlePage() {
                   </section>
 
                   {/* Wellness / Categories / Tags */}
-                  <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
-                    <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                      Wellness Dimension, Category &amp; Tags
-                    </h2>
-
-                    <div className="space-y-4 text-xs">
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Wellness Dimension
-                        </label>
-                        <input
-                          placeholder="Physical, Emotional"
-                          value={wellness.join(", ")}
-                          onChange={(e) =>
-                            setWellness(
-                              e.target.value
-                                .split(",")
-                                .map((x) => x.trim())
-                                .filter(Boolean)
-                            )
-                          }
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Categories
-                        </label>
-                        <input
-                          placeholder="Personal Care & Beauty"
-                          value={categories.join(", ")}
-                          onChange={(e) =>
-                            setCategories(
-                              e.target.value
-                                .split(",")
-                                .map((x) => x.trim())
-                                .filter(Boolean)
-                            )
-                          }
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Tags
-                        </label>
-                        <input
-                          placeholder="Use ',' to add more tags"
-                          value={tags}
-                          onChange={(e) => setTags(e.target.value)}
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  </section>
+                  <WellnessCategoryTagsSection
+                    title="Wellness Dimension, Category & Tags"
+                    wellnessOptions={wellnessOptions}
+                    selectedWellnessIds={selectedWellnessIds}
+                    onChangeWellness={setSelectedWellnessIds}
+                    categories={categories}
+                    onChangeCategories={setCategories}
+                    tags={tags}
+                    onChangeTags={setTags}
+                  />
                 </div>
               </div>
             </div>

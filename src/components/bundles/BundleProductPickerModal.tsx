@@ -5,6 +5,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import type { BundleCandidateItem } from "../../types/bundles.types";
 import ClipLoader from "react-spinners/ClipLoader";
+import { supabase } from "../../lib/supabase/client"; // 👈 add this
 
 const MAX_BUNDLE_ITEMS = 5;
 
@@ -50,13 +51,40 @@ export function BundleProductPickerModal({
     if (!open) return;
 
     let cancelled = false;
+
     async function run() {
       setLoading(true);
       try {
         const url = `/api/bundles/search-products?q=${encodeURIComponent(
           query
         )}`;
-        const res = await fetch(url);
+
+        // 👇 get current session token
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        if (!token) {
+          // not logged in – no results
+          if (!cancelled) {
+            setResults([]);
+          }
+          return;
+        }
+
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`, // 🔐 pass token so API can filter by vendor
+          },
+        });
+
+        if (!res.ok) {
+          console.error("Error loading bundle candidates", await res.text());
+          if (!cancelled) setResults([]);
+          return;
+        }
+
         const data = await res.json();
         if (!cancelled) {
           setResults(data.items ?? []);
@@ -69,8 +97,7 @@ export function BundleProductPickerModal({
       }
     }
 
-    // tiny debounce feel
-    const id = setTimeout(run, 200);
+    const id = setTimeout(run, 200); // tiny debounce
     return () => {
       cancelled = true;
       clearTimeout(id);
@@ -89,7 +116,6 @@ export function BundleProductPickerModal({
         delete next[item.id];
       } else {
         if (Object.keys(next).length >= MAX_BUNDLE_ITEMS) {
-          // optionally show toast instead of alert
           alert(`You can only add up to ${MAX_BUNDLE_ITEMS} products.`);
           return prev;
         }
@@ -115,7 +141,7 @@ export function BundleProductPickerModal({
   const showEmptyState = !query && !results.length && !loading;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-50 flex.items-center justify-center bg-black/40">
       <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-8 py-6">
@@ -163,9 +189,13 @@ export function BundleProductPickerModal({
         <div className="flex-1 overflow-auto px-8 py-4 text-xs">
           {showEmptyState ? (
             <div className="flex h-full flex-col items-center justify-center gap-4 py-10 text-center">
-              {/* Placeholder illustration – swap with actual SVG */}
               <div className="flex h-32 w-32 items-center justify-center rounded-full bg-[#F7F7FB] text-5xl">
-                🔎
+                <Image
+                  src="/images/search-icon.svg"
+                  alt="Bundle Illustration"
+                  width={80}
+                  height={80}
+                />
               </div>
               <div>
                 <p className="text-lg font-semibold text-gray-900">
@@ -196,8 +226,7 @@ export function BundleProductPickerModal({
                         colSpan={4}
                         className="px-4 py-6 text-center text-gray-500"
                       >
-                                <ClipLoader size={55} color="#6B46C1" />
-
+                        <ClipLoader size={55} color="#6B46C1" />
                       </td>
                     </tr>
                   )}

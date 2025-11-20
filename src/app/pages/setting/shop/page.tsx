@@ -15,6 +15,7 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { useToast } from "../../../../components/toast/ToastProvider";
+import AppModal from "../../../../components/common/AppModal";
 
 declare const google: any; // for TS, Google Maps is loaded via <Script>
 
@@ -82,9 +83,14 @@ function ShopSettingsPageInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { successToast, errorToast } = useToast();
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const urlTab = (searchParams.get("tab") as TabKey) || "general";
   const [activeTab, setActiveTab] = useState<TabKey>(urlTab);
+
+  const [modalOpen, setModalOpen] = useState(false);
+const [modalTitle, setModalTitle] = useState("");
+const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
 
   // Google Places
   const [placesLoaded, setPlacesLoaded] = useState(false);
@@ -336,6 +342,31 @@ const autocompleteRef = useRef<any>(null);
 
   async function save(tab: TabKey) {
     if (!vb) return;
+
+      if (tab === "general") {
+    const trimmedSlug = (vb.shop_slug || "").trim();
+
+    if (!trimmedSlug) {
+      setModalTitle("Add your shop URL");
+      setModalMessage(
+        <>
+          <p className="text-xs text-gray-700">
+            To save your shop settings, please add a <strong>Shop URL / Handle</strong>.
+          </p>
+          <p className="mt-2 text-[11px] text-gray-500">
+            This is the last part of your public shop link, e.g.&nbsp;
+            <span className="font-mono text-[11px]">
+              https://meuraki.com.sg/<span className="underline">your-shop</span>
+            </span>
+            .
+          </p>
+        </>
+      );
+      setModalOpen(true);
+      return; // ⛔ stop here, don’t save
+    }
+  }
+
     setSaving(true);
 
     const payload = buildPayload(vb);
@@ -384,6 +415,15 @@ const autocompleteRef = useRef<any>(null);
         strategy="afterInteractive"
         onLoad={() => setPlacesLoaded(true)}
       />
+
+      <AppModal
+      open={modalOpen}
+      title={modalTitle}
+      message={modalMessage}
+      primaryLabel="Okay, got it"
+      onPrimaryClick={() => setModalOpen(false)}
+      onClose={() => setModalOpen(false)}
+    />
 
       <div className="flex h-screen bg-[#F7F7FB]">
         <Sidebar config={sidebarConfig} />

@@ -1,7 +1,9 @@
 // types/bundles.ts
 export type BundleCandidateItem = {
-  id: string;        // variant id
-  productId?: string;
+  id: string; // local row ID for the picker (can be same as variant/product id)
+  kind: "variant" | "single";
+  productId: string;
+  variantId: string | null;
   name: string;
   sku: string;
   priceCents: number;

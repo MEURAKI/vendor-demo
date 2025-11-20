@@ -46,7 +46,20 @@ export default function AllBundlesPage() {
         if (mounted && prof) setProfile(prof);
       }
 
-      const res = await fetch("/api/bundles");
+      const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+
+      const res = await fetch("/api/bundles",{
+         method: "GET",
+   headers: {
+      Authorization: session?.access_token
+        ? `Bearer ${session.access_token}`
+        : "",
+   },
+  }
+);
       const data = await res.json();
 
       const mapped: BundleRow[] = (data.bundles ?? []).map((b: any) => ({
