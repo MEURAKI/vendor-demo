@@ -7,13 +7,14 @@ export async function GET(req: Request) {
   const supabase = createRouteHandlerClient({ cookies });
   const { data: auth } = await supabase.auth.getUser();
 
-  if (!auth.user) {
+  if (!auth?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") || "").trim();
 
+  // Include relation to service_location_settings
   let query = supabase
     .from("services")
     .select(
@@ -23,7 +24,17 @@ export async function GET(req: Request) {
       status,
       cover_image_url,
       service_types,
-      location_types
+      location_types,
+      service_location_settings (
+        id,
+        location_type,
+        sku,
+        max_participants,
+        price_cents,
+        discount_type,
+        discount_value,
+        discount_cap
+      )
     `
     )
     .eq("vendor_id", auth.user.id)
@@ -40,26 +51,38 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  // Normalize cover_image_url -> imageUrl (string)
+  // Normalize services + nested location settings
   const services = (data ?? []).map((p: any) => {
+    // --- cover_image_url -> imageUrl ---
     let imageUrl: string | null = null;
     const raw = p.cover_image_url;
 
     if (raw) {
       if (typeof raw === "string") {
-        // could be a plain URL or a JSON string of the image row
         try {
           const parsed = JSON.parse(raw);
           imageUrl = parsed.image_url ?? parsed.url ?? null;
         } catch {
-          // not JSON → assume it's already a URL
-          imageUrl = raw;
+          imageUrl = raw; // plain URL
         }
       } else if (typeof raw === "object") {
-        // if the column is jsonb instead of text
         imageUrl = raw.image_url ?? raw.url ?? null;
       }
     }
+
+    // --- service_location_settings -> locations[] ---
+    const locations = (p.service_location_settings ?? []).map((s: any) => ({
+      id: s.id,
+      locationType: s.location_type,
+      sku: s.sku,
+      maxParticipants: s.max_participants,
+      priceCents: s.price_cents,
+      discount: {
+        type: s.discount_type,
+        value: s.discount_value,
+        cap: s.discount_cap,
+      },
+    }));
 
     return {
       id: p.id,
@@ -68,7 +91,8 @@ export async function GET(req: Request) {
       type: "Service",
       serviceTypes: p.service_types ?? [],
       locationTypes: p.location_types ?? [],
-      imageUrl, // <- clean URL for your UI
+      imageUrl,
+      locations, // <-- pricing/discount/max participants per location
     };
   });
 

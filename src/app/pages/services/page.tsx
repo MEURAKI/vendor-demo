@@ -30,11 +30,13 @@ type ProviderSummary = {
 type ServiceRow = {
   id: string;
   name: string;
-  typeLabel: string | null; // "1-1", "Group", "Private (At Home)" etc.
-  locations: LocationType[]; // ["online", "in_person"]
-  expiry: "fixed" | "anytime" | null; // Fixed Dates / ANYTIME
+  typeLabel: string | null;
+  locations: LocationType[];
+  expiry: "fixed" | "anytime" | null;
   price: number | null;
+  pricesCount: number; // 👈 NEW
   durationMinutes: number | null;
+  minParticipants: number | null;  // 👈 NEW
   maxParticipants: number | null;
   ticketsSold: number | null;
   ticketsAvailable: number | null;
@@ -42,6 +44,7 @@ type ServiceRow = {
   coverImageUrl: string | null;
   providers: ProviderSummary[];
 };
+
 
 /* ---------- Bulk Upload Modal ---------- */
 
@@ -315,81 +318,113 @@ export default function ServicesPage() {
   );
 
   // function to (re)load services from API
-  async function reloadServices() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/services");
-      const json = await res.json();
-      if (!res.ok) {
-        console.error("Failed to load services", json);
-        return;
-      }
-
-      const raw = json.services ?? json;
-
-      const mapped: ServiceRow[] = (raw as any[]).map((s) => ({
-        id: s.id,
-        name: s.name,
-        // Prefer explicit typeLabel, otherwise first serviceTypes entry
-        typeLabel:
-          (s.typeLabel as string | null) ??
-          (Array.isArray(s.serviceTypes) && s.serviceTypes[0]) ??
-          null,
-        // Locations from camelCase locationTypes
-        locations:
-          (s.locationTypes as LocationType[]) ??
-          (Array.isArray(s.locations) ? s.locations : []),
-
-        // These may not be present in your lightweight list API yet – default to null
-        expiry: (s.expiry as "fixed" | "anytime" | null) ?? null,
-        price:
-          typeof s.price === "number"
-            ? s.price
-            : typeof s.priceCents === "number"
-            ? s.priceCents / 100
-            : null,
-        durationMinutes:
-          typeof s.durationMinutes === "number"
-            ? s.durationMinutes
-            : null,
-        maxParticipants:
-          typeof s.maxParticipants === "number"
-            ? s.maxParticipants
-            : null,
-        ticketsSold:
-          typeof s.ticketsSold === "number" ? s.ticketsSold : null,
-        ticketsAvailable:
-          typeof s.ticketsAvailable === "number"
-            ? s.ticketsAvailable
-            : null,
-
-        status: s.status as ServiceStatus,
-
-        // ✅ use the normalized URL from the API
-        coverImageUrl:
-          (s.imageUrl as string | null) ??
-          (s.coverImageUrl as string | null) ??
-          (s.cover_image_url as string | null) ??
-          null,
-
-        // You can later extend API to send providers; for now, default empty
-        providers:
-          (s.providers as ProviderSummary[]) ??
-          (Array.isArray(s.provider_names)
-            ? s.provider_names.map((name: string, idx: number) => ({
-                id: `p-${idx}`,
-                name,
-              }))
-            : []),
-      }));
-
-      setRows(mapped);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+async function reloadServices() {
+  setLoading(true);
+  try {
+    const res = await fetch("/api/services");
+    const json = await res.json();
+    if (!res.ok) {
+      console.error("Failed to load services", json);
+      return;
     }
+
+    const raw = json.services ?? json;
+const mapped: ServiceRow[] = (raw as any[]).map((s) => {
+  const locationsRaw = Array.isArray(s.locations) ? s.locations : [];
+
+  // locationTypes (as before)
+  const locationTypes: LocationType[] =
+    Array.isArray(s.locationTypes) && s.locationTypes.length
+      ? s.locationTypes
+      : locationsRaw.map((loc: any) => loc.locationType).filter(Boolean);
+
+  // PRICE VALUES (as we did before)
+  const priceValues = locationsRaw
+    .map((loc: any) => loc.priceCents)
+    .filter((v: any) => typeof v === "number");
+
+  const pricesCount = priceValues.length;
+  const basePriceCentsFromLocations =
+    priceValues.length > 0 ? Math.min(...priceValues) : undefined;
+
+  // ✅ PARTICIPANTS FROM LOCATIONS
+  const participantValues = locationsRaw
+    .map((loc: any) => loc.maxParticipants ?? loc.max_participants)
+    .filter((v: any) => typeof v === "number");
+
+  let minParticipants: number | null = null;
+  let maxParticipants: number | null = null;
+
+  if (participantValues.length > 0) {
+    minParticipants = Math.min(...participantValues);
+    maxParticipants = Math.max(...participantValues);
+  } else if (typeof s.maxParticipants === "number") {
+    // fallback if API sends a flat maxParticipants
+    minParticipants = s.maxParticipants;
+    maxParticipants = s.maxParticipants;
   }
+
+  return {
+    id: s.id,
+    name: s.name,
+    typeLabel:
+      (s.typeLabel as string | null) ??
+      (Array.isArray(s.serviceTypes) && s.serviceTypes[0]) ??
+      null,
+
+    locations: locationTypes as LocationType[],
+    expiry: (s.expiry as "fixed" | "anytime" | null) ?? null,
+
+    price:
+      typeof s.price === "number"
+        ? s.price
+        : typeof s.priceCents === "number"
+        ? s.priceCents / 100
+        : typeof basePriceCentsFromLocations === "number"
+        ? basePriceCentsFromLocations / 100
+        : null,
+
+    pricesCount,
+
+    durationMinutes:
+      typeof s.durationMinutes === "number" ? s.durationMinutes : null,
+
+    // ✅ use derived min/max participants
+    minParticipants,
+    maxParticipants,
+
+    ticketsSold: typeof s.ticketsSold === "number" ? s.ticketsSold : null,
+    ticketsAvailable:
+      typeof s.ticketsAvailable === "number" ? s.ticketsAvailable : null,
+
+    status: s.status as ServiceStatus,
+
+    coverImageUrl:
+      (s.imageUrl as string | null) ??
+      (s.coverImageUrl as string | null) ??
+      (s.cover_image_url as string | null) ??
+      null,
+
+    providers:
+      (s.providers as ProviderSummary[]) ??
+      (Array.isArray(s.provider_names)
+        ? s.provider_names.map((name: string, idx: number) => ({
+            id: `p-${idx}`,
+            name,
+          }))
+        : []),
+  };
+});
+
+
+    setRows(mapped);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   // initial load
   useEffect(() => {
@@ -649,9 +684,26 @@ className="
                         </td>
 
                         {/* PRICE */}
-                        <td className="px-3 py-3 text-[11px] text-gray-700">
-                          {row.price != null ? `$${row.price.toFixed(2)}` : "—"}
-                        </td>
+                        {/* PRICE + COUNT */}
+<td className="px-3 py-3 text-[11px] text-gray-700">
+  {row.price != null ? (
+    <div className="flex flex-col leading-tight">
+      <span>{`$${row.price.toFixed(2)}`}</span>
+      {row.pricesCount > 1 && (
+        <span className="text-[10px] text-gray-400">
+          {row.pricesCount} prices
+        </span>
+      )}
+    </div>
+  ) : row.pricesCount > 0 ? (
+    <span className="text-[10px] text-gray-400">
+      {row.pricesCount} prices
+    </span>
+  ) : (
+    "—"
+  )}
+</td>
+
 
                         {/* DURATION */}
                         <td className="px-3 py-3 text-[11px] text-gray-700">
@@ -660,12 +712,22 @@ className="
 
                         {/* MAX PARTICIPANTS */}
                         <td className="px-3 py-3 text-[11px] text-gray-700">
-                          {row.maxParticipants != null
-                            ? `${row.maxParticipants} Slot${
-                                row.maxParticipants === 1 ? "" : "s"
-                              }`
-                            : "—"}
-                        </td>
+  {row.maxParticipants != null ? (
+    row.minParticipants != null &&
+    row.minParticipants !== row.maxParticipants ? (
+      // e.g. 10–100 Slots
+      `${row.minParticipants}–${row.maxParticipants} Slots`
+    ) : (
+      // single value
+      `${row.maxParticipants} Slot${
+        row.maxParticipants === 1 ? "" : "s"
+      }`
+    )
+  ) : (
+    "—"
+  )}
+</td>
+
 
                         {/* TICKETS SOLD */}
                         <td className="px-3 py-3 text-[11px] text-gray-700">
