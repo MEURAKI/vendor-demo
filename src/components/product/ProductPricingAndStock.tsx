@@ -249,7 +249,7 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
                 </button>
                 <button
                   type="button"
-                  disabled={isVariant}
+                  // disabled={isVariant}
                   onClick={() => toggleDiscountType("percent")}
                   className={
                     "h-7 w-10 rounded-xl text-xs font-semibold transition " +
@@ -266,7 +266,7 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
                 type="number"
                 step="0.01"
                 min={0}
-                disabled={discountDisabled}
+                // disabled={discountDisabled}
                 value={discountValue ?? ""}
                 onChange={(e) =>
                   onDiscountValueChange(safeNumber(e.target.value))
@@ -279,13 +279,11 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
             <div className="mt-3 space-y-2">
               <button
                 type="button"
-                disabled={discountDisabled}
+                // disabled={discountDisabled}
                 onClick={() => setDiscountModalOpen(true)}
                 className={
-                  "flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-[11px] sm:text-xs " +
-                  (discountDisabled
-                    ? "cursor-not-allowed border-dashed border-gray-200 bg-gray-50 text-gray-400"
-                    : "border-gray-200 bg-white text-gray-700 hover:border-purple-500")
+                  "flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-[11px] sm:text-xs cursor-not-allowed border-dashed border-gray-200 bg-gray-50 text-gray-400"
+                    
                 }
               >
                 <span>{rangeLabel}</span>
