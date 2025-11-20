@@ -15,6 +15,7 @@ import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../../../components/taxonomy/WellnessCategoryTagsSection";
 import { uploadProviderImage } from "../../../../../../lib/uploadProviderImage";
+import { useAuthGuard } from "../../../../../../hooks/useAuthGuard";
 
 type DiscountType = "fixed" | "percent" | null;
 
@@ -66,6 +67,15 @@ export default function EditBundlePage() {
   const params = useParams<{ bundleId: string }>();
   const router = useRouter();
   const bundleId = params.bundleId;
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   const [loading, setLoading] = useState(true);
 

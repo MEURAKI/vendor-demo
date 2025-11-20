@@ -9,6 +9,7 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
 
 type ProviderStatus = "draft" | "active" | "unavailable";
 
@@ -38,6 +39,16 @@ export default function ProvidersPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   // -------- load profile for sidebar --------
   useEffect(() => {

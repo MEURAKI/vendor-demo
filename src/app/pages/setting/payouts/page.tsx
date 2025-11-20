@@ -9,6 +9,8 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { useToast } from "../../../../components/toast/ToastProvider";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
+import ClipLoader from "react-spinners/ClipLoader";
 
 /* ---------- Types ---------- */
 type Payout = {
@@ -458,6 +460,15 @@ function BillingSettingsPageInner() {
 /* ======================================================================= */
 
 export default function BillingSettingsPage() {
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
   return (
     <Suspense
       fallback={

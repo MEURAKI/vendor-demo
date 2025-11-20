@@ -16,6 +16,7 @@ import WellnessCategoryTagsSection, {
 } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
 import ClipLoader from "react-spinners/ClipLoader";
 import AppModal from "../../../../../components/common/AppModal";
+import { useAuthGuard } from "../../../../../hooks/useAuthGuard";
 
 type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
@@ -179,6 +180,16 @@ export default function EditServicePage() {
   const [showCategoryErrorModal, setShowCategoryErrorModal] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const categorySectionRef = useRef<HTMLDivElement | null>(null);
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   // sidebar profile
   useEffect(() => {

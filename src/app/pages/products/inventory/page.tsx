@@ -10,6 +10,7 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
 
 type InventoryStatus = "draft" | "active" | "out_of_stock" | "published" | "inactive";
 
@@ -45,6 +46,16 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   useEffect(() => {
     let isMounted = true;

@@ -8,6 +8,8 @@ import { buildSidebarConfig } from "../../../../../../components/sidebar/sidebar
 import { supabase } from "../../../../../../lib/supabase/client";
 import { uploadProviderImage } from "../../../../../../lib/uploadProviderImage";
 import WellnessCategoryTagsSection, { WellnessOption } from "../../../../../../components/taxonomy/WellnessCategoryTagsSection";
+import { useAuthGuard } from "../../../../../../hooks/useAuthGuard";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type ProviderStatus = "draft" | "active" | "unavailable";
 
@@ -86,6 +88,16 @@ export default function EditProviderPage({
   const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   // ---- Load profile for sidebar ----
   useEffect(() => {

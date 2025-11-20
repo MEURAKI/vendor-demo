@@ -26,6 +26,8 @@ import {
   ProductImage,
 } from "../../../../components/product/ProductImagesGallery";
 import AppModal from "../../../../components/common/AppModal";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
+import ClipLoader from "react-spinners/ClipLoader";
 
 /* ---------- Types ---------- */
 
@@ -660,6 +662,16 @@ export default function NewProductPage() {
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [showDescriptionErrorModal, setShowDescriptionErrorModal] =
     useState(false);
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   // sidebar config
   const sidebarConfig = useMemo(

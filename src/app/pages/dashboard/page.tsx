@@ -7,6 +7,7 @@ import type { SidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 import Link from "next/link";
+import { useAuthGuard } from "../../../hooks/useAuthGuard";
 
 
 /* ------------------------------------------------------------------ */
@@ -55,6 +56,15 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   const redirectPath = useMemo(() => {
     if (!profile) return null;

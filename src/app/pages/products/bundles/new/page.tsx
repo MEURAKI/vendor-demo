@@ -13,6 +13,8 @@ import { supabase } from "../../../../../lib/supabase/client";
 import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
+import { useAuthGuard } from "../../../../../hooks/useAuthGuard";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type DiscountType = "fixed" | "percent" | null;
 
@@ -78,6 +80,15 @@ async function uploadImageToSupabase(
 
 export default function NewBundlePage() {
   const router = useRouter();
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   const [pickerOpen, setPickerOpen] = useState(true);
 

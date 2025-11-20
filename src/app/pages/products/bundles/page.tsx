@@ -9,6 +9,7 @@ import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.confi
 import { supabase } from "../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 import AppModal from "../../../../components/common/AppModal";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
 
 type BundleStatus = "draft" | "active" | "out_of_stock";
 
@@ -35,6 +36,16 @@ export default function AllBundlesPage() {
 const [bundleIdToTrash, setBundleIdToTrash] = useState<string | null>(null);
 const [trashError, setTrashError] = useState<string | null>(null);
 const [trashLoading, setTrashLoading] = useState(false);
+
+  const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
 function openTrashModal(bundleId: string) {
   setBundleIdToTrash(bundleId);

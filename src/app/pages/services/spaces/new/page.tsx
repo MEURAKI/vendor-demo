@@ -15,6 +15,8 @@ import Sidebar from "../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
 import WellnessCategoryTagsSection, { WellnessOption } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
+import { useAuthGuard } from "../../../../../hooks/useAuthGuard";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type SpaceStatus = "draft" | "active" | "unavailable";
 type SpaceType = "in_person" | "online" | "hybrid";
@@ -138,6 +140,16 @@ export default function NewSpacePage() {
   const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   // load profile for sidebar + vendor id
   useEffect(() => {

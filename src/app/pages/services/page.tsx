@@ -10,6 +10,7 @@ import { buildSidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 import AppModal from "../../../components/common/AppModal";
+import { useAuthGuard } from "../../../hooks/useAuthGuard";
 
 type ServiceStatus = "draft" | "active" | "unavailable";
 type LocationType = "online" | "in_person";
@@ -311,6 +312,16 @@ function closeTrashModal() {
   setServiceIdToTrash(null);
   setTrashError(null);
 }
+
+  const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   // load profile for sidebar
   useEffect(() => {

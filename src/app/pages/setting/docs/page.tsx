@@ -6,6 +6,8 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { useToast } from "../../../../components/toast/ToastProvider";
+import ClipLoader from "react-spinners/ClipLoader";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
 
 /* ---------------- Types ---------------- */
 type DocKind =
@@ -42,6 +44,16 @@ export default function DocumentsAgreementsPage() {
   const [uploading, setUploading] = useState<DocKind | null>(null);
   const [loading, setLoading] = useState(true);
   const { successToast, errorToast } = useToast();
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   const sidebarConfig = useMemo(
     () =>

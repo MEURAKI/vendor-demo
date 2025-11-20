@@ -12,6 +12,8 @@ import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../components/taxonomy/WellnessCategoryTagsSection";
 import AppModal from "../../../../components/common/AppModal";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
@@ -187,6 +189,16 @@ export default function NewServicePage() {
     []
   );
   const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   // per-location settings
   const [locationSettings, setLocationSettings] =

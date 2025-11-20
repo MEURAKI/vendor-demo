@@ -6,6 +6,8 @@ import SettingsNav from "../../../../components/settings/SettingsNav";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
+import ClipLoader from "react-spinners/ClipLoader";
 
 /* ----------------------------- Types & Consts ---------------------------- */
 
@@ -145,6 +147,16 @@ export default function BrandStoryOfferingsPage() {
   const [interests, setInterests] = useState<string[]>([]);
 
   const { successToast, errorToast } = useToast();
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   // Load profile & existing brand doc (or prep empty)
   useEffect(() => {

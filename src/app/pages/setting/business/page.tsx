@@ -10,6 +10,8 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
+import ClipLoader from "react-spinners/ClipLoader";
 
 /* ---------- Types ---------- */
 
@@ -296,6 +298,16 @@ function BusinessSettingsPageInner() {
   }
 
   const { successToast, errorToast } = useToast();
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
 
   /* ---------- Load everything once ---------- */
   useEffect(() => {

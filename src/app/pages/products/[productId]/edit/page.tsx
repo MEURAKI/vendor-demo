@@ -33,6 +33,7 @@ import WellnessCategoryTagsSection, {
 
 import AppModal from "../../../../../components/common/AppModal";
 import ClipLoader from "react-spinners/ClipLoader";
+import { useAuthGuard } from "../../../../../hooks/useAuthGuard";
 
 /* ---------- Types ---------- */
 
@@ -261,6 +262,15 @@ export default function EditProductPage({
   const router = useRouter();
   const { productId } = params;
 
+  const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
+  }
   const [loading, setLoading] = useState(true);
 
   // sidebar profile

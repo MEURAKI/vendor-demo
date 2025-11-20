@@ -9,6 +9,7 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
+import { useAuthGuard } from "../../../../hooks/useAuthGuard";
 
 type SpaceRow = {
   id: string;
@@ -107,6 +108,16 @@ export default function SpacesPage() {
     if (s === "draft") return "Draft";
     if (s === "active") return "Active";
     return "Unavailable";
+  }
+
+    const { checking } = useAuthGuard();
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <ClipLoader size={28} />
+      </div>
+    );
   }
 
   return (
