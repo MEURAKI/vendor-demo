@@ -1,14 +1,17 @@
 // app/pages/products/[productId]/edit/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 
 import { ProductPricingAndStock } from "../../../../../components/product/ProductPricingAndStock";
 import { ProductGeneralInfo } from "../../../../../components/product/ProductGeneralInfo";
-import { ProductDescriptionTabs } from "../../../../../components/product/ProductDescriptionTabs";
+import {
+  ProductDescriptionTabs,
+  validateDescriptionSections,
+} from "../../../../../components/product/ProductDescriptionTabs";
 import {
   ProductVariantChooser,
   OptionGroupKind as BaseOptionGroupKind,
@@ -27,6 +30,8 @@ import {
 import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
+
+import AppModal from "../../../../../components/common/AppModal";
 
 /* ---------- Types ---------- */
 
@@ -303,9 +308,19 @@ export default function EditProductPage({
   const [variantsCollapsed, setVariantsCollapsed] = useState(false);
 
   const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
-const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
-const [categories, setCategories] = useState<string[]>([]);
-const [tags, setTags] = useState<string[]>([]);
+  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+
+  // validation state
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [showDescriptionErrorModal, setShowDescriptionErrorModal] =
+    useState(false);
+  const descriptionSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [showCategoryErrorModal, setShowCategoryErrorModal] = useState(false);
+  const categorySectionRef = useRef<HTMLDivElement | null>(null);
 
   /* ---------- Sidebar config ---------- */
 
@@ -315,7 +330,7 @@ const [tags, setTags] = useState<string[]>([]);
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-       status: profile?.status ?? "active"
+        status: profile?.status ?? "active",
       }),
     [profile]
   );
@@ -506,6 +521,9 @@ const [tags, setTags] = useState<string[]>([]);
       ? price !== undefined && !Number.isNaN(price)
       : variants.length > 0);
 
+  const descriptionHasError =
+    submitAttempted && !validateDescriptionSections(sections);
+
   /* ---------- Variant helpers ---------- */
 
   function addCustomGroup() {
@@ -605,6 +623,23 @@ const [tags, setTags] = useState<string[]>([]);
   /* ---------- Save ---------- */
 
   async function handleSave(status: "draft" | "published") {
+    setSubmitAttempted(true);
+
+    // 1) Validate description sections – no empty titles
+    if (!validateDescriptionSections(sections)) {
+      setShowDescriptionErrorModal(true);
+      return;
+    }
+
+    // 2) Validate categories for published products
+    if (status === "published" && categories.length === 0) {
+      setCategoryError("Please add at least one category.");
+      setShowCategoryErrorModal(true);
+      return;
+    } else {
+      setCategoryError(null);
+    }
+
     if (!canSave) return;
 
     try {
@@ -710,7 +745,7 @@ const [tags, setTags] = useState<string[]>([]);
     return (
       <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
         <Sidebar config={sidebarConfig} />
-        <div className="flex flex-1 items-stretch justify.center px-3 py-3 sm:px-6 sm:py-4">
+        <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
           <div className="flex h-full w-full items-center justify-center rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
             <p className="w-full text-center text-sm text-gray-500">
               Loading product…
@@ -729,10 +764,10 @@ const [tags, setTags] = useState<string[]>([]);
       <Sidebar config={sidebarConfig} />
 
       {/* Black bezel + tablet */}
-      <div className="flex flex-1.items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
+      <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Sticky header */}
-          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
+          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient.to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
             <h1 className="text-lg font-semibold text-[#1B1529] sm:text-2xl">
               Edit product
             </h1>
@@ -740,7 +775,7 @@ const [tags, setTags] = useState<string[]>([]);
               <button
                 type="button"
                 onClick={() => handleSave("draft")}
-                className="h-9 rounded-full border.border-gray-300 bg-white px-3 text-xs font-medium sm:h-10 sm:px-4 sm:text-sm"
+                className="h-9 rounded-full border border-gray-300 bg-white px-3 text-xs font-medium sm:h-10 sm:px-4 sm:text-sm"
               >
                 Save Draft
               </button>
@@ -778,11 +813,21 @@ const [tags, setTags] = useState<string[]>([]);
                   onToggleVariant={setIsVariant}
                 />
 
-                <ProductDescriptionTabs
-                  sections={sections}
-                  onChange={setSections}
-                  maxSections={5}
-                />
+                <div ref={descriptionSectionRef}>
+                  <ProductDescriptionTabs
+                    sections={sections}
+                    onChange={setSections}
+                    maxSections={5}
+                    submitAttempted={submitAttempted}
+                  />
+
+                  {descriptionHasError && (
+                    <p className="mt-1 text-[11px] text-red-600">
+                      Please fill in all section titles before saving the
+                      product.
+                    </p>
+                  )}
+                </div>
 
                 <ProductPricingAndStock
                   isVariant={isVariant}
@@ -899,7 +944,7 @@ const [tags, setTags] = useState<string[]>([]);
                   </h2>
 
                   {/* Main image */}
-                  <div className="aspect-[4/3] w-full overflow-hidden.rounded-2xl bg-gray-200">
+                  <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-200">
                     {productImageUrl ? (
                       <img
                         src={productImageUrl}
@@ -949,17 +994,24 @@ const [tags, setTags] = useState<string[]>([]);
                 </section>
 
                 {/* Wellness / category / tags */}
-               {/* Wellness / category / tags */}
-                <WellnessCategoryTagsSection
-                  title="Wellness Dimension, Category & Tags"
-                  wellnessOptions={wellnessOptions}
-                  selectedWellnessIds={selectedWellnessIds}
-                  onChangeWellness={setSelectedWellnessIds}
-                  categories={categories}
-                  onChangeCategories={setCategories}
-                  tags={tags}
-                  onChangeTags={setTags}
-                />
+                <div ref={categorySectionRef}>
+                  <WellnessCategoryTagsSection
+                    title="Wellness Dimension, Category & Tags"
+                    wellnessOptions={wellnessOptions}
+                    selectedWellnessIds={selectedWellnessIds}
+                    onChangeWellness={setSelectedWellnessIds}
+                    categories={categories}
+                    onChangeCategories={setCategories}
+                    tags={tags}
+                    onChangeTags={setTags}
+                  />
+
+                  {categoryError && (
+                    <p className="mt-1 text-[11px] text-red-600">
+                      {categoryError}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -969,7 +1021,7 @@ const [tags, setTags] = useState<string[]>([]);
       {/* Variant modal */}
       {showVariantModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-xl">
+          <div className="max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-3xl bg.white shadow-xl">
             <div className="flex items-center justify-between border-b px-4 py-3 sm:px-6 sm:py-4">
               <div>
                 <h2 className="text-sm font-semibold sm:text-lg">
@@ -1036,7 +1088,7 @@ const [tags, setTags] = useState<string[]>([]);
                             >
                               ↑
                             </button>
-                            <span className="text-lg.leading-none">≡</span>
+                            <span className="text-lg leading-none">≡</span>
                             <button
                               type="button"
                               onClick={() => moveVariant(index, index + 1)}
@@ -1082,14 +1134,14 @@ const [tags, setTags] = useState<string[]>([]);
                                   )
                                 );
                               }}
-                              className="h-8 w-20 rounded-xl border.border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:outline-none sm:w-24"
+                              className="h-8 w-20 rounded-xl border border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:outline-none sm:w-24"
                             />
                           </div>
                         </td>
 
                         <td className="bg-[#F7F7FB] px-3 py-2">
                           <div className="flex items-center gap-1">
-                            <span className="rounded-xl border.border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-500">
+                            <span className="rounded-xl border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-500">
                               QTY
                             </span>
                             <input
@@ -1106,7 +1158,7 @@ const [tags, setTags] = useState<string[]>([]);
                                   )
                                 );
                               }}
-                              className="h-8 w-16 rounded-xl border.border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:outline-none sm:w-20"
+                              className="h-8 w-16 rounded-xl border border-gray-300 bg-white px-2 text-xs focus:border-purple-500 focus:outline-none sm:w-20"
                             />
                           </div>
                         </td>
@@ -1154,6 +1206,53 @@ const [tags, setTags] = useState<string[]>([]);
           </div>
         </div>
       )}
+
+      {/* Description sections error modal */}
+      <AppModal
+        open={showDescriptionErrorModal}
+        title="Section Title Required"
+        message={
+          <>
+            One or more{" "}
+            <span className="font-medium text-[#5B33FF]">description tabs</span>{" "}
+            have an empty title. Please fill in all section titles before
+            saving the product.
+          </>
+        }
+        primaryLabel="Go to Description"
+        onPrimaryClick={() => {
+          setShowDescriptionErrorModal(false);
+          descriptionSectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }}
+        onClose={() => setShowDescriptionErrorModal(false)}
+      />
+
+      {/* Category error modal */}
+      <AppModal
+        open={showCategoryErrorModal}
+        title="Category Required"
+        message={
+          <>
+            To publish this product, please add at least one category in the{" "}
+            <span className="font-medium text-[#5B33FF]">
+              Wellness Dimension, Category &amp; Tags
+            </span>{" "}
+            section.
+          </>
+        }
+        primaryLabel="Go to Category"
+        onPrimaryClick={() => {
+          setShowCategoryErrorModal(false);
+          categorySectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }}
+        onClose={() => setShowCategoryErrorModal(false)}
+      />
     </div>
   );
 }

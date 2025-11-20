@@ -3,6 +3,7 @@
 
 import React from "react";
 import clsx from "clsx";
+import Image from "next/image";
 
 /** The 4 built-in variant types */
 export type OptionGroupKind = "size" | "volume" | "weight" | "color";
@@ -96,11 +97,16 @@ export const ProductVariantChooser: React.FC<ProductVariantChooserProps> = ({
           <span>Choose Variant</span>
           <span
             className={clsx(
-              "inline-flex h-6 w-6 items-center justify-center rounded-full bg-black text-[11px] text-white transition-transform",
+              "inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] text-white transition-transform",
               collapsed ? "" : "rotate-180"
             )}
           >
-            ▾
+            <Image
+              src="/images/common/down-arrow.svg"
+              alt="Toggle"
+              width={16}
+              height={16}
+            />
           </span>
         </button>
 

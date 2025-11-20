@@ -1,7 +1,7 @@
 // app/pages/services/[serviceId]/edit/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useParams, useRouter } from "next/navigation";
 
@@ -15,6 +15,7 @@ import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
 import ClipLoader from "react-spinners/ClipLoader";
+import AppModal from "../../../../../components/common/AppModal";
 
 type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
@@ -113,6 +114,10 @@ function uuid() {
   return Math.random().toString(36).slice(2);
 }
 
+function validateDescriptionTabs(tabs: DescriptionTab[]) {
+  return tabs.every((t) => t.title.trim().length > 0);
+}
+
 export default function EditServicePage() {
   const params = useParams<{ serviceId: string }>();
   const router = useRouter();
@@ -130,14 +135,18 @@ export default function EditServicePage() {
 
   // taxonomy
   const [serviceTypes, setServiceTypes] = useState<string[]>([]);
-  const [locationTypes, setLocationTypes] = useState<LocationType[]>(["in_person"]);
-
-  // categories & tags as comma-separated strings in the UI
-  const [categoriesInput, setCategoriesInput] = useState("");
-  const [tagsInput, setTagsInput] = useState("");
+  const [locationTypes, setLocationTypes] = useState<LocationType[]>([
+    "in_person",
+  ]);
 
   // description tabs
   const [tabs, setTabs] = useState<DescriptionTab[]>([]);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [showDescriptionErrorModal, setShowDescriptionErrorModal] =
+    useState(false);
+  const descriptionSectionRef = useRef<HTMLDivElement | null>(null);
+  const descriptionHasError =
+    submitAttempted && !validateDescriptionTabs(tabs);
 
   // images (URLs only)
   const [images, setImages] = useState<string[]>([]);
@@ -146,17 +155,31 @@ export default function EditServicePage() {
   // providers / spaces
   const [providerIds, setProviderIds] = useState<string[]>([]);
   const [spaceIds, setSpaceIds] = useState<string[]>([]);
-  const [allProviders, setAllProviders] = useState<{ id: string; name: string }[]>([]);
-  const [allSpaces, setAllSpaces] = useState<{ id: string; name: string }[]>([]);
+  const [allProviders, setAllProviders] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [allSpaces, setAllSpaces] = useState<{ id: string; name: string }[]>(
+    []
+  );
 
   // per-location settings
-  const [locationSettings, setLocationSettings] = useState<LocationSettingsState[]>([]);
-  const [activeLocationTab, setActiveLocationTab] = useState<LocationType>("in_person");
+  const [locationSettings, setLocationSettings] = useState<
+    LocationSettingsState[]
+  >([]);
+  const [activeLocationTab, setActiveLocationTab] =
+    useState<LocationType>("in_person");
 
-    const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
-    const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
-    const [categories, setCategories] = useState<string[]>([]);
-    const [tags, setTags] = useState<string[]>([]);
+  // wellness / categories / tags (array-based, same as create page)
+  const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
+  const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+
+  // category error UI
+  const [showCategoryErrorModal, setShowCategoryErrorModal] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const categorySectionRef = useRef<HTMLDivElement | null>(null);
+
   // sidebar profile
   useEffect(() => {
     (async () => {
@@ -164,7 +187,7 @@ export default function EditServicePage() {
       if (!auth.user) return;
       const { data } = await supabase
         .from("profiles")
-        .select("id,email,full_name")
+        .select("id,email,full_name,status")
         .eq("id", auth.user.id)
         .maybeSingle();
       if (data) setProfile(data as Profile);
@@ -269,11 +292,13 @@ export default function EditServicePage() {
         setStatus(data.status ?? "draft");
 
         setServiceTypes(data.serviceTypes ?? []);
-        setLocationTypes((data.locationTypes as LocationType[]) ?? ["in_person"]);
+        setLocationTypes(
+          (data.locationTypes as LocationType[]) ?? ["in_person"]
+        );
         setSelectedWellnessIds((data.wellnessDimensions ?? []).map(String));
 
-        setCategoriesInput((data.categories ?? []).join(", "));
-        setTagsInput((data.tags ?? []).join(", "));
+        setCategories(data.categories ?? []);
+        setTags(data.tags ?? []);
 
         setImages(data.images ?? []);
         setProviderIds(data.providerIds ?? []);
@@ -312,10 +337,10 @@ export default function EditServicePage() {
               start: s.start,
               end: s.end,
             })),
-            sessionOptions: (loc.sessionOptions ?? []).map((o, idx) => ({
+            sessionOptions: (loc.sessionOptions ?? []).map((o, idx2) => ({
               id: uuid(),
               label: o.label,
-              sessionsCount: o.sessionsCount ?? idx + 1,
+              sessionsCount: o.sessionsCount ?? idx2 + 1,
               price: o.price ?? 0,
             })),
           })) || [];
@@ -423,18 +448,26 @@ export default function EditServicePage() {
   }
 
   async function handleSave(nextStatus: ServiceStatus) {
-    if (!canSave || saving) return;
+    if (saving) return;
+    setSubmitAttempted(true);
+
+    // 1) validate description tabs
+    if (!validateDescriptionTabs(tabs)) {
+      setShowDescriptionErrorModal(true);
+      return;
+    }
+
+    // 2) validate categories only when publishing active
+    if (nextStatus === "active" && categories.length === 0) {
+      setCategoryError("Please add at least one category.");
+      setShowCategoryErrorModal(true);
+      return;
+    } else {
+      setCategoryError(null);
+    }
+
+    if (!canSave) return;
     setSaving(true);
-
-    const parsedCategories = categoriesInput
-      .split(",")
-      .map((c) => c.trim())
-      .filter(Boolean);
-
-    const parsedTags = tagsInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
 
     const payload = {
       sku: sku || null,
@@ -444,8 +477,8 @@ export default function EditServicePage() {
       serviceTypes,
       locationTypes,
       wellnessDimensions: selectedWellnessIds,
-      categories: parsedCategories,
-      tags: parsedTags,
+      categories,
+      tags,
       coverImageUrl,
       images,
       descriptionTabs: tabs.map((t, idx) => ({
@@ -530,7 +563,7 @@ export default function EditServicePage() {
                 type="button"
                 onClick={() => handleSave("draft")}
                 disabled={!canSave || saving}
-                className="h-9 rounded-full border border-gray-300 bg.white px-4 text-xs font-medium disabled:opacity-40"
+                className="h-9 rounded-full border border-gray-300 bg-white px-4 text-xs font-medium disabled:opacity-40"
               >
                 Save Draft
               </button>
@@ -553,8 +586,7 @@ export default function EditServicePage() {
           {/* Body */}
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
-                      <ClipLoader size={55} color="#6B46C1" />
-
+              <ClipLoader size={55} color="#6B46C1" />
             </div>
           ) : (
             <div className="flex-1 overflow-auto px-6 py-6">
@@ -602,7 +634,10 @@ export default function EditServicePage() {
                   </section>
 
                   {/* Description Tabs */}
-                  <section className="rounded-3xl border border-[#ECECFB] bg-white p-6">
+                  <section
+                    ref={descriptionSectionRef}
+                    className="rounded-3xl border border-[#ECECFB] bg-white p-6"
+                  >
                     <div className="mb-3 flex items-center justify-between">
                       <h2 className="text-sm font-semibold text-gray-900">
                         Description Tabs
@@ -627,71 +662,93 @@ export default function EditServicePage() {
                     </div>
 
                     <div className="space-y-4 text-xs">
-                      {tabs.map((tab, idx) => (
-                        <div
-                          key={tab.id}
-                          className="rounded-2xl border border-gray-200 bg-[#FBFBFE] p-4"
-                        >
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className="text-[11px] font-semibold text-purple-700">
-                              {`Section ${idx + 1}`}
-                            </span>
-                            {tabs.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setTabs((prev) =>
-                                    prev.filter((t) => t.id !== tab.id)
-                                  )
-                                }
-                                className="text-xs text-gray-400 hover:text-black"
-                              >
-                                ✕
-                              </button>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <div>
-                              <label className="text-[11px] font-semibold text-gray-800">
-                                Section Title (Displayed on app)
-                              </label>
-                              <input
-                                value={tab.title}
-                                onChange={(e) =>
-                                  setTabs((prev) =>
-                                    prev.map((t) =>
-                                      t.id === tab.id
-                                        ? { ...t, title: e.target.value }
-                                        : t
+                      {tabs.map((tab, idx) => {
+                        const titleHasError =
+                          descriptionHasError && tab.title.trim().length === 0;
+
+                        return (
+                          <div
+                            key={tab.id}
+                            className="rounded-2xl border border-gray-200 bg-[#FBFBFE] p-4"
+                          >
+                            <div className="mb-2 flex items-center justify-between">
+                              <span className="text-[11px] font-semibold text-purple-700">
+                                {`Section ${idx + 1}`}
+                              </span>
+                              {tabs.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTabs((prev) =>
+                                      prev.filter((t) => t.id !== tab.id)
                                     )
-                                  )
-                                }
-                                className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                              />
+                                  }
+                                  className="text-xs text-gray-400 hover:text-black"
+                                >
+                                  ✕
+                                </button>
+                              )}
                             </div>
-                            <div>
-                              <label className="text-[11px] font-semibold text-gray-800">
-                                Section Description
-                              </label>
-                              <textarea
-                                rows={3}
-                                value={tab.body}
-                                onChange={(e) =>
-                                  setTabs((prev) =>
-                                    prev.map((t) =>
-                                      t.id === tab.id
-                                        ? { ...t, body: e.target.value }
-                                        : t
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-[11px] font-semibold text-gray-800">
+                                  Section Title (Displayed on app)
+                                </label>
+                                <input
+                                  value={tab.title}
+                                  onChange={(e) =>
+                                    setTabs((prev) =>
+                                      prev.map((t) =>
+                                        t.id === tab.id
+                                          ? { ...t, title: e.target.value }
+                                          : t
+                                      )
                                     )
-                                  )
-                                }
-                                className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                              />
+                                  }
+                                  className={clsx(
+                                    "mt-1 w-full rounded-2xl bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none border",
+                                    titleHasError
+                                      ? "border-red-500"
+                                      : "border-gray-200"
+                                  )}
+                                />
+                                {titleHasError && (
+                                  <p className="mt-1 text-[10px] text-red-600">
+                                    Section title is required.
+                                  </p>
+                                )}
+                              </div>
+                              <div>
+                                <label className="text-[11px] font-semibold text-gray-800">
+                                  Section Description
+                                </label>
+                                <textarea
+                                  rows={3}
+                                  value={tab.body}
+                                  onChange={(e) =>
+                                    setTabs((prev) =>
+                                      prev.map((t) =>
+                                        t.id === tab.id
+                                          ? { ...t, body: e.target.value }
+                                          : t
+                                      )
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
+
+                    {descriptionHasError && (
+                      <p className="mt-2 text-[11px] text-red-600">
+                        Please fill in all section titles before saving the
+                        service.
+                      </p>
+                    )}
                   </section>
 
                   {/* Service Type, Providers, Spaces, Location types */}
@@ -846,7 +903,7 @@ export default function EditServicePage() {
                               <label className="text-[11px] font-semibold text-gray-800">
                                 Price
                               </label>
-                              <div className="mt-2 flex.items-center gap-1">
+                              <div className="mt-2 flex items-center gap-1">
                                 <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500">
                                   SGD
                                 </span>
@@ -863,7 +920,7 @@ export default function EditServicePage() {
                                           : Number(e.target.value),
                                     })
                                   }
-                                  className="h-9 flex-1.rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                  className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
                                 />
                               </div>
                             </div>
@@ -927,7 +984,7 @@ export default function EditServicePage() {
                                           : Number(e.target.value),
                                     })
                                   }
-                                  className="h-9 flex-1.rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                  className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
                                 />
                               </div>
                             </div>
@@ -990,7 +1047,7 @@ export default function EditServicePage() {
                                               ),
                                             })
                                           }
-                                          className="mt-1 w-full rounded-2xl border border-gray-200 bg.white px-3 py-2 text-xs"
+                                          className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
                                         />
                                       </div>
 
@@ -1011,7 +1068,7 @@ export default function EditServicePage() {
                                               ),
                                             })
                                           }
-                                          className="mt-1 w-full rounded-2xl border border-gray-200 bg.white px-3 py-2 text-xs"
+                                          className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
                                         />
                                       </div>
 
@@ -1041,7 +1098,7 @@ export default function EditServicePage() {
                                         ],
                                       })
                                     }
-                                    className="mt-2 inline-flex items-center rounded-full bg-black px-4 py-2 text-[11px] font-semibold text.white"
+                                    className="mt-2 inline-flex items-center rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white"
                                   >
                                     + Add Time Slot
                                   </button>
@@ -1066,7 +1123,7 @@ export default function EditServicePage() {
                                           "flex-1 rounded-2xl border px-3 py-2 text-[11px]",
                                           loc.expiryType === "anytime"
                                             ? "border-black bg-black text-white"
-                                            : "border-gray-300 bg.white text-gray-700"
+                                            : "border-gray-300 bg-white text-gray-700"
                                         )}
                                       >
                                         Use Anytime
@@ -1082,7 +1139,7 @@ export default function EditServicePage() {
                                           "flex-1 rounded-2xl border px-3 py-2 text-[11px]",
                                           loc.expiryType === "duration"
                                             ? "border-black bg-black text-white"
-                                            : "border-gray-300 bg.white text-gray-700"
+                                            : "border-gray-300 bg-white text-gray-700"
                                         )}
                                       >
                                         Duration
@@ -1108,7 +1165,7 @@ export default function EditServicePage() {
                                                   : Number(e.target.value),
                                             })
                                           }
-                                          className="h-9 w-20 rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                                          className="h-9 w-20 rounded-2xl border border-gray-200 bg-white px-3 text-xs"
                                         />
                                         <select
                                           value={loc.expiryDurationUnit ?? "days"}
@@ -1121,7 +1178,7 @@ export default function EditServicePage() {
                                                   | "months",
                                             })
                                           }
-                                          className="h-9 flex-1 rounded-2xl border border-gray-200 bg.white px-3 text-xs"
+                                          className="h-9 flex-1 rounded-2xl border border-gray-200 bg-white px-3 text-xs"
                                         >
                                           <option value="days">Days</option>
                                           <option value="weeks">Weeks</option>
@@ -1168,7 +1225,7 @@ export default function EditServicePage() {
                                                   ),
                                               })
                                             }
-                                            className="mt-2 w-full rounded-2xl border border-gray-200 bg.white px-3 py-2 text-xs"
+                                            className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
                                           />
                                         </div>
 
@@ -1177,7 +1234,7 @@ export default function EditServicePage() {
                                             Price
                                           </label>
                                           <div className="mt-2 flex items-center gap-1">
-                                            <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg.white px-3 text-[11px] text-gray-500">
+                                            <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500">
                                               SGD
                                             </span>
                                             <input
@@ -1305,7 +1362,7 @@ export default function EditServicePage() {
                         </button>
                       ))}
                       {images.length < 6 && (
-                        <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">
+                        <label className="flex h-14 w-14.cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">
                           +
                           <input
                             type="file"
@@ -1325,22 +1382,84 @@ export default function EditServicePage() {
                   </section>
 
                   {/* Wellness / Categories / Tags */}
-                 <WellnessCategoryTagsSection
-                                  title="Wellness Dimension, Category & Tags"
-                                  wellnessOptions={wellnessOptions}
-                                  selectedWellnessIds={selectedWellnessIds}
-                                  onChangeWellness={setSelectedWellnessIds}
-                                  categories={categories}
-                                  onChangeCategories={setCategories}
-                                  tags={tags}
-                                  onChangeTags={setTags}
-                                />
+                  {/* <div
+                    ref={categorySectionRef}
+                    className={clsx(
+                      categoryError &&
+                        "rounded-3xl border border-red-500 p-[1px]"
+                    )}
+                  > */}
+                    <WellnessCategoryTagsSection
+                      title="Wellness Dimension, Category & Tags"
+                      wellnessOptions={wellnessOptions}
+                      selectedWellnessIds={selectedWellnessIds}
+                      onChangeWellness={setSelectedWellnessIds}
+                      categories={categories}
+                      onChangeCategories={setCategories}
+                      tags={tags}
+                      onChangeTags={setTags}
+                    />
+                  </div>
+                  {categoryError && (
+                    <p className="mt-2 text-[11px] text-red-600">
+                      {categoryError}
+                    </p>
+                  )}
                 </div>
-              </div>
+              {/* </div> */}
             </div>
           )}
         </div>
       </div>
+
+      {/* Description error modal */}
+      <AppModal
+        open={showDescriptionErrorModal}
+        title="Section Title Required"
+        message={
+          <>
+            One or more{" "}
+            <span className="font-medium text-[#5B33FF]">
+              description tabs
+            </span>{" "}
+            have an empty title. Please fill in all section titles before
+            saving the service.
+          </>
+        }
+        primaryLabel="Go to Description"
+        onPrimaryClick={() => {
+          setShowDescriptionErrorModal(false);
+          descriptionSectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }}
+        onClose={() => setShowDescriptionErrorModal(false)}
+      />
+
+      {/* Category error modal */}
+      <AppModal
+        open={showCategoryErrorModal}
+        title="Category Required"
+        message={
+          <>
+            To publish this service, please add at least one category in the{" "}
+            <span className="font-medium text-[#5B33FF]">
+              Wellness Dimension, Category &amp; Tags
+            </span>{" "}
+            section.
+          </>
+        }
+        primaryLabel="Go to Category"
+        onPrimaryClick={() => {
+          setShowCategoryErrorModal(false);
+          categorySectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }}
+        onClose={() => setShowCategoryErrorModal(false)}
+      />
     </div>
   );
 }

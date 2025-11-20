@@ -12,7 +12,10 @@ import { supabase } from "../../../../lib/supabase/client";
 
 import { ProductPricingAndStock } from "../../../../components/product/ProductPricingAndStock";
 import { ProductGeneralInfo } from "../../../../components/product/ProductGeneralInfo";
-import { ProductDescriptionTabs } from "../../../../components/product/ProductDescriptionTabs";
+import {
+  ProductDescriptionTabs,
+  validateDescriptionSections,
+} from "../../../../components/product/ProductDescriptionTabs";
 import {
   ProductVariantChooser,
   OptionGroupKind as BaseOptionGroupKind,
@@ -96,11 +99,7 @@ function generateBaseSku(name: string) {
   return slugifySkuPart(name || "PRODUCT");
 }
 
-function buildVariantSku(
-  baseSku: string,
-  index: number,
-  customSuffix?: string
-) {
+function buildVariantSku(baseSku: string, index: number, customSuffix?: string) {
   const skuNumber = String(index + 1).padStart(3, "0");
   const suffixPart = customSuffix?.trim() ? `-${customSuffix.trim()}` : "";
   return `${baseSku}${suffixPart}-${skuNumber}`.toUpperCase();
@@ -395,7 +394,7 @@ function DiscountCalendarModal({
                   )
                 )
               }
-              className="rounded-full px-2 py-1 hover:bg.white"
+              className="rounded-full px-2 py-1 hover:bg-white"
             >
               ‹
             </button>
@@ -481,7 +480,7 @@ function DiscountCalendarModal({
                 onChange={(e) =>
                   setStartMinute(parseIntClamped(e.target.value, 0, 59))
                 }
-                className="h-8 w-10 rounded-lg border border-gray-200 bg[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+                className="h-8 w-10 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
               />
               <div className="flex rounded-full bg-[#ECEBFF] p-0.5">
                 {(["AM", "PM"] as const).map((v) => (
@@ -622,8 +621,7 @@ export default function NewProductPage() {
 
   // taxonomy
   const [wellnessOptions, setWellnessOptions] = useState<WellnessDimension[]>(
-    [
-    ]
+    []
   );
   const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -633,11 +631,11 @@ export default function NewProductPage() {
   const [showCategoryErrorModal, setShowCategoryErrorModal] = useState(false);
   const categorySectionRef = useRef<HTMLDivElement | null>(null);
 
-
   // description accordions
   const [sections, setSections] = useState<DescriptionSection[]>([
     { id: uuid(), title: "Product Details", body: "" },
   ]);
+  const descriptionSectionRef = useRef<HTMLDivElement | null>(null);
 
   // main product image
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
@@ -659,6 +657,10 @@ export default function NewProductPage() {
 
   const [variantsCollapsed, setVariantsCollapsed] = useState(false);
 
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [showDescriptionErrorModal, setShowDescriptionErrorModal] =
+    useState(false);
+
   // sidebar config
   const sidebarConfig = useMemo(
     () =>
@@ -666,7 +668,7 @@ export default function NewProductPage() {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-       status: profile?.status ?? "active"
+        status: profile?.status ?? "active",
       }),
     [profile]
   );
@@ -825,15 +827,24 @@ export default function NewProductPage() {
     setProductImageFile(file);
   }
 
-
   async function handleSave(status: "draft" | "published") {
+    setSubmitAttempted(true);
+
+    // 1) Validate description sections – no empty titles allowed
+    if (!validateDescriptionSections(sections)) {
+      setShowDescriptionErrorModal(true);
+      return;
+    }
+
+    // 2) Validate categories for published products
     if (status === "published" && categories.length === 0) {
-    setCategoryError("Please add at least one category.");
-    setShowCategoryErrorModal(true);
-    return;
-  } else {
-    setCategoryError(null);
-  }
+      setCategoryError("Please add at least one category.");
+      setShowCategoryErrorModal(true);
+      return;
+    } else {
+      setCategoryError(null);
+    }
+
     if (!canSave) return;
     if (!vendorId) {
       alert("You must be logged in as a vendor to save a product.");
@@ -880,17 +891,17 @@ export default function NewProductPage() {
       }
 
       // Build wellness with id + name + slug
-    const selectedWellness = wellnessOptions
-      .filter((w) => selectedWellnessIds.includes(w.id))
-      .map((w) => ({
-        id: w.id,
-        name: w.name,
-        slug: w.slug,
-      }));
+      const selectedWellness = wellnessOptions
+        .filter((w) => selectedWellnessIds.includes(w.id))
+        .map((w) => ({
+          id: w.id,
+          name: w.name,
+          slug: w.slug,
+        }));
 
-    // Categories and tags currently only have the name
-    const categoriesPayload = categories.map((name) => ({ name }));
-    const tagsPayload = tags.map((name) => ({ name }));
+      // Categories and tags currently only have the name
+      const categoriesPayload = categories.map((name) => ({ name }));
+      const tagsPayload = tags.map((name) => ({ name }));
 
       const body = {
         status,
@@ -912,7 +923,7 @@ export default function NewProductPage() {
           : null,
         wellnessIds: selectedWellness,
         categoryIds: categoriesPayload,
-        tags:tagsPayload,
+        tags: tagsPayload,
         sections: sections.map((s, idx) => ({
           title: s.title,
           body: s.body,
@@ -941,6 +952,9 @@ export default function NewProductPage() {
       alert("Error uploading image or saving product");
     }
   }
+
+  const descriptionHasError =
+  submitAttempted && !validateDescriptionSections(sections);
 
   /* ---------- UI ---------- */
 
@@ -1009,11 +1023,21 @@ export default function NewProductPage() {
                   }}
                 />
 
-                <ProductDescriptionTabs
-                  sections={sections}
-                  onChange={setSections}
-                  maxSections={5}
-                />
+                <div ref={descriptionSectionRef}>
+                    <ProductDescriptionTabs
+                      sections={sections}
+                      onChange={setSections}
+                      maxSections={5}
+                      submitAttempted={submitAttempted}
+                    />
+
+                    {/* Inline error under the accordion area */}
+                    {descriptionHasError && (
+                      <p className="mt-1 text-[11px] text-red-600">
+                        Please fill in all section titles before saving the product.
+                      </p>
+                    )}
+                  </div>
 
                 <ProductPricingAndStock
                   isVariant={isVariant}
@@ -1205,7 +1229,10 @@ export default function NewProductPage() {
                 </section>
 
                 {/* Wellness / category / tags */}
-                <section ref={categorySectionRef} className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6">
+                <section
+                  ref={categorySectionRef}
+                  className="rounded-2xl border bg-[#FBFBFE] p-4 sm:p-6"
+                >
                   <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-700 sm:mb-4 sm:text-sm">
                     Wellness Dimension, Category &amp; Tags
                   </h2>
@@ -1271,31 +1298,32 @@ export default function NewProductPage() {
                         onChange={setCategories}
                         placeholder="e.g. Apparel, Classes"
                       />
-                         {showCategoryErrorModal && (
-                      <AppModal
-                        open={showCategoryErrorModal}
-                        title="Category Required"
-                        message={
-                          <>
-                            To publish this product, please add at least one category in the{" "}
-                            <span className="font-medium text-[#5B33FF]">
-                              Wellness Dimension, Category &amp; Tags
-                            </span>{" "}
-                            section.
-                          </>
-                        }
-                        primaryLabel="Go to Category"
-                        onPrimaryClick={() => {
-                          setShowCategoryErrorModal(false);
-                          categorySectionRef.current?.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start",
-                          });
-                        }}
-                        onClose={() => {
-                          setShowCategoryErrorModal(false);
-                        }}
-                      />
+                      {showCategoryErrorModal && (
+                        <AppModal
+                          open={showCategoryErrorModal}
+                          title="Category Required"
+                          message={
+                            <>
+                              To publish this product, please add at least one
+                              category in the{" "}
+                              <span className="font-medium text-[#5B33FF]">
+                                Wellness Dimension, Category &amp; Tags
+                              </span>{" "}
+                              section.
+                            </>
+                          }
+                          primaryLabel="Go to Category"
+                          onPrimaryClick={() => {
+                            setShowCategoryErrorModal(false);
+                            categorySectionRef.current?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            });
+                          }}
+                          onClose={() => {
+                            setShowCategoryErrorModal(false);
+                          }}
+                        />
                       )}
                     </div>
 
@@ -1425,7 +1453,7 @@ export default function NewProductPage() {
 
                         {/* Price */}
                         <td className="bg-[#F7F7FB] px-3 py-2">
-                          <div className="flex.items-center gap-1">
+                          <div className="flex items-center gap-1">
                             <span className="rounded-xl border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-500">
                               SGD
                             </span>
@@ -1529,6 +1557,29 @@ export default function NewProductPage() {
           setDiscountStart(startISO);
           setDiscountEnd(endISO);
         }}
+      />
+
+      {/* Description sections error modal */}
+      <AppModal
+        open={showDescriptionErrorModal}
+        title="Section Title Required"
+        message={
+          <>
+            One or more{" "}
+            <span className="font-medium text-[#5B33FF]">description tabs</span>{" "}
+            have an empty title. Please fill in all section titles before saving
+            the product.
+          </>
+        }
+        primaryLabel="Go to Description"
+        onPrimaryClick={() => {
+          setShowDescriptionErrorModal(false);
+          descriptionSectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }}
+        onClose={() => setShowDescriptionErrorModal(false)}
       />
     </div>
   );
