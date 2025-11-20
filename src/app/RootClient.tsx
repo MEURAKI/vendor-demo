@@ -5,25 +5,20 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 
-// Adjust these to your real protected routes
-const PROTECTED = [
-  "/pages/dashboard",
-  "/pages/profile",
-  "/pages/orders",
-];
-
-const PUBLIC_AUTH = [
+// ❌ These are auth pages (allowed without login)
+const AUTH_PAGES = [
   "/pages/auth/login",
   "/pages/auth/register",
   "/pages/auth/forgot-password",
 ];
 
-function isProtectedRoute(path: string) {
-  return PROTECTED.some((r) => path === r || path.startsWith(r + "/"));
+function isAuthPage(path: string) {
+  return AUTH_PAGES.some((r) => path.startsWith(r));
 }
 
-function isAuthPage(path: string) {
-  return PUBLIC_AUTH.includes(path);
+// ✅ ANY page starting with "/pages/" is protected (except auth)
+function isProtected(path: string) {
+  return path.startsWith("/pages/") && !isAuthPage(path);
 }
 
 export default function RootClient({ children }: { children: React.ReactNode }) {
@@ -32,49 +27,44 @@ export default function RootClient({ children }: { children: React.ReactNode }) 
 
   const [checking, setChecking] = useState(true);
 
-  // 🔒 Global Auth Check
   useEffect(() => {
     let ignore = false;
 
-    const checkSession = async () => {
-      // If page is public and not an auth page → no need to check
-      if (!isProtectedRoute(pathname) && !isAuthPage(pathname)) {
+    const check = async () => {
+      // Public auth pages require no protection
+      if (isAuthPage(pathname)) {
         setChecking(false);
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
+      // All other /pages/** require protection
+      if (isProtected(pathname)) {
+        const { data } = await supabase.auth.getSession();
+        if (ignore) return;
 
-      if (ignore) return;
+        const user = data?.session?.user ?? null;
 
-      const user = data?.session?.user ?? null;
-
-      // If protected & no user → redirect
-      if (isProtectedRoute(pathname) && !user) {
-        setChecking(false);
-        router.replace("/pages/auth/login");
-        return;
+        // ❌ Not logged in → send to login
+        if (!user) {
+          setChecking(false);
+          router.replace("/pages/auth/login");
+          return;
+        }
       }
 
-      // If auth page & already logged in → redirect to dashboard
-      if (isAuthPage(pathname) && user) {
-        setChecking(false);
-        router.replace("/pages/dashboard");
-        return;
-      }
-
+      // Everything is OK
       setChecking(false);
     };
 
     setChecking(true);
-    checkSession();
+    check();
 
     return () => {
       ignore = true;
     };
   }, [pathname, router]);
 
-  // 🔁 Multi-tab logout sync
+  // 🔁 Multi-tab logout protection
   useEffect(() => {
     const handler = (e: StorageEvent) => {
       if (e.key === "vendor:logout") {
@@ -86,8 +76,7 @@ export default function RootClient({ children }: { children: React.ReactNode }) 
     return () => window.removeEventListener("storage", handler);
   }, [router]);
 
-  // Show loader ONLY while checking protected pages
-  if (checking && isProtectedRoute(pathname)) {
+  if (checking && isProtected(pathname)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <ClipLoader size={28} />
