@@ -9,6 +9,7 @@ import Sidebar from "../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
+import AppModal from "../../../components/common/AppModal";
 
 type ServiceStatus = "draft" | "active" | "unavailable";
 type LocationType = "online" | "in_person";
@@ -292,6 +293,25 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(true);
   const [bulkOpen, setBulkOpen] = useState(false);
 
+  // modal state
+const [trashModalOpen, setTrashModalOpen] = useState(false);
+const [serviceIdToTrash, setServiceIdToTrash] = useState<string | null>(null);
+const [trashError, setTrashError] = useState<string | null>(null);
+const [trashLoading, setTrashLoading] = useState(false);
+
+// open modal
+function openTrashModal(serviceId: string) {
+  setServiceIdToTrash(serviceId);
+  setTrashError(null);
+  setTrashModalOpen(true);
+}
+
+function closeTrashModal() {
+  setTrashModalOpen(false);
+  setServiceIdToTrash(null);
+  setTrashError(null);
+}
+
   // load profile for sidebar
   useEffect(() => {
     (async () => {
@@ -503,12 +523,40 @@ const mapped: ServiceRow[] = (raw as any[]).map((s) => {
     window.location.href = `/pages/services/${id}/edit`;
   }
 
-  function handleTrash(id: string) {
-    // you can replace with real delete later
-    if (window.confirm("Move this service to trash?")) {
-      console.log("TODO: delete service", id);
+  async function handleConfirmTrash() {
+  if (!serviceIdToTrash) return;
+
+  setTrashLoading(true);
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      setTrashError("You are not logged in.");
+      return;
     }
+
+    const res = await fetch(`/api/services/${serviceIdToTrash}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      setTrashError(data.error || "Failed to trash service.");
+      return;
+    }
+
+    // success — close modal & refresh list
+    closeTrashModal();
+    window.location.reload(); // or router.refresh()
+  } finally {
+    setTrashLoading(false);
   }
+}
 
   return (
     <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
@@ -758,7 +806,7 @@ className="
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleTrash(row.id)}
+                              onClick={() => openTrashModal(row.id)}
                               className="rounded-full border border-gray-300 bg-white px-4 py-1.5 text-[11px] text-gray-700"
                             >
                               Trash
@@ -771,6 +819,26 @@ className="
                 </tbody>
               </table>
             </div>
+
+            <AppModal
+  open={trashModalOpen}
+  title="Move service to trash?"
+  message={
+    <div className="space-y-2 text-xs">
+      <p>This will remove the service from your storefront.</p>
+      <p className="text-[11px] text-gray-500">
+        You can restore or recreate this service later if needed.
+      </p>
+
+      {trashError && (
+        <p className="mt-2 text-[11px] text-red-600">{trashError}</p>
+      )}
+    </div>
+  }
+  primaryLabel={trashLoading ? "Deleting..." : "Yes, move to trash"}
+  onPrimaryClick={trashLoading ? undefined : handleConfirmTrash}
+  onClose={trashLoading ? undefined : closeTrashModal}
+/>
 
             {/* FOOTER SUMMARY */}
             <div className="mt-4 text-[11px] text-gray-500">

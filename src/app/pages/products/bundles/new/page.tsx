@@ -163,7 +163,7 @@ export default function NewBundlePage() {
         email: profile?.email ?? "",
         role: "Vendor",
         status: profile?.onboarding_completed
-          ? "Active"
+          ? "active"
           : "Incomplete Registration",
       }),
     [profile]
