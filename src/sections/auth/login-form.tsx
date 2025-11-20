@@ -160,22 +160,41 @@ export default function LoginForm() {
 
   return (
     <div className="h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
-      {/* Left – form (scrollable if content taller than viewport) */}
+      {/* LEFT – FORM; scrolls on smaller/short screens */}
       <div className="flex-1 flex justify-center lg:items-center">
-        <div className="w-full max-w-md h-full lg:h-auto overflow-y-auto px-4 sm:px-6 lg:px-16 py-6 sm:py-8 lg:py-10">
-          {/* Logo + Heading */}
-          <div className="mb-6 sm:mb-8">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-black">
+        <div
+          className="
+            w-full max-w-sm
+            sm:max-w-md
+            xl:max-w-lg
+            h-full lg:h-auto
+            overflow-y-auto
+            px-4 sm:px-6 md:px-10 xl:px-16
+            py-5 sm:py-8 md:py-10 xl:py-12
+          "
+        >
+          {/* Heading */}
+          <div className="mb-5 sm:mb-7 md:mb-8">
+            <h1
+              className="
+                text-2xl sm:text-3xl md:text-4xl xl:text-5xl
+                font-extrabold leading-tight text-black
+              "
+            >
               MEURAKI
               <br /> Vendor Portal
             </h1>
-            <p className="mt-2 sm:mt-3 text-sm sm:text-base text-gray-500">
+            <p className="mt-2 sm:mt-3 text-xs sm:text-sm md:text-base text-gray-500">
               Welcome back! Please sign in to access your account.
             </p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} noValidate className="space-y-5 sm:space-y-6">
+          {/* FORM */}
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+            className="space-y-4 sm:space-y-5 md:space-y-6"
+          >
             {/* Email */}
             <div>
               <label className="text-black font-semibold tracking-wide text-xs sm:text-sm">
@@ -190,7 +209,10 @@ export default function LoginForm() {
                   if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
                 }}
                 className={[
-                  "mt-2 w-full h-11 sm:h-12 md:h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
+                  "mt-2 w-full rounded-2xl px-4",
+                  "h-10 sm:h-11 md:h-12 xl:h-14",
+                  "bg-[#EFEDFF] border text-gray-900 placeholder-gray-500",
+                  "focus:outline-none focus:ring-2 focus:ring-purple-500",
                   errors.email ? "border-rose-500" : "border-transparent",
                 ].join(" ")}
                 required
@@ -198,7 +220,7 @@ export default function LoginForm() {
                 aria-describedby={errors.email ? "email-error" : undefined}
               />
               {errors.email && (
-                <p id="email-error" className="mt-1 text-xs text-rose-600">
+                <p id="email-error" className="mt-1 text-[11px] sm:text-xs text-rose-600">
                   {errors.email}
                 </p>
               )}
@@ -219,7 +241,10 @@ export default function LoginForm() {
                     setErrors((p) => ({ ...p, password: undefined }));
                 }}
                 className={[
-                  "mt-2 w-full h-11 sm:h-12 md:h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
+                  "mt-2 w-full rounded-2xl px-4",
+                  "h-10 sm:h-11 md:h-12 xl:h-14",
+                  "bg-[#EFEDFF] border text-gray-900 placeholder-gray-500",
+                  "focus:outline-none focus:ring-2 focus:ring-purple-500",
                   errors.password ? "border-rose-500" : "border-transparent",
                 ].join(" ")}
                 required
@@ -227,7 +252,7 @@ export default function LoginForm() {
                 aria-describedby={errors.password ? "password-error" : undefined}
               />
               {errors.password && (
-                <p id="password-error" className="mt-1 text-xs text-rose-600">
+                <p id="password-error" className="mt-1 text-[11px] sm:text-xs text-rose-600">
                   {errors.password}
                 </p>
               )}
@@ -235,7 +260,7 @@ export default function LoginForm() {
 
             {/* Remember me */}
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
+              <label className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm text-gray-500">
                 <input
                   type="checkbox"
                   checked={formData.rememberMe}
@@ -253,7 +278,15 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-11 sm:h-12 md:h-14 rounded-full bg-black text-white text-sm sm:text-base font-medium shadow-lg shadow-black/10 hover:bg-gray-900 transition-colors disabled:opacity-70"
+              className="
+                w-full rounded-full
+                h-10 sm:h-11 md:h-12 xl:h-14
+                bg-black text-white
+                text-sm sm:text-[15px] md:text-base
+                font-medium shadow-lg shadow-black/10
+                hover:bg-gray-900 transition-colors
+                disabled:opacity-70
+              "
             >
               {loading ? "Signing in…" : "Login"}
             </button>
@@ -262,7 +295,7 @@ export default function LoginForm() {
             <div className="text-center -mt-1 sm:-mt-2">
               <Link
                 href="/pages/auth/forgot-password"
-                className="text-xs sm:text-sm font-medium text-purple-600 hover:text-purple-700"
+                className="text-[11px] sm:text-xs md:text-sm font-medium text-purple-600 hover:text-purple-700"
               >
                 Forgot your password?
               </Link>
@@ -274,7 +307,7 @@ export default function LoginForm() {
                 <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-white px-3 text-xs sm:text-sm text-gray-500">
+                <span className="bg-white px-3 text-[11px] sm:text-xs md:text-sm text-gray-500">
                   Or
                 </span>
               </div>
@@ -284,9 +317,20 @@ export default function LoginForm() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="w-full h-11 sm:h-12 md:h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center gap-3 text-gray-700 text-sm sm:text-base font-medium shadow-sm hover:shadow transition-shadow"
+              className="
+                w-full rounded-2xl border border-gray-200
+                h-10 sm:h-11 md:h-12 xl:h-14
+                bg-white
+                flex items-center justify-center gap-3
+                text-gray-700 text-sm sm:text-[15px] md:text-base
+                font-medium shadow-sm hover:shadow transition-shadow
+              "
             >
-              <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" aria-hidden="true">
+              <svg
+                className="h-4 w-4 sm:h-5 sm:w-5"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -308,8 +352,8 @@ export default function LoginForm() {
             </button>
 
             {/* Subtext + register link */}
-            <div className="text-center mb-4">
-              <p className="text-xs sm:text-sm text-gray-500">
+            <div className="text-center mb-3 sm:mb-4">
+              <p className="text-[11px] sm:text-xs md:text-sm text-gray-500">
                 Don&apos;t have an account?{" "}
                 <Link
                   href="/pages/auth/register"
@@ -330,7 +374,7 @@ export default function LoginForm() {
           </form>
 
           {/* Footer Logo */}
-          <div className="mt-2 sm:mt-4 mb-2 flex justify-center">
+          <div className="mt-1 sm:mt-3 mb-2 flex justify-center">
             <Image
               src="/images/logo-meuraki.svg"
               alt="Meuraki"
@@ -342,7 +386,7 @@ export default function LoginForm() {
         </div>
       </div>
 
-      {/* Right – hero panel (only on lg+) */}
+      {/* RIGHT – HERO (desktop only) */}
       <div className="hidden lg:flex lg:flex-1 relative">
         <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
           <Image
