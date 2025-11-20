@@ -7,6 +7,7 @@ import type { BundleCandidateItem } from "../../../../../types/bundles.types";
 import Sidebar from "../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
+import WellnessCategoryTagsSection, { WellnessOption } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
 
 type DiscountType = "fixed" | "percent" | null;
 
@@ -53,9 +54,10 @@ export default function NewBundlePage() {
 
   // right-column meta
   const [bundleImageUrl, setBundleImageUrl] = useState<string | null>(null);
-  const [wellness, setWellness] = useState<string[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [tags, setTags] = useState("");
+      const [wellnessOptions, setWellnessOptions] = useState<WellnessOption[]>([]);
+    const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
+    const [tags, setTags] = useState<string[]>([]);
 
   // bundle items (with quantities)
   const [items, setItems] = useState<BundleItem[]>([]);
@@ -70,6 +72,7 @@ export default function NewBundlePage() {
 
   // ---- load vendor (profile) for vendorId + sidebar ----
   useEffect(() => {
+    let isMounted = true;
     async function loadProfile() {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth?.user) return;
@@ -84,6 +87,14 @@ export default function NewBundlePage() {
         setProfile(prof as Profile);
         setVendorId(prof.id);
       }
+
+      const { data: wellnessData } = await supabase
+              .from("wellness_dimensions")
+              .select("id,name,slug");
+      
+            if (isMounted && wellnessData) {
+              setWellnessOptions(wellnessData as WellnessOption[]);
+            }
     }
 
     void loadProfile();
@@ -152,18 +163,9 @@ export default function NewBundlePage() {
       startAt: startDate || null,
       endAt: endDate || null,
       imageUrl: bundleImageUrl,
-      wellnessDimensions: wellness,
+      wellnessDimensions: wellnessOptions,
       categories,
-      tags: tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-      items: items.map((i) => ({
-        variantId: i.id, // or productId for singles, depending on your schema
-        itemName: i.name,
-        itemPriceCents: i.priceCents,
-        quantity: i.quantity,
-      })),
+      tags
     };
 
     const res = await fetch("/api/bundles", {
@@ -532,61 +534,16 @@ export default function NewBundlePage() {
                   </section>
 
                   {/* Wellness / Categories / Tags */}
-                  <section className="rounded-2xl border bg-[#FBFBFE] p-6">
-                    <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                      Wellness Dimension, Category &amp; Tags
-                    </h2>
-
-                    <div className="space-y-4 text-xs">
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Wellness Dimension
-                        </label>
-                        <input
-                          placeholder="Physical, Emotional"
-                          value={wellness.join(", ")}
-                          onChange={(e) =>
-                            setWellness(
-                              e.target.value
-                                .split(",")
-                                .map((x) => x.trim())
-                                .filter(Boolean)
-                            )
-                          }
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Categories
-                        </label>
-                        <input
-                          placeholder="Personal Care & Beauty"
-                          value={categories.join(", ")}
-                          onChange={(e) =>
-                            setCategories(
-                              e.target.value
-                                .split(",")
-                                .map((x) => x.trim())
-                                .filter(Boolean)
-                            )
-                          }
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-semibold text-gray-800">
-                          Tags
-                        </label>
-                        <input
-                          placeholder="Use ',' to add more tags"
-                          value={tags}
-                          onChange={(e) => setTags(e.target.value)}
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  </section>
+                   <WellnessCategoryTagsSection
+                                                   title="Wellness Dimension, Category & Tags"
+                                                   wellnessOptions={wellnessOptions}
+                                                   selectedWellnessIds={selectedWellnessIds}
+                                                   onChangeWellness={setSelectedWellnessIds}
+                                                   categories={categories}
+                                                   onChangeCategories={setCategories}
+                                                   tags={tags}
+                                                   onChangeTags={setTags}
+                                                 />
                 </div>
               </div>
             </div>
