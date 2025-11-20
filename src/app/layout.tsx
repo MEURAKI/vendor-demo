@@ -1,7 +1,7 @@
 import "../styles/globals.css";
 import { Poppins } from "next/font/google";
 import { ToastProvider } from "../components/toast/ToastProvider";
-
+import RootClient from "./RootClient";   // <-- add this
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -14,7 +14,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${poppins.variable}`}>
       <body className="font-poppins">
-                <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <RootClient>      {/* 🔥 wrap EVERYTHING in the auth wrapper */}
+            {children}
+          </RootClient>
+        </ToastProvider>
       </body>
     </html>
   );
