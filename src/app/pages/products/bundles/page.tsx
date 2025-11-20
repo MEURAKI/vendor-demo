@@ -8,6 +8,7 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
+import AppModal from "../../../../components/common/AppModal";
 
 type BundleStatus = "draft" | "active" | "out_of_stock";
 
@@ -18,7 +19,7 @@ type BundleRow = {
   productsIncluded: number;
   sku: string;
   price: number;
-  discount: number;
+  discountDisplay: string | null;
   status: BundleStatus;
   imageUrl?: string | null;
 };
@@ -29,6 +30,61 @@ export default function AllBundlesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [profile, setProfile] = useState<any>(null);
+
+  const [trashModalOpen, setTrashModalOpen] = useState(false);
+const [bundleIdToTrash, setBundleIdToTrash] = useState<string | null>(null);
+const [trashError, setTrashError] = useState<string | null>(null);
+const [trashLoading, setTrashLoading] = useState(false);
+
+function openTrashModal(bundleId: string) {
+  setBundleIdToTrash(bundleId);
+  setTrashError(null);
+  setTrashModalOpen(true);
+}
+
+function closeTrashModal() {
+  setTrashModalOpen(false);
+  setBundleIdToTrash(null);
+  setTrashError(null);
+}
+
+async function handleConfirmTrash() {
+  if (!bundleIdToTrash) return;
+
+  setTrashLoading(true);
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      setTrashError("You are not logged in.");
+      return;
+    }
+
+    const res = await fetch(`/api/bundles/${bundleIdToTrash}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("[Trash Error]", data);
+      setTrashError(data.error || "Failed to delete bundle.");
+      return;
+    }
+
+    // success – close modal and refresh list
+    closeTrashModal();
+    // simplest: reload, or use router.refresh() if you're in app router
+    window.location.reload();
+  } finally {
+    setTrashLoading(false);
+  }
+}
 
   useEffect(() => {
     let mounted = true;
@@ -69,7 +125,7 @@ export default function AllBundlesPage() {
         productsIncluded: b.productsIncluded ?? 0,
         sku: b.sku,
         price: (b.priceCents ?? 0) / 100,
-        discount: b.discountType ? b.discountValue ?? 0 : 0,
+        discountDisplay: b.discountDisplay ?? null,
         status: b.status,
         imageUrl: b.imageUrl ?? null
       }));
@@ -244,7 +300,7 @@ export default function AllBundlesPage() {
                           ${b.price.toFixed(2)}
                         </td>
                         <td className="px-3 py-3 text-right text-[11px] text-gray-800">
-                          {b.discount ? `-$${b.discount.toFixed(2)}` : "—"}
+                          {b.discountDisplay ? `${b.discountDisplay}` : "—"}
                         </td>
                         <td className="px-3 py-3 text-center">
                           <span
@@ -275,9 +331,12 @@ export default function AllBundlesPage() {
                             >
                               Edit
                             </button>
-                            <button className="rounded-full border border-gray-300 px-4 py-1.5 text-[11px] text-gray-700">
-                              Trash
-                            </button>
+                            <button
+                            onClick={() => openTrashModal(b.id)}
+                            className="rounded-full border border-gray-300 px-4 py-1.5 text-[11px] text-gray-700 hover:bg-red-50 hover:text-red-700 transition"
+                          >
+                            Trash
+                          </button>
                           </div>
                         </td>
                       </tr>
@@ -286,6 +345,30 @@ export default function AllBundlesPage() {
                 </tbody>
               </table>
             </div>
+
+            <AppModal
+  open={trashModalOpen}
+  title="Move bundle to trash?"
+  message={
+    <div className="space-y-2 text-xs">
+      <p>
+        This will remove the bundle from your storefront. The products
+        themselves will not be deleted.
+      </p>
+      <p className="text-[11px] text-gray-500">
+        You can always create a new bundle with the same products later.
+      </p>
+      {trashError && (
+        <p className="mt-2 text-[11px] text-red-600">
+          {trashError}
+        </p>
+      )}
+    </div>
+  }
+  primaryLabel={trashLoading ? "Deleting..." : "Yes, move to trash"}
+  onPrimaryClick={trashLoading ? undefined : handleConfirmTrash}
+  onClose={trashLoading ? undefined : closeTrashModal}
+/>
 
             <div className="mt-4 flex items-center justify-between text-[11px] text-gray-500">
               <span>Showing {filtered.length} bundles</span>
@@ -305,5 +388,6 @@ export default function AllBundlesPage() {
         </div>
       </div>
     </div>
+    
   );
 }

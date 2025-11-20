@@ -9,6 +9,34 @@ const supa = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  async function getAuthedVendor(req: Request) {
+  const client = supa();
+
+  const authHeader = req.headers.get("Authorization");
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.split(" ")[1]
+    : undefined;
+
+  if (!token) {
+    return { client, error: "Missing access token", vendorId: null as string | null };
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await client.auth.getUser(token);
+
+  if (error || !user) {
+    return {
+      client,
+      error: error?.message ?? "Unauthenticated",
+      vendorId: null as string | null,
+    };
+  }
+
+  return { client, error: null as string | null, vendorId: user.id as string };
+}
+
 // ---------------- GET ONE BUNDLE ----------------
 export async function GET(
   _req: Request,
@@ -289,4 +317,58 @@ export async function PUT(
   }
 
   return NextResponse.json({ ok: true, bundleId });
+}
+
+export async function DELETE(
+  req: Request,
+  context: { params: { bundleId: string } }
+) {
+  const { client, error, vendorId } = await getAuthedVendor(req);
+  if (error || !vendorId) {
+    return NextResponse.json({ error }, { status: 401 });
+  }
+
+  const { bundleId } = context.params;
+
+  // Ensure bundle belongs to this vendor
+  const { data: bundle, error: bundleErr } = await client
+    .from("bundles")
+    .select("id, vendor_id")
+    .eq("id", bundleId)
+    .maybeSingle();
+
+  if (bundleErr) {
+    console.error("[bundle DELETE] bundle error:", bundleErr);
+    return NextResponse.json({ error: bundleErr.message }, { status: 400 });
+  }
+
+  if (!bundle || bundle.vendor_id !== vendorId) {
+    return NextResponse.json({ error: "Bundle not found" }, { status: 404 });
+  }
+
+  // HARD DELETE: remove children then bundle
+  // If you prefer SOFT DELETE, comment these out and just do an update to status='inactive'
+  await client.from("bundle_items").delete().eq("bundle_id", bundleId);
+  await client.from("bundle_wellness_dimensions").delete().eq("bundle_id", bundleId);
+  await client.from("bundle_categories").delete().eq("bundle_id", bundleId);
+  await client.from("bundle_tags").delete().eq("bundle_id", bundleId);
+
+  const { error: deleteErr } = await client
+    .from("bundles")
+    .delete()
+    .eq("id", bundleId);
+
+  if (deleteErr) {
+    console.error("[bundle DELETE] delete error:", deleteErr);
+    return NextResponse.json({ error: deleteErr.message }, { status: 400 });
+  }
+
+  // SOFT DELETE alternative:
+  // const { error: softErr } = await client
+  //   .from("bundles")
+  //   .update({ status: "inactive" })
+  //   .eq("id", bundleId);
+  // if (softErr) { ... }
+
+  return NextResponse.json({ ok: true });
 }
