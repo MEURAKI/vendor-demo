@@ -25,117 +25,143 @@ export default function LoginForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [loading, setLoading] = useState(false);
 
+  const [checkingSession, setCheckingSession] = useState(true); // 👈 new
+
   function validate(): boolean {
     const next: Errors = {};
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!formData.email.trim()) next.email = "Email is required.";
-    else if (!emailRe.test(formData.email.trim())) next.email = "Enter a valid email address.";
+    else if (!emailRe.test(formData.email.trim()))
+      next.email = "Enter a valid email address.";
 
     if (!formData.password) next.password = "Password is required.";
-    else if (formData.password.length < 6) next.password = "Must be at least 6 characters.";
+    else if (formData.password.length < 6)
+      next.password = "Must be at least 6 characters.";
 
     setErrors(next);
     return Object.keys(next).length === 0;
   }
 
-    const [checkingSession, setCheckingSession] = useState(true);
-
+  // 🔍 Check if already logged in
   useEffect(() => {
-    let isMounted = true;
+    let ignore = false;
 
     const checkSession = async () => {
-      const { data, error } = await supabase.auth.getUser();
+      try {
+        const { data, error } = await supabase.auth.getSession(); // 👈 prefer getSession here
 
-      if (!isMounted) return;
+        if (ignore) return;
 
-      if (data?.user) {
-        // ✅ already logged in → go straight to dashboard
-        router.replace("/pages/dashboard");
-      } else {
-        // ❌ not logged in → show the form
-        setCheckingSession(false);
+        if (error) {
+          console.error("session check error", error);
+          setCheckingSession(false);
+          return;
+        }
+
+        if (data?.session?.user) {
+          // ✅ already logged in → go straight to dashboard
+          router.replace("/pages/dashboard");
+        } else {
+          // ❌ not logged in → show the form
+          setCheckingSession(false);
+        }
+      } catch (err) {
+        console.error("session check failed", err);
+        if (!ignore) setCheckingSession(false);
       }
     };
 
     checkSession();
 
     return () => {
-      isMounted = false;
+      ignore = true;
     };
   }, [router]);
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setErrors({});
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
 
-  if (!validate()) {
-    errorToast({
-      title: "Check the form",
-      description: "Please fix the highlighted fields.",
-    });
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    // Optional "remember me": keep email locally
-    try {
-      if (formData.rememberMe) {
-        localStorage.setItem("remember:email", formData.email);
-      } else {
-        localStorage.removeItem("remember:email");
-      }
-    } catch {
-      // ignore storage errors (Safari private mode, etc.)
-    }
-
-    const {
-      data: { session },
-      error: signErr,
-    } = await supabase.auth.signInWithPassword({
-      email: formData.email.trim(),
-      password: formData.password,
-    });
-
-    if (signErr || !session) {
-      const msg =
-        signErr?.message?.toLowerCase().includes("invalid login credentials") ||
-        signErr?.message?.toLowerCase().includes("invalid credentials")
-          ? "Invalid email or password."
-          : signErr?.message || "Unable to sign in.";
-
-      setErrors((p) => ({ ...p, password: msg })); // show under password
-      errorToast({ title: "Login failed", description: msg });
+    if (!validate()) {
+      errorToast({
+        title: "Check the form",
+        description: "Please fix the highlighted fields.",
+      });
       return;
     }
 
-    // At this point Supabase has written the session to storage
-    // and it will be shared across all tabs (same origin).
     try {
-      // Optional: your own flag you can check in any tab
-      localStorage.setItem("vendor:isLoggedIn", "true");
-    } catch {}
+      setLoading(true);
 
-    successToast({
-      title: "Welcome back",
-      description: "You’re signed in.",
-    });
+      // Optional "remember me": keep email locally
+      try {
+        if (formData.rememberMe) {
+          localStorage.setItem("remember:email", formData.email);
+        } else {
+          localStorage.removeItem("remember:email");
+        }
+      } catch {
+        // ignore storage errors
+      }
 
-    router.push("/pages/dashboard");
-  } finally {
-    setLoading(false);
-  }
-};
+      const {
+        data: { session },
+        error: signErr,
+      } = await supabase.auth.signInWithPassword({
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+
+      if (signErr || !session) {
+        const msg =
+          signErr?.message?.toLowerCase().includes("invalid login credentials") ||
+          signErr?.message?.toLowerCase().includes("invalid credentials")
+            ? "Invalid email or password."
+            : signErr?.message || "Unable to sign in.";
+
+        setErrors((p) => ({ ...p, password: msg }));
+        errorToast({ title: "Login failed", description: msg });
+        return;
+      }
+
+      try {
+        localStorage.setItem("vendor:isLoggedIn", "true");
+      } catch {}
+
+      successToast({
+        title: "Welcome back",
+        description: "You’re signed in.",
+      });
+
+      router.push("/pages/dashboard");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     const { error: oAuthErr } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo },
     });
-    if (oAuthErr) errorToast({ title: "Google sign-in failed", description: oAuthErr.message });
+    if (oAuthErr)
+      errorToast({
+        title: "Google sign-in failed",
+        description: oAuthErr.message,
+      });
   };
+
+  // 🧊 IMPORTANT: block UI while checking session
+  if (checkingSession) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-white">
+        <span className="text-sm text-gray-500">
+          Checking your session…
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-white flex overflow-hidden">
@@ -194,7 +220,8 @@ const handleSubmit = async (e: React.FormEvent) => {
                 value={formData.password}
                 onChange={(e) => {
                   setFormData({ ...formData, password: e.target.value });
-                  if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+                  if (errors.password)
+                    setErrors((p) => ({ ...p, password: undefined }));
                 }}
                 className={[
                   "mt-2 w-full h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
@@ -263,10 +290,22 @@ const handleSubmit = async (e: React.FormEvent) => {
               className="w-full h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center gap-3 text-gray-700 font-medium shadow-sm hover:shadow transition-shadow"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
               </svg>
               Continue with Google
             </button>
@@ -307,34 +346,28 @@ const handleSubmit = async (e: React.FormEvent) => {
       </div>
 
       {/* Right – hero panel */}
-    <div className="hidden lg:block lg:w-1/2 relative">
-          <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
-        
-            {/* --- GIF Background --- */}
+      <div className="hidden lg:block lg:w-1/2 relative">
+        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
+          <Image
+            src="/images/hero-bg.gif"
+            alt="Animated background"
+            fill
+            priority
+            unoptimized
+            className="object-cover"
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
             <Image
-              src="/images/hero-bg.gif"
-              alt="Animated background"
-              fill
-              priority
-              unoptimized
-              className="object-cover"
+              src="/images/hero-overlay.png"
+              alt="Meuraki overlay"
+              width={320}
+              height={640}
+              className="rounded-[28px] pointer-events-none"
             />
-        
-            {/* --- PNG Overlay (logo, text, etc.) --- */}
-             <div className="absolute inset-0 flex items-center justify-center">
-                        <Image
-                          src="/images/hero-overlay.png"
-                          alt="Meuraki overlay"
-                          width={320} // adjust if needed
-                          height={640}
-                          className="rounded-[28px] pointer-events-none"
-                        />
-                      </div>
-        
-            {/* Optional gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
           </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
         </div>
+      </div>
     </div>
   );
 }
