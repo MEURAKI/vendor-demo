@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase/client";
 import { useToast } from "../../components/toast/ToastProvider";
+import ClipLoader from "react-spinners/ClipLoader";
 
 const redirectTo =
   process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI ||
@@ -157,7 +158,7 @@ export default function LoginForm() {
     return (
       <div className="h-screen flex items-center justify-center bg-white">
         <span className="text-sm text-gray-500">
-          Checking your session…
+          <ClipLoader size={20} className="mr-2" />
         </span>
       </div>
     );
