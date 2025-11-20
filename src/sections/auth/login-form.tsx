@@ -92,7 +92,6 @@ export default function LoginForm() {
     try {
       setLoading(true);
 
-      // Optional "remember me": keep email locally
       try {
         if (formData.rememberMe) {
           localStorage.setItem("remember:email", formData.email);
@@ -161,17 +160,16 @@ export default function LoginForm() {
 
   return (
     <div className="h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
-      {/* Left – form */}
+      {/* Left – form (scrollable if content taller than viewport) */}
       <div className="flex-1 flex justify-center lg:items-center">
-        {/* Make this column scrollable on small screens */}
         <div className="w-full max-w-md h-full lg:h-auto overflow-y-auto px-4 sm:px-6 lg:px-16 py-6 sm:py-8 lg:py-10">
           {/* Logo + Heading */}
           <div className="mb-6 sm:mb-8">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold leading-tight text-black">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-black">
               MEURAKI
               <br /> Vendor Portal
             </h1>
-            <p className="mt-2 sm:mt-3 text-xs sm:text-sm md:text-base text-gray-500">
+            <p className="mt-2 sm:mt-3 text-sm sm:text-base text-gray-500">
               Welcome back! Please sign in to access your account.
             </p>
           </div>

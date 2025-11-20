@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${poppins.variable}`}>
       <body className="font-poppins">
         <ToastProvider>
-          <RootClient>      {/* 🔥 wrap EVERYTHING in the auth wrapper */}
+          <RootClient>      
             {children}
           </RootClient>
         </ToastProvider>
