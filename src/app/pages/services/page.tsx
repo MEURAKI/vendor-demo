@@ -505,7 +505,6 @@ function BulkEditModal({
                   { value: null, label: "No change" },
                   { value: "draft", label: "In-Active" },
                   { value: "active", label: "Active" },
-                  { value: "unavailable", label: "Out of Stock" },
                 ] as { value: ServiceStatus | null; label: string }[]).map(
                   (opt) => (
                     <button
