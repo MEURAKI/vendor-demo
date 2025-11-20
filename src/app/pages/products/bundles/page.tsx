@@ -71,7 +71,7 @@ export default function AllBundlesPage() {
         price: (b.priceCents ?? 0) / 100,
         discount: b.discountType ? b.discountValue ?? 0 : 0,
         status: b.status,
-        imageUrl: b.imageUrl ?? null,
+        imageUrl: b.imageUrl ?? null
       }));
 
       if (mounted) {

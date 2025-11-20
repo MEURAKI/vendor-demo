@@ -45,12 +45,24 @@ export async function GET(req: NextRequest) {
 
   // 2) Vendor products (include image_url)
   const { data: products, error } = await client
-    .from("products")
-    .select(
-      "id, name, base_sku, is_variant, price_cents, inventory_qty, status, image_url "
-    )
-    .eq("vendor_id", user.id)
-    .order("created_at", { ascending: false });
+  .from("products")
+  .select(
+    `
+      id,
+      name,
+      base_sku,
+      is_variant,
+      price_cents,
+      inventory_qty,
+      status,
+      image_url,
+      product_categories (
+        category
+      )
+    `
+  )
+  .eq("vendor_id", user.id)
+  .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
@@ -84,6 +96,9 @@ export async function GET(req: NextRequest) {
   const payload = products.map((p: any) => {
     const agg = variantAgg[p.id] ?? { count: 0, stock: 0 };
 
+    const categories =
+    p.product_categories?.map((c: any) => c.category) ?? [];
+
     return {
       id: p.id,
       name: p.name,
@@ -93,7 +108,8 @@ export async function GET(req: NextRequest) {
       priceCents: p.price_cents,
       stock: p.is_variant ? agg.stock : p.inventory_qty,
       variantCount: agg.count,
-      imageUrl: p.image_url ?? null, // URL stored in DB
+      imageUrl: p.image_url ?? null, 
+      categories: categories.join(", ")// URL stored in DB
     };
   });
 

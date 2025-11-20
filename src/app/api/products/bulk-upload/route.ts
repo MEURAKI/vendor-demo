@@ -14,6 +14,7 @@ type CsvMappingKey =
   | "productUniqueCode"
   | "sku"
   | "name"
+  | "description"
   | "type"
   | "category"
   | "wellness"
@@ -25,6 +26,7 @@ type Mapping = Record<CsvMappingKey, string>;
 
 type ProductInsert = {
   name: string;
+  description: string;
   base_sku: string;
   is_variant: boolean;
   price_cents: number | null;
@@ -142,6 +144,8 @@ export async function POST(req: NextRequest) {
       const sku =
         getMappedValue(row, mapping, "sku") ||
         getMappedValue(row, mapping, "productUniqueCode");
+      
+      const description = getMappedValue(row, mapping, "description");
 
       const inventoryRaw = getMappedValue(row, mapping, "inventory");
 
@@ -163,6 +167,7 @@ export async function POST(req: NextRequest) {
       const product: ProductInsert = {
         name,
         base_sku: sku,
+        description,
         is_variant: typeRaw === "variant" || typeRaw === "variants",
         price_cents: Number.isNaN(priceNumber)
           ? null
@@ -235,7 +240,7 @@ export async function POST(req: NextRequest) {
 
     // 6) Build join-table rows
     const wellnessJoins: { product_id: string; dimension_id: string }[] = [];
-    const categoryJoins: { product_id: string; category_id: string }[] = [];
+    const categoryJoins: { product_id: string; category: string }[] = [];
     const tagJoins: { product_id: string; tag: string }[] = [];
 
     parsedRows.forEach((row) => {
@@ -253,10 +258,8 @@ export async function POST(req: NextRequest) {
 
       // categories
       row.categoryNames.forEach((n) => {
-        const id = categoryIdByName[n.toLowerCase()];
-        if (id) {
-          categoryJoins.push({ product_id: productId, category_id: id });
-        }
+        // const id = categoryIdByName[n.toLowerCase()];
+          categoryJoins.push({ product_id: productId, category: n });
       });
 
       // tags (free text)
@@ -264,6 +267,7 @@ export async function POST(req: NextRequest) {
         tagJoins.push({ product_id: productId, tag: t });
       });
     });
+
 
     // 7) Insert into join tables (if any)
     if (wellnessJoins.length) {

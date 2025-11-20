@@ -32,6 +32,7 @@ import WellnessCategoryTagsSection, {
 } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
 
 import AppModal from "../../../../../components/common/AppModal";
+import ClipLoader from "react-spinners/ClipLoader";
 
 /* ---------- Types ---------- */
 
@@ -748,7 +749,7 @@ export default function EditProductPage({
         <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
           <div className="flex h-full w-full items-center justify-center rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
             <p className="w-full text-center text-sm text-gray-500">
-              Loading product…
+              <ClipLoader size={55} color="#8884ff" /> 
             </p>
           </div>
         </div>

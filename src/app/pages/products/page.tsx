@@ -25,7 +25,7 @@ type ProductRow = {
   id: string;
   name: string;
   type: "Single" | "Variant";
-  category: string;
+  categories: string;
   price: number;
   stock: number;
   sku: string;
@@ -811,6 +811,7 @@ type ProductCsvMappingKey =
   | "productUniqueCode"
   | "sku"
   | "name"
+  | "description"
   | "type"
   | "category"
   | "wellness"
@@ -853,6 +854,7 @@ function BulkUploadModal({
     productUniqueCode: "",
     sku: "",
     name: "",
+    description: "",
     type: "",
     category: "",
     wellness: "",
@@ -1072,6 +1074,9 @@ function BulkUploadModal({
                   Product Name
                 </div>
                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Product Description
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
                   Product Type (Single / Variant)
                 </div>
                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
@@ -1158,6 +1163,16 @@ function BulkUploadModal({
                   value={productMapping.name}
                   onChange={(e) =>
                     handleChangeProductMapping("name", e.target.value)
+                  }
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={productMapping.description}
+                  onChange={(e) =>
+                    handleChangeProductMapping("description", e.target.value)
                   }
                   className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
@@ -1451,7 +1466,7 @@ export default function AllProductsPage() {
           id: String(p.id),
           name: p.name,
           type: p.type === "Variant" ? "Variant" : "Single",
-          category: p.categoryName ?? "—",
+          categories: p.categories ?? "—",
           price: typeof p.priceCents === "number" ? p.priceCents / 100 : 0,
           stock: p.stock ?? p.totalStock ?? p.inventoryQty ?? 0,
           sku: p.baseSku ?? p.sku ?? "",
@@ -1613,7 +1628,7 @@ export default function AllProductsPage() {
           id: String(p.id),
           name: p.name,
           type: p.type === "Variant" ? "Variant" : "Single",
-          category: p.categoryName ?? "—",
+          categories: p.categories ?? "—",
           price: (p.priceCents ?? 0) / 100,
           stock: p.totalStock ?? p.inventoryQty ?? 0,
           sku: p.baseSku ?? p.sku ?? "",
@@ -2023,7 +2038,7 @@ const hasActiveFilters = activeFilterCount > 0;
                           </td>
 
                           <td className="px-3 py-3 text-[11px] text-gray-600">
-                            {p.category}
+                            {p.categories}
                           </td>
 
                           <td className="px-3 py-3 text-right text-[11px] text-gray-800">
