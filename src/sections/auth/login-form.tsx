@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -38,6 +38,32 @@ export default function LoginForm() {
     setErrors(next);
     return Object.keys(next).length === 0;
   }
+
+    const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkSession = async () => {
+      const { data, error } = await supabase.auth.getUser();
+
+      if (!isMounted) return;
+
+      if (data?.user) {
+        // ✅ already logged in → go straight to dashboard
+        router.replace("/pages/dashboard");
+      } else {
+        // ❌ not logged in → show the form
+        setCheckingSession(false);
+      }
+    };
+
+    checkSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
 
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
