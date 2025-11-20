@@ -39,48 +39,69 @@ export default function LoginForm() {
     return Object.keys(next).length === 0;
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setErrors({});
 
-    if (!validate()) {
-      errorToast({ title: "Check the form", description: "Please fix the highlighted fields." });
+  if (!validate()) {
+    errorToast({
+      title: "Check the form",
+      description: "Please fix the highlighted fields.",
+    });
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    // Optional "remember me": keep email locally
+    try {
+      if (formData.rememberMe) {
+        localStorage.setItem("remember:email", formData.email);
+      } else {
+        localStorage.removeItem("remember:email");
+      }
+    } catch {
+      // ignore storage errors (Safari private mode, etc.)
+    }
+
+    const {
+      data: { session },
+      error: signErr,
+    } = await supabase.auth.signInWithPassword({
+      email: formData.email.trim(),
+      password: formData.password,
+    });
+
+    if (signErr || !session) {
+      const msg =
+        signErr?.message?.toLowerCase().includes("invalid login credentials") ||
+        signErr?.message?.toLowerCase().includes("invalid credentials")
+          ? "Invalid email or password."
+          : signErr?.message || "Unable to sign in.";
+
+      setErrors((p) => ({ ...p, password: msg })); // show under password
+      errorToast({ title: "Login failed", description: msg });
       return;
     }
 
+    // At this point Supabase has written the session to storage
+    // and it will be shared across all tabs (same origin).
     try {
-      setLoading(true);
+      // Optional: your own flag you can check in any tab
+      localStorage.setItem("vendor:isLoggedIn", "true");
+    } catch {}
 
-      // Optional "remember me": keep email locally
-      try {
-        if (formData.rememberMe) localStorage.setItem("remember:email", formData.email);
-        else localStorage.removeItem("remember:email");
-      } catch {}
+    successToast({
+      title: "Welcome back",
+      description: "You’re signed in.",
+    });
 
-      const { error: signErr } = await supabase.auth.signInWithPassword({
-        email: formData.email.trim(),
-        password: formData.password,
-      });
-
-      if (signErr) {
-        // Map Supabase auth errors to friendly message
-        const msg =
-          signErr.message?.toLowerCase().includes("invalid login credentials") ||
-          signErr.message?.toLowerCase().includes("invalid credentials")
-            ? "Invalid email or password."
-            : signErr.message || "Unable to sign in.";
-
-        setErrors((p) => ({ ...p, password: msg })); // show under password
-        errorToast({ title: "Login failed", description: msg });
-        return;
-      }
-
-      successToast({ title: "Welcome back", description: "You’re signed in." });
-      router.push("/pages/dashboard");
-    } finally {
-      setLoading(false);
-    }
-  };
+    router.push("/pages/dashboard");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleGoogleLogin = async () => {
     const { error: oAuthErr } = await supabase.auth.signInWithOAuth({
