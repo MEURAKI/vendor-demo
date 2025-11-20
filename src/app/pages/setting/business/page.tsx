@@ -299,15 +299,7 @@ function BusinessSettingsPageInner() {
 
   const { successToast, errorToast } = useToast();
 
-    const { checking } = useAuthGuard();
 
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
 
   /* ---------- Load everything once ---------- */
   useEffect(() => {

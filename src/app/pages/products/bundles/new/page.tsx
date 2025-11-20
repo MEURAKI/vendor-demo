@@ -80,15 +80,6 @@ async function uploadImageToSupabase(
 
 export default function NewBundlePage() {
   const router = useRouter();
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
 
   const [pickerOpen, setPickerOpen] = useState(true);
 

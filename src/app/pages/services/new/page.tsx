@@ -190,15 +190,6 @@ export default function NewServicePage() {
   );
   const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
 
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
 
   // per-location settings
   const [locationSettings, setLocationSettings] =

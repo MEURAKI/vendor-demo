@@ -141,16 +141,6 @@ export default function NewSpacePage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
 
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
-
   // load profile for sidebar + vendor id
   useEffect(() => {
     async function loadProfile() {

@@ -181,16 +181,6 @@ export default function EditServicePage() {
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const categorySectionRef = useRef<HTMLDivElement | null>(null);
 
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
-
   // sidebar profile
   useEffect(() => {
     (async () => {

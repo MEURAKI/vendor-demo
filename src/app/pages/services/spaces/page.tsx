@@ -110,16 +110,6 @@ export default function SpacesPage() {
     return "Unavailable";
   }
 
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
       <Sidebar config={sidebarConfig} />

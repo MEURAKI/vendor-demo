@@ -663,16 +663,6 @@ export default function NewProductPage() {
   const [showDescriptionErrorModal, setShowDescriptionErrorModal] =
     useState(false);
 
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
-
   // sidebar config
   const sidebarConfig = useMemo(
     () =>

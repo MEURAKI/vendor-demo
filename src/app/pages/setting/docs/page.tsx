@@ -45,16 +45,6 @@ export default function DocumentsAgreementsPage() {
   const [loading, setLoading] = useState(true);
   const { successToast, errorToast } = useToast();
 
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
-
   const sidebarConfig = useMemo(
     () =>
       buildSidebarConfig({

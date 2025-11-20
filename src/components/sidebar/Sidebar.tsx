@@ -247,7 +247,15 @@ export default function Sidebar({
   <button
     onClick={async () => {
       await supabase.auth.signOut();
-      router.replace("/pages/auth/login");
+      try {
+    localStorage.removeItem("vendor:isLoggedIn");
+    // tell other tabs
+    localStorage.setItem("vendor:logout", Date.now().toString());
+  } catch (e) {
+    console.error("logout storage error", e);
+  }
+
+  router.replace("/pages/auth/login");
     }}
     className={[
       "flex items-center gap-3 rounded-lg px-2.5 py-2 text-accent-400 hover:text-accent-300",

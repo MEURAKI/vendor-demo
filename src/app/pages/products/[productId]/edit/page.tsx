@@ -262,15 +262,6 @@ export default function EditProductPage({
   const router = useRouter();
   const { productId } = params;
 
-  const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
   const [loading, setLoading] = useState(true);
 
   // sidebar profile

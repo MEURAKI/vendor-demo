@@ -47,16 +47,6 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
 
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
-
   useEffect(() => {
     let isMounted = true;
 

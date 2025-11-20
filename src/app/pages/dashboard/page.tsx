@@ -56,15 +56,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
-    const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
 
   const redirectPath = useMemo(() => {
     if (!profile) return null;
@@ -336,7 +327,15 @@ export default function DashboardPage() {
         <button
           onClick={async () => {
             await supabase.auth.signOut();
-            router.replace("/pages/auth/login");
+            try {
+    localStorage.removeItem("vendor:isLoggedIn");
+    // tell other tabs
+    localStorage.setItem("vendor:logout", Date.now().toString());
+  } catch (e) {
+    console.error("logout storage error", e);
+  }
+
+  router.replace("/pages/auth/login");
           }}
           className="mt-10 rounded-full bg-black px-6 py-3 text-white transition hover:bg-gray-900"
         >

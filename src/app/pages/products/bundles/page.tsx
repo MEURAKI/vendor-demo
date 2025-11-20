@@ -37,16 +37,6 @@ const [bundleIdToTrash, setBundleIdToTrash] = useState<string | null>(null);
 const [trashError, setTrashError] = useState<string | null>(null);
 const [trashLoading, setTrashLoading] = useState(false);
 
-  const { checking } = useAuthGuard();
-
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
-      </div>
-    );
-  }
-
 function openTrashModal(bundleId: string) {
   setBundleIdToTrash(bundleId);
   setTrashError(null);

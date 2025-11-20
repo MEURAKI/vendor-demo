@@ -153,30 +153,31 @@ export default function LoginForm() {
   // Block UI while checking session
   if (checkingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="h-screen flex items-center justify-center bg-white">
         <ClipLoader size={28} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col lg:flex-row overflow-x-hidden">
+    <div className="h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
       {/* Left – form */}
-      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-16 py-8 sm:py-10">
-        <div className="w-full max-w-md">
+      <div className="flex-1 flex justify-center lg:items-center">
+        {/* Make this column scrollable on small screens */}
+        <div className="w-full max-w-md h-full lg:h-auto overflow-y-auto px-4 sm:px-6 lg:px-16 py-6 sm:py-8 lg:py-10">
           {/* Logo + Heading */}
-          <div className="mb-8">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-black">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold leading-tight text-black">
               MEURAKI
               <br /> Vendor Portal
             </h1>
-            <p className="mt-3 text-sm sm:text-base text-gray-500">
+            <p className="mt-2 sm:mt-3 text-xs sm:text-sm md:text-base text-gray-500">
               Welcome back! Please sign in to access your account.
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} noValidate className="space-y-6">
+          <form onSubmit={handleSubmit} noValidate className="space-y-5 sm:space-y-6">
             {/* Email */}
             <div>
               <label className="text-black font-semibold tracking-wide text-xs sm:text-sm">
@@ -191,7 +192,7 @@ export default function LoginForm() {
                   if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
                 }}
                 className={[
-                  "mt-2 w-full h-12 sm:h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
+                  "mt-2 w-full h-11 sm:h-12 md:h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
                   errors.email ? "border-rose-500" : "border-transparent",
                 ].join(" ")}
                 required
@@ -220,7 +221,7 @@ export default function LoginForm() {
                     setErrors((p) => ({ ...p, password: undefined }));
                 }}
                 className={[
-                  "mt-2 w-full h-12 sm:h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
+                  "mt-2 w-full h-11 sm:h-12 md:h-14 rounded-2xl px-4 bg-[#EFEDFF] border text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500",
                   errors.password ? "border-rose-500" : "border-transparent",
                 ].join(" ")}
                 required
@@ -254,7 +255,7 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-12 sm:h-14 rounded-full bg-black text-white text-sm sm:text-base font-medium shadow-lg shadow-black/10 hover:bg-gray-900 transition-colors disabled:opacity-70"
+              className="w-full h-11 sm:h-12 md:h-14 rounded-full bg-black text-white text-sm sm:text-base font-medium shadow-lg shadow-black/10 hover:bg-gray-900 transition-colors disabled:opacity-70"
             >
               {loading ? "Signing in…" : "Login"}
             </button>
@@ -270,7 +271,7 @@ export default function LoginForm() {
             </div>
 
             {/* Divider */}
-            <div className="relative my-5 sm:my-6">
+            <div className="relative my-4 sm:my-5 md:my-6">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200" />
               </div>
@@ -285,7 +286,7 @@ export default function LoginForm() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="w-full h-12 sm:h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center gap-3 text-gray-700 text-sm sm:text-base font-medium shadow-sm hover:shadow transition-shadow"
+              className="w-full h-11 sm:h-12 md:h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center gap-3 text-gray-700 text-sm sm:text-base font-medium shadow-sm hover:shadow transition-shadow"
             >
               <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -309,7 +310,7 @@ export default function LoginForm() {
             </button>
 
             {/* Subtext + register link */}
-            <div className="text-center">
+            <div className="text-center mb-4">
               <p className="text-xs sm:text-sm text-gray-500">
                 Don&apos;t have an account?{" "}
                 <Link
@@ -331,7 +332,7 @@ export default function LoginForm() {
           </form>
 
           {/* Footer Logo */}
-          <div className="mt-8 sm:mt-10 flex justify-center">
+          <div className="mt-2 sm:mt-4 mb-2 flex justify-center">
             <Image
               src="/images/logo-meuraki.svg"
               alt="Meuraki"
