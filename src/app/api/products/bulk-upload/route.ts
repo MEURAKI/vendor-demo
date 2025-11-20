@@ -20,7 +20,12 @@ type CsvMappingKey =
   | "wellness"
   | "price"
   | "inventory"
-  | "tags"; // 👈 NEW
+  | "tags"
+  | "discountType"
+  | "discountValue"
+  | "discountStart"
+  | "discountEnd"
+  ; // 👈 NEW
 
 type Mapping = Record<CsvMappingKey, string>;
 
@@ -164,6 +169,11 @@ export async function POST(req: NextRequest) {
       const priceNumber = priceRaw ? Number(priceRaw) : NaN;
       const inventoryNumber = inventoryRaw ? Number(inventoryRaw) : NaN;
 
+      const discountType = getMappedValue(row, mapping, "discountType");
+      const discountValue = getMappedValue(row, mapping, "discountValue");
+      const discountStart = getMappedValue(row, mapping, "discountStart");
+      const discountEnd = getMappedValue(row, mapping, "discountEnd");
+
       const product: ProductInsert = {
         name,
         base_sku: sku,
@@ -182,6 +192,8 @@ export async function POST(req: NextRequest) {
       const wellnessStr = getMappedValue(row, mapping, "wellness");
       const categoryStr = getMappedValue(row, mapping, "category");
       const tagsStr = getMappedValue(row, mapping, "tags");
+
+
 
       parsedRows.push({
         product,

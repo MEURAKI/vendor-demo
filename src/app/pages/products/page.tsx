@@ -818,7 +818,11 @@ type ProductCsvMappingKey =
   | "wellness"
   | "price"
   | "inventory"
-  | "tags";
+  | "tags"
+  | "discountType"
+  | "discountValue"
+  | "discountStart"
+  | "discountEnd";
 
 type VariantCsvMappingKey =
   | "productBaseSku" // parent product base_sku
@@ -862,6 +866,10 @@ function BulkUploadModal({
     price: "",
     inventory: "",
     tags: "",
+    discountType: "",
+    discountValue: "",
+    discountStart: "",
+    discountEnd: "",
   });
 
   const [variantMapping, setVariantMapping] = useState<
@@ -1095,6 +1103,18 @@ function BulkUploadModal({
                 <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
                   Inventory Stock
                 </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Discount Type
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Discount Value
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Discount Start Date
+                </div>
+                <div className="rounded-2xl bg-[#F8F7FF] px-3 py-2">
+                  Discount End Date
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1234,6 +1254,47 @@ function BulkUploadModal({
                   value={productMapping.inventory}
                   onChange={(e) =>
                     handleChangeProductMapping("inventory", e.target.value)
+                  }
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={productMapping.discountType}
+                  onChange={(e) =>
+                    handleChangeProductMapping("discountType", e.target.value)
+                  }
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={productMapping.discountValue}
+                  onChange={(e) =>
+                    handleChangeProductMapping("discountValue", e.target.value)
+                  }
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                >
+                  {headerOptions}
+                </select>
+
+
+                <select
+                  value={productMapping.discountStart}
+                  onChange={(e) =>
+                    handleChangeProductMapping("discountStart", e.target.value)
+                  }
+                  className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                >
+                  {headerOptions}
+                </select>
+
+                <select
+                  value={productMapping.discountEnd}
+                  onChange={(e) =>
+                    handleChangeProductMapping("discountEnd", e.target.value)
                   }
                   className="h-9 w-full rounded-full border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                 >
