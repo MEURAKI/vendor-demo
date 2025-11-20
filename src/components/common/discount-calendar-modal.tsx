@@ -258,7 +258,7 @@ export function DiscountCalendarModal({
                 onChange={(e) =>
                   setStartHour(parseIntClamped(e.target.value, 1, 12))
                 }
-                className="h-8 w-10 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+                className="h-8 w-14 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
               />
               :
               <input
@@ -269,7 +269,7 @@ export function DiscountCalendarModal({
                 onChange={(e) =>
                   setStartMinute(parseIntClamped(e.target.value, 0, 59))
                 }
-                className="h-8 w-10 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+                className="h-8 w-14 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
               />
               <div className="flex rounded-full bg-[#ECEBFF] p-0.5">
                 {(["AM", "PM"] as const).map((v) => (
@@ -278,7 +278,7 @@ export function DiscountCalendarModal({
                     type="button"
                     onClick={() => setStartAmPm(v)}
                     className={clsx(
-                      "h-7 w-10 rounded-full text-[11px] font-medium",
+                      "h-7 w-14 rounded-full text-[11px] font-medium",
                       startAmPm === v
                         ? "bg-white text-gray-900 shadow-sm"
                         : "text-gray-500"
@@ -302,7 +302,7 @@ export function DiscountCalendarModal({
                 onChange={(e) =>
                   setEndHour(parseIntClamped(e.target.value, 1, 12))
                 }
-                className="h-8 w-10 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+                className="h-8 w-14 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
               />
               :
               <input
@@ -313,7 +313,7 @@ export function DiscountCalendarModal({
                 onChange={(e) =>
                   setEndMinute(parseIntClamped(e.target.value, 0, 59))
                 }
-                className="h-8 w-10 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
+                className="h-8 w-14 rounded-lg border border-gray-200 bg-[#F7F7FF] px-2 text-center text-xs focus:border-purple-500 focus:outline-none"
               />
               <div className="flex rounded-full bg-[#ECEBFF] p-0.5">
                 {(["AM", "PM"] as const).map((v) => (
@@ -322,7 +322,7 @@ export function DiscountCalendarModal({
                     type="button"
                     onClick={() => setEndAmPm(v)}
                     className={clsx(
-                      "h-7 w-10 rounded-full text-[11px] font-medium",
+                      "h-7 w-14 rounded-full text-[11px] font-medium",
                       endAmPm === v
                         ? "bg-white text-gray-900 shadow-sm"
                         : "text-gray-500"
