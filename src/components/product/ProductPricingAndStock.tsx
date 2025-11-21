@@ -236,7 +236,7 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
               <div className="inline-flex rounded-2xl bg-white p-1 shadow-sm">
                 <button
                   type="button"
-                  disabled={isVariant}
+                  // disabled={isVariant}
                   onClick={() => toggleDiscountType("fixed")}
                   className={
                     "h-7 w-16 rounded-xl text-xs font-semibold transition " +
