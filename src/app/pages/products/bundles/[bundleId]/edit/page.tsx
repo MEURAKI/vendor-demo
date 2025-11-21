@@ -18,8 +18,12 @@ import { uploadProviderImage } from "../../../../../../lib/uploadProviderImage";
 
 type DiscountType = "fixed" | "percent" | null;
 
+// 🔹 extended to support variant/single behaviour
 type BundleItem = BundleCandidateItem & {
   quantity: number;
+  variantLabel?: string | null;
+  choiceCount?: number | null;
+  isMultiple?: boolean | null;
 };
 
 type LoadedBundle = {
@@ -42,7 +46,12 @@ type LoadedBundle = {
   wellnessDimensions: (string | number)[];
   categories: (string | number)[];
   tags: string[];
-  items: (BundleCandidateItem & { quantity?: number })[];
+  items: (BundleCandidateItem & {
+    quantity?: number;
+    variantLabel?: string | null;
+    choiceCount?: number | null;
+    isMultiple?: boolean | null;
+  })[];
 };
 
 type UserStatus = "active" | "inactive" | "pending";
@@ -222,12 +231,15 @@ export default function EditBundlePage() {
         setCategories((data.categories ?? []).map(String));
         setTags(data.tags ?? []);
 
-        // items
+        // items (keep variant/single specific fields)
         setItems(
           (data.items ?? []).map((it) => ({
             ...it,
             id: it.id || it.productId,
             quantity: it.quantity ?? 1,
+            variantLabel: it.variantLabel ?? null,
+            choiceCount: it.choiceCount ?? null,
+            isMultiple: it.isMultiple ?? null,
           }))
         );
       } catch (err) {
@@ -307,11 +319,15 @@ export default function EditBundlePage() {
       tags,
       items: items.map((i, idx) => ({
         productId: i.productId,
-        variantId: null,
+        variantId: i.variantId ?? null,
         itemName: i.name,
         itemPriceCents: i.priceCents,
         quantity: i.quantity,
         position: idx,
+        kind: i.kind,
+        variantLabel: i.variantLabel ?? null,
+        choiceCount: i.choiceCount ?? null,
+        isMultiple: i.isMultiple ?? null,
       })),
     };
 
@@ -329,13 +345,12 @@ export default function EditBundlePage() {
     router.push("/pages/products/bundles");
   }
 
-
   // ---------- UI ----------
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
 
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
+      <div className="flex flex-1.items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Top bar */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-5">
@@ -435,7 +450,7 @@ export default function EditBundlePage() {
                         <label className="text-[11px] font-semibold text-gray-700">
                           Price
                         </label>
-                        <div className="mt-2 flex items.center gap-1">
+                        <div className="mt-2 flex items-center gap-1">
                           <span className="inline-flex h-9 items-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] text-gray-600">
                             SGD
                           </span>
@@ -575,7 +590,7 @@ export default function EditBundlePage() {
                   {/* Bundle Items */}
                   <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
                     <div className="mb-4 flex items-center justify-between">
-                      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
+                      <h2 className="text-sm font-semibold.uppercase tracking-wide text-gray-700">
                         Products in Bundle
                       </h2>
                       <button
@@ -596,8 +611,9 @@ export default function EditBundlePage() {
                         {items.map((item, idx) => (
                           <div
                             key={item.id}
-                            className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center"
+                            className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4"
                           >
+                            {/* Common heading */}
                             <div className="flex items-center gap-3">
                               <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-[#E5DEFF] text-[11px] font-semibold text-[#4C1D95]">
                                 Product {idx + 1}
@@ -612,34 +628,150 @@ export default function EditBundlePage() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-gray-500">
-                                QTY
-                              </span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={item.stock}
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const qty = Math.max(
-                                    1,
-                                    Math.min(
-                                      item.stock,
-                                      Number(e.target.value) || 1
+
+                            {/* VARIANT PRODUCT UI */}
+                            {item.kind === "variant" && (
+                              <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4">
+                                <label className="mb-2 block text-xs font-semibold text-gray-700">
+                                  Size Variant Name (Displayed on store)
+                                </label>
+
+                                <input
+                                  type="text"
+                                  placeholder="Choose any 2 items"
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                                  value={item.variantLabel ?? ""}
+                                  onChange={(e) =>
+                                    setItems((prev) =>
+                                      prev.map((it) =>
+                                        it.id === item.id
+                                          ? {
+                                              ...it,
+                                              variantLabel: e.target.value,
+                                            }
+                                          : it
+                                      )
                                     )
-                                  );
-                                  setItems((prev) =>
-                                    prev.map((it) =>
-                                      it.id === item.id
-                                        ? { ...it, quantity: qty }
-                                        : it
-                                    )
-                                  );
-                                }}
-                                className="h-8 w-20 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-                              />
-                            </div>
+                                  }
+                                />
+
+                                <div className="mt-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+                                      value={item.choiceCount ?? 1}
+                                      min={1}
+                                      max={item.variantCount}
+                                      onChange={(e) =>
+                                        setItems((prev) =>
+                                          prev.map((it) =>
+                                            it.id === item.id
+                                              ? {
+                                                  ...it,
+                                                  choiceCount: Math.max(
+                                                    1,
+                                                    Math.min(
+                                                      item.variantCount,
+                                                      Number(
+                                                        e.target.value
+                                                      ) || 1
+                                                    )
+                                                  ),
+                                                }
+                                              : it
+                                          )
+                                        )
+                                      }
+                                    />
+                                    <span className="text-[11px] text-gray-500">
+                                      / {item.variantCount} Available Variants
+                                    </span>
+                                  </div>
+
+                                  <label className="flex items-center gap-2 text-[11px] text-gray-600">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.isMultiple ?? false}
+                                      onChange={(e) =>
+                                        setItems((prev) =>
+                                          prev.map((it) =>
+                                            it.id === item.id
+                                              ? {
+                                                  ...it,
+                                                  isMultiple: e.target.checked,
+                                                }
+                                              : it
+                                          )
+                                        )
+                                      }
+                                    />
+                                    Select option, if this is a multiple choice
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* SINGLE PRODUCT UI */}
+                            {item.kind === "single" && (
+                              <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+                                {/* Number of units in bundle */}
+                                <div className="flex flex-col">
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    No. of units in bundle
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={item.stock}
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const qty = Math.max(
+                                        1,
+                                        Math.min(
+                                          item.stock,
+                                          Number(e.target.value) || 1
+                                        )
+                                      );
+                                      setItems((prev) =>
+                                        prev.map((it) =>
+                                          it.id === item.id
+                                            ? { ...it, quantity: qty }
+                                            : it
+                                        )
+                                      );
+                                    }}
+                                    className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+                                  />
+                                </div>
+
+                                {/* Stock */}
+                                <div>
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    Current Stock Level
+                                  </label>
+                                  <input
+                                    disabled
+                                    value={item.stock}
+                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+                                  />
+                                </div>
+
+                                {/* Price */}
+                                <div>
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    Item Price
+                                  </label>
+                                  <input
+                                    disabled
+                                    value={`$ ${(item.priceCents / 100).toFixed(
+                                      2
+                                    )}`}
+                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -657,6 +789,7 @@ export default function EditBundlePage() {
 
                     <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-200">
                       {bundleImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={bundleImageUrl}
                           alt="Bundle"
@@ -695,9 +828,7 @@ export default function EditBundlePage() {
                     title="Wellness Dimension, Category & Tags"
                     wellnessOptions={wellnessOptions}
                     selectedWellnessIds={selectedWellnessIds}
-                    onChangeWellness={
-                      setSelectedWellnessIds
-                    }
+                    onChangeWellness={setSelectedWellnessIds}
                     categories={categories}
                     onChangeCategories={setCategories}
                     tags={tags}
@@ -722,6 +853,9 @@ export default function EditBundlePage() {
               return {
                 ...p,
                 quantity: existing?.quantity ?? 1,
+                variantLabel: existing?.variantLabel ?? "",
+                choiceCount: existing?.choiceCount ?? 1,
+                isMultiple: existing?.isMultiple ?? false,
               };
             })
           );

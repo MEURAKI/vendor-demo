@@ -18,8 +18,12 @@ import ClipLoader from "react-spinners/ClipLoader";
 
 type DiscountType = "fixed" | "percent" | null;
 
+// 🔹 EXTEND BundleItem to support variant UI
 type BundleItem = BundleCandidateItem & {
   quantity: number;
+  variantLabel?: string;
+  choiceCount?: number;
+  isMultiple?: boolean;
 };
 
 type UserStatus = "active" | "inactive" | "pending";
@@ -216,15 +220,18 @@ export default function NewBundlePage() {
 
       // 2) Prepare items for API
       const itemPayload = items.map((it, idx) => ({
-        // variantId: it.variantId ?? null,
         productId: it.productId ?? null,
         itemName: it.name,
         itemPriceCents: it.priceCents,
         quantity: it.quantity,
         position: idx,
+        kind: it.kind,
+        variantLabel: it.variantLabel ?? null,
+        choiceCount: it.choiceCount ?? null,
+        isMultiple: it.isMultiple ?? null,
       }));
 
-      // 🔥 Clean wellness dimensions: numbers only, unique
+      // Clean wellness dimensions: numbers only, unique
       const cleanWellnessDimensions = Array.from(
         new Set(
           (selectedWellnessIds ?? [])
@@ -401,7 +408,7 @@ export default function NewBundlePage() {
                         </div>
                       </div>
 
-                      {/* Discount – same pill style as products/services */}
+                      {/* Discount */}
                       <div>
                         <label className="text-[11px] font-semibold text-gray-700">
                           Discount
@@ -513,7 +520,7 @@ export default function NewBundlePage() {
                           />
 
                           {/* Preview + optional suffix */}
-                          <div className="flex flex-col.items-end gap-1">
+                          <div className="flex flex-col items-end gap-1">
                             {customSkuEnabled && (
                               <input
                                 placeholder="Custom suffix"
@@ -563,8 +570,9 @@ export default function NewBundlePage() {
                         {items.map((item, idx) => (
                           <div
                             key={item.id}
-                            className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3"
+                            className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4"
                           >
+                            {/* Common header */}
                             <div className="flex items-center gap-3">
                               <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-[#E5DEFF] text-[11px] font-semibold text-[#4C1D95]">
                                 Product {idx + 1}
@@ -574,45 +582,157 @@ export default function NewBundlePage() {
                                   {item.name}
                                 </p>
                                 <p className="text-[11px] text-gray-500">
-                                  Current Stock Level: {item.stock} · Item Price:{" "}
-                                  {(item.priceCents / 100).toLocaleString(
-                                    "en-SG",
-                                    {
-                                      style: "currency",
-                                      currency: "SGD",
-                                    }
-                                  )}
+                                  Current Stock Level: {item.stock} · Item Price: $
+                                  {(item.priceCents / 100).toFixed(2)}
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-gray-500">
-                                QTY
-                              </span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={item.stock}
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const qty = Math.max(
-                                    1,
-                                    Math.min(
-                                      item.stock,
-                                      Number(e.target.value) || 1
+
+                            {/* VARIANT PRODUCT UI */}
+                            {item.kind === "variant" && (
+                              <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4">
+                                <label className="mb-2 block text-xs font-semibold text-gray-700">
+                                  Size Variant Name (Displayed on store)
+                                </label>
+
+                                <input
+                                  type="text"
+                                  placeholder="Choose any 2 items"
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                                  value={item.variantLabel ?? ""}
+                                  onChange={(e) =>
+                                    setItems((prev) =>
+                                      prev.map((it) =>
+                                        it.id === item.id
+                                          ? {
+                                              ...it,
+                                              variantLabel: e.target.value,
+                                            }
+                                          : it
+                                      )
                                     )
-                                  );
-                                  setItems((prev) =>
-                                    prev.map((it) =>
-                                      it.id === item.id
-                                        ? { ...it, quantity: qty }
-                                        : it
-                                    )
-                                  );
-                                }}
-                                className="h-8 w-16 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-                              />
-                            </div>
+                                  }
+                                />
+
+                                <div className="mt-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+                                      value={item.choiceCount ?? 1}
+                                      min={1}
+                                      max={item.variantCount || item.stock}
+                                      onChange={(e) =>
+                                        setItems((prev) =>
+                                          prev.map((it) =>
+                                            it.id === item.id
+                                              ? {
+                                                  ...it,
+                                                  choiceCount: Math.max(
+                                                    1,
+                                                    Math.min(
+                                                      item.variantCount ||
+                                                        item.stock,
+                                                      Number(
+                                                        e.target.value
+                                                      ) || 1
+                                                    )
+                                                  ),
+                                                }
+                                              : it
+                                          )
+                                        )
+                                      }
+                                    />
+                                    <span className="text-[11px] text-gray-500">
+                                      / {item.variantCount ?? 0} Available
+                                      Variants
+                                    </span>
+                                  </div>
+
+                                  <label className="flex items-center gap-2 text-[11px] text-gray-600">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.isMultiple ?? false}
+                                      onChange={(e) =>
+                                        setItems((prev) =>
+                                          prev.map((it) =>
+                                            it.id === item.id
+                                              ? {
+                                                  ...it,
+                                                  isMultiple: e.target.checked,
+                                                }
+                                              : it
+                                          )
+                                        )
+                                      }
+                                    />
+                                    Select Option, if this is a multiple choice
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* SINGLE PRODUCT UI */}
+                            {item.kind === "single" && (
+                              <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+                                {/* Number of units in bundle */}
+                                <div className="flex flex-col">
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    No. of units in bundle
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={item.stock}
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const qty = Math.max(
+                                        1,
+                                        Math.min(
+                                          item.stock,
+                                          Number(e.target.value) || 1
+                                        )
+                                      );
+                                      setItems((prev) =>
+                                        prev.map((it) =>
+                                          it.id === item.id
+                                            ? { ...it, quantity: qty }
+                                            : it
+                                        )
+                                      );
+                                    }}
+                                    className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+                                  />
+                                </div>
+
+                                {/* Stock */}
+                                <div>
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    Current Stock Level
+                                  </label>
+                                  <input
+                                    disabled
+                                    value={item.stock}
+                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+                                  />
+                                </div>
+
+                                {/* Price */}
+                                <div>
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    Item Price
+                                  </label>
+                                  <input
+                                    disabled
+                                    value={`$ ${(item.priceCents / 100).toFixed(
+                                      2
+                                    )}`}
+                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -630,6 +750,7 @@ export default function NewBundlePage() {
 
                     <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-200">
                       {bundleImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={bundleImageUrl}
                           alt="Bundle"
@@ -664,12 +785,12 @@ export default function NewBundlePage() {
                     </div>
                   </section>
 
-                  {/* Wellness / Categories / Tags – same as product */}
+                  {/* Wellness / Categories / Tags */}
                   <WellnessCategoryTagsSection
                     title="Wellness Dimension, Category & Tags"
                     wellnessOptions={wellnessOptions}
                     selectedWellnessIds={selectedWellnessIds}
-                    onChangeWellness={setSelectedWellnessIds }
+                    onChangeWellness={setSelectedWellnessIds}
                     categories={categories}
                     onChangeCategories={setCategories}
                     tags={tags}
@@ -688,13 +809,16 @@ export default function NewBundlePage() {
         onClose={() => setPickerOpen(false)}
         initialSelected={items}
         onContinue={(picked) => {
-          // merge with existing quantities or default to 1
+          // merge with existing quantities / variant settings or default them
           setItems(
             picked.map((p) => {
               const existing = items.find((it) => it.id === p.id);
               return {
                 ...p,
                 quantity: existing?.quantity ?? 1,
+                variantLabel: existing?.variantLabel ?? "",
+                choiceCount: existing?.choiceCount ?? 1,
+                isMultiple: existing?.isMultiple ?? false,
               };
             })
           );

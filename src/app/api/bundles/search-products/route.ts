@@ -17,8 +17,9 @@ type BundleSearchItem = {
   name: string;
   sku: string;
   priceCents: number;
-  stock: number;
+  stock: number;          // total stock (for variants: across all variants)
   imageUrl: string | null;
+  variantCount: number;   // NEW: number of variants for this product
 };
 
 export async function GET(req: Request) {
@@ -100,7 +101,8 @@ export async function GET(req: Request) {
       imageUrl: string | null;
       totalStock: number;
       minPriceCents: number | null;
-      sku: string; // representative SKU (e.g. first variant's SKU)
+      sku: string;          // representative SKU (e.g. first variant's SKU)
+      variantCount: number; // NEW: how many variants this product has
     };
 
     const variantGroups: Record<string, VariantGroup> = {};
@@ -127,10 +129,14 @@ export async function GET(req: Request) {
           totalStock: 0,
           minPriceCents: null,
           sku: (row as any).sku ?? "",
+          variantCount: 0,
         };
       }
 
       const group = variantGroups[productId];
+
+      // Count variants
+      group.variantCount += 1;
 
       // Accumulate stock
       const stock = (row as any).inventory_qty ?? 0;
@@ -159,6 +165,7 @@ export async function GET(req: Request) {
           priceCents: group.minPriceCents ?? 0, // "from" price
           stock: group.totalStock, // total across all variants
           imageUrl: group.imageUrl,
+          variantCount: group.variantCount, // ✅ NEW
         })
       );
 
@@ -206,6 +213,7 @@ export async function GET(req: Request) {
           priceCents: p.price_cents ?? 0,
           stock: p.inventory_qty ?? 0,
           imageUrl: p.image_url ?? null,
+          variantCount: 0, // singles don't have variants
         })
       );
 

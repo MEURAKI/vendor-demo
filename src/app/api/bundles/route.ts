@@ -149,10 +149,11 @@ export async function POST(req: Request) {
       base_sku: body.base_sku ?? body.sku,
       status: body.status ?? "draft",
       price_cents: body.priceCents ?? 0,
+      // ⬇️ align with columns used in GET/PUT (discount_start / discount_end)
       discount_type: body.discount?.type ?? null,
       discount_value: body.discount?.value ?? null,
-      discount_start_at: body.discount?.start ?? null,
-      discount_end_at: body.discount?.end ?? null,
+      discount_start: body.discount?.start ?? null,
+      discount_end: body.discount?.end ?? null,
       image_url: body.imageUrl ?? null,
       inventory_qty: 0,
     })
@@ -168,29 +169,43 @@ export async function POST(req: Request) {
   }
 
   // --- 2. Insert bundle items (products / variants) ---
-if (Array.isArray(body.items) && body.items.length > 0) {
-  const itemRows = body.items.map((item: any, idx: number) => {
-    const variantId = item.variantId ?? null;
-    const productId = item.productId ?? variantId; // ✅ fallback so one is always set
+  if (Array.isArray(body.items) && body.items.length > 0) {
+    const itemRows = body.items.map((item: any, idx: number) => {
+      const variantId = item.variantId ?? null;
+      const productId = item.productId ?? variantId; // ✅ fallback so one is always set
 
-    return {
-      bundle_id: bundle.id,
-      product_id: productId,          // ✅ always something
-      variant_id: variantId,          // null for singles
-      item_name: item.itemName,
-      item_price_cents: item.itemPriceCents ?? 0,
-      quantity: item.quantity ?? 1,
-      position: idx,
-    };
-  });
+      const kind =
+        item.kind ??
+        (variantId ? "variant" : "single"); // default based on variantId
 
-  const { error: itemsErr } = await client.from("bundle_items").insert(itemRows);
+      return {
+        bundle_id: bundle.id,
+        product_id: productId,
+        variant_id: variantId,
+        item_name: item.itemName,
+        item_price_cents: item.itemPriceCents ?? 0,
+        quantity: item.quantity ?? 1,
+        position: idx,
 
-  if (itemsErr) {
-    console.error("[bundles POST] items error:", itemsErr);
-    return NextResponse.json({ error: itemsErr.message }, { status: 400 });
+        // 🔹 NEW FIELDS for variant / single behaviour
+        kind,
+        variant_label: item.variantLabel ?? null,
+        choice_count:
+          typeof item.choiceCount === "number" ? item.choiceCount : null,
+        is_multiple:
+          typeof item.isMultiple === "boolean" ? item.isMultiple : null,
+      };
+    });
+
+    const { error: itemsErr } = await client
+      .from("bundle_items")
+      .insert(itemRows);
+
+    if (itemsErr) {
+      console.error("[bundles POST] items error:", itemsErr);
+      return NextResponse.json({ error: itemsErr.message }, { status: 400 });
+    }
   }
-}
 
   // --- 3. Wellness / categories / tags ---
 

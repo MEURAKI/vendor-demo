@@ -608,6 +608,7 @@ export default function EditServicePage() {
                         <input
                           value={sku}
                           onChange={(e) => setSku(e.target.value)}
+                          readOnly
                           className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
                         />
                       </div>

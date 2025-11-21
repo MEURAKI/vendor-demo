@@ -9,7 +9,7 @@ const supa = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  async function getAuthedVendor(req: Request) {
+async function getAuthedVendor(req: Request) {
   const client = supa();
 
   const authHeader = req.headers.get("Authorization");
@@ -18,7 +18,11 @@ const supa = () =>
     : undefined;
 
   if (!token) {
-    return { client, error: "Missing access token", vendorId: null as string | null };
+    return {
+      client,
+      error: "Missing access token",
+      vendorId: null as string | null,
+    };
   }
 
   const {
@@ -115,6 +119,10 @@ export async function GET(
         position,
         item_name,
         item_price_cents,
+        kind,
+        variant_label,
+        choice_count,
+        is_multiple,
         product_variants:variant_id (
           id,
           sku,
@@ -126,14 +134,18 @@ export async function GET(
             id,
             name,
             base_sku,
-            image_url
+            image_url,
+            inventory_qty,
+            price_cents
           )
         ),
         products:product_id (
           id,
           name,
           base_sku,
-          image_url
+          image_url,
+          inventory_qty,
+          price_cents
         )
       `
     )
@@ -153,9 +165,7 @@ export async function GET(
       const product = productDirect ?? productFromVariant ?? null;
 
       const baseName =
-        row.item_name ??
-        product?.name ??
-        "Unnamed product";
+        row.item_name ?? product?.name ?? "Unnamed product";
 
       let suffix = "";
       if (variant?.options_json && typeof variant.options_json === "object") {
@@ -167,32 +177,59 @@ export async function GET(
         }
       }
 
+      const kind: "variant" | "single" =
+        row.kind ??
+        (row.variant_id ? "variant" : "single");
+
+      // 🔹 CURRENT STOCK: prefer variant stock, fallback to product stock
+      let stock = 0;
+      if (row.variant_id && variant) {
+        stock = variant.inventory_qty ?? 0;
+      } else if (product) {
+        stock = product.inventory_qty ?? 0;
+      }
+
+      // 🔹 CURRENT PRICE: item override → variant price → product price
+      const priceCents =
+        row.item_price_cents ??
+        variant?.price_cents ??
+        product?.price_cents ??
+        0;
+
       return {
         // UI key
         id: String(row.id),
-        // 🔑 IDs we need for PUT
-        productId: product ? String(product.id) : row.product_id ? String(row.product_id) : null,
+
+        // IDs we need for PUT
+        productId: product
+          ? String(product.id)
+          : row.product_id
+          ? String(row.product_id)
+          : null,
         variantId: row.variant_id ? String(row.variant_id) : null,
 
         name: baseName + suffix,
         sku: variant?.sku ?? product?.base_sku ?? "",
-        priceCents: row.item_price_cents ?? variant?.price_cents ?? 0,
-        stock: variant?.inventory_qty ?? 0,
+        priceCents,
+        stock,
         imageUrl: variant?.image_url ?? product?.image_url ?? null,
         quantity: row.quantity ?? 1,
+
+        // variant/single behaviour fields (round-trip)
+        kind,
+        variantLabel: row.variant_label ?? null,
+        choiceCount: row.choice_count ?? null,
+        isMultiple: row.is_multiple ?? null,
       };
     }) ?? [];
 
-      const cleanWellnessDimensions = Array.from(
-      new Set(
-        (wellnessIds ?? [])
-          .map((v) => Number(String(v).trim()))
-          .filter((n) => Number.isFinite(n))
-      )
-    );
-
-    console.log("cleanWellnessDimensions", wellnessIds);
-    console.log("categoryIds", categoryIds);
+  const cleanWellnessDimensions = Array.from(
+    new Set(
+      (wellnessIds ?? [])
+        .map((v) => Number(String(v).trim()))
+        .filter((n) => Number.isFinite(n))
+    )
+  );
 
   return NextResponse.json({
     id: bundle.id as string,
@@ -237,7 +274,6 @@ export async function PUT(
     ...bundle
   } = body;
 
-
   const wellnessArray = Array.isArray(wellnessDimensions)
     ? wellnessDimensions
     : [];
@@ -256,7 +292,7 @@ export async function PUT(
     .map((idStr) => Number(idStr))
     .filter((n) => Number.isFinite(n));
 
-  // dedupe categories & tags too (optional but safe)
+  // dedupe categories & tags
   const uniqueCategories = [
     ...new Set(
       (Array.isArray(categories) ? categories : []).map((c: any) =>
@@ -349,7 +385,10 @@ export async function PUT(
   if (Array.isArray(items) && items.length) {
     const rows = items.map((item: any, idx: number) => {
       const variantId = item.variantId ?? null;
-      const productId = item.productId ?? variantId; // fallback
+      const productId = item.productId ?? variantId;
+      const kind =
+        item.kind ??
+        (variantId ? "variant" : "single");
 
       return {
         bundle_id: bundleId,
@@ -359,6 +398,14 @@ export async function PUT(
         item_price_cents: item.itemPriceCents ?? 0,
         quantity: item.quantity ?? 1,
         position: idx,
+
+        // 🔹 persist variant/single behaviour fields
+        kind,
+        variant_label: item.variantLabel ?? null,
+        choice_count:
+          typeof item.choiceCount === "number" ? item.choiceCount : null,
+        is_multiple:
+          typeof item.isMultiple === "boolean" ? item.isMultiple : null,
       };
     });
 
@@ -372,6 +419,8 @@ export async function PUT(
 
   return NextResponse.json({ ok: true, bundleId });
 }
+
+// ---------------- DELETE BUNDLE ----------------
 
 export async function DELETE(
   req: Request,
@@ -401,9 +450,11 @@ export async function DELETE(
   }
 
   // HARD DELETE: remove children then bundle
-  // If you prefer SOFT DELETE, comment these out and just do an update to status='inactive'
   await client.from("bundle_items").delete().eq("bundle_id", bundleId);
-  await client.from("bundle_wellness_dimensions").delete().eq("bundle_id", bundleId);
+  await client
+    .from("bundle_wellness_dimensions")
+    .delete()
+    .eq("bundle_id", bundleId);
   await client.from("bundle_categories").delete().eq("bundle_id", bundleId);
   await client.from("bundle_tags").delete().eq("bundle_id", bundleId);
 
@@ -416,13 +467,6 @@ export async function DELETE(
     console.error("[bundle DELETE] delete error:", deleteErr);
     return NextResponse.json({ error: deleteErr.message }, { status: 400 });
   }
-
-  // SOFT DELETE alternative:
-  // const { error: softErr } = await client
-  //   .from("bundles")
-  //   .update({ status: "inactive" })
-  //   .eq("id", bundleId);
-  // if (softErr) { ... }
 
   return NextResponse.json({ ok: true });
 }
