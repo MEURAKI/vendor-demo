@@ -675,65 +675,64 @@ export default function NewBundlePage() {
                             )}
 
                             {/* SINGLE PRODUCT UI */}
-                            {item.kind === "single" && (
-                              <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
-                                {/* Number of units in bundle */}
-                                <div className="flex flex-col">
-                                  <label className="mb-1 text-[11px] text-gray-500">
-                                    No. of units in bundle
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    max={item.stock}
-                                    value={item.quantity}
-                                    onChange={(e) => {
-                                      const qty = Math.max(
-                                        1,
-                                        Math.min(
-                                          item.stock,
-                                          Number(e.target.value) || 1
-                                        )
-                                      );
-                                      setItems((prev) =>
-                                        prev.map((it) =>
-                                          it.id === item.id
-                                            ? { ...it, quantity: qty }
-                                            : it
-                                        )
-                                      );
-                                    }}
-                                    className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-                                  />
-                                </div>
+                         {item.kind === "single" && item.stock > 0 && (
+  <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+    {/* Number of units in bundle */}
+    <div className="flex flex-col">
+      <label className="mb-1 text-[11px] text-gray-500">
+        No. of units in bundle
+      </label>
+      <input
+        type="number"
+        min={1}
+        max={item.stock}
+        value={item.quantity}
+        onChange={(e) => {
+          const qty = Math.max(
+            1,
+            Math.min(item.stock, Number(e.target.value) || 1)
+          );
+          setItems((prev) =>
+            prev.map((it) =>
+              it.id === item.id ? { ...it, quantity: qty } : it
+            )
+          );
+        }}
+        className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
 
-                                {/* Stock */}
-                                <div>
-                                  <label className="mb-1 text-[11px] text-gray-500">
-                                    Current Stock Level
-                                  </label>
-                                  <input
-                                    disabled
-                                    value={item.stock}
-                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
-                                  />
-                                </div>
+    {/* Stock */}
+    <div>
+      <label className="mb-1 text-[11px] text-gray-500">
+        Current Stock Level
+      </label>
+      <input
+        disabled
+        value={item.stock}
+        className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+      />
+    </div>
 
-                                {/* Price */}
-                                <div>
-                                  <label className="mb-1 text-[11px] text-gray-500">
-                                    Item Price
-                                  </label>
-                                  <input
-                                    disabled
-                                    value={`$ ${(item.priceCents / 100).toFixed(
-                                      2
-                                    )}`}
-                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
-                                  />
-                                </div>
-                              </div>
-                            )}
+    {/* Price */}
+    <div>
+      <label className="mb-1 text-[11px] text-gray-500">
+        Item Price
+      </label>
+      <input
+        disabled
+        value={`$ ${(item.priceCents / 100).toFixed(2)}`}
+        className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+      />
+    </div>
+  </div>
+)}
+
+{item.kind === "single" && (!item.stock || item.stock <= 0) && (
+  <p className="mt-2 text-[11px] text-red-500">
+    This product currently has no stock. Please remove it from the bundle.
+  </p>
+)}
                           </div>
                         ))}
                       </div>
@@ -805,27 +804,37 @@ export default function NewBundlePage() {
       </div>
 
       {/* Product picker modal (overlay) */}
-      <BundleProductPickerModal
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        initialSelected={items}
-        onContinue={(picked) => {
-          // merge with existing quantities / variant settings or default them
-          setItems(
-            picked.map((p) => {
-              const existing = items.find((it) => it.id === p.id);
-              return {
-                ...p,
-                quantity: existing?.quantity ?? 1,
-                variantLabel: existing?.variantLabel ?? "",
-                choiceCount: existing?.choiceCount ?? 1,
-                isMultiple: existing?.isMultiple ?? false,
-              };
-            })
-          );
-          setPickerOpen(false);
-        }}
-      />
+    <BundleProductPickerModal
+  open={pickerOpen}
+  onClose={() => setPickerOpen(false)}
+  initialSelected={items}
+  onContinue={(picked) => {
+    const byProductId = new Map<string | null, BundleCandidateItem>();
+
+    picked.forEach((p) => {
+      const key = (p as any).productId ?? p.id;
+      if (!byProductId.has(key)) {
+        byProductId.set(key, p);
+      }
+    });
+
+    const deduped = Array.from(byProductId.values());
+
+    setItems(
+      deduped.map((p) => {
+        const existing = items.find((it) => it.id === p.id);
+        return {
+          ...p,
+          quantity: existing?.quantity ?? 1,
+          variantLabel: existing?.variantLabel ?? "",
+          choiceCount: existing?.choiceCount ?? 1,
+          isMultiple: existing?.isMultiple ?? false,
+        };
+      })
+    );
+    setPickerOpen(false);
+  }}
+/>
     </div>
   );
 }

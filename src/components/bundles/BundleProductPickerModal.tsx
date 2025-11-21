@@ -106,24 +106,7 @@ export function BundleProductPickerModal({
 
   if (!open) return null;
 
-  function toggleItem(item: BundleCandidateItem) {
-    // safety: do not allow zero stock (should already be filtered)
-    if (!item.stock || item.stock <= 0) return;
 
-    setSelected((prev) => {
-      const next = { ...prev };
-      if (next[item.id]) {
-        delete next[item.id];
-      } else {
-        if (Object.keys(next).length >= MAX_BUNDLE_ITEMS) {
-          alert(`You can only add up to ${MAX_BUNDLE_ITEMS} products.`);
-          return prev;
-        }
-        next[item.id] = item;
-      }
-      return next;
-    });
-  }
 
   function removeChip(id: string) {
     setSelected((prev) => {
@@ -137,6 +120,25 @@ export function BundleProductPickerModal({
     if (!selectedCount) return;
     onContinue(selectedList);
   }
+
+  function toggleItem(item: BundleCandidateItem) {
+  // safety: do not allow zero stock (should already be filtered)
+  if (!item.stock || item.stock <= 0) return;
+
+  setSelected((prev) => {
+    const next = { ...prev };
+    if (next[item.id]) {
+      delete next[item.id];
+    } else {
+      if (Object.keys(next).length >= MAX_BUNDLE_ITEMS) {
+        alert(`You can only add up to ${MAX_BUNDLE_ITEMS} products.`);
+        return prev;
+      }
+      next[item.id] = item; // 👈 cannot duplicate same id
+    }
+    return next;
+  });
+}
 
   const showEmptyState = !query && !results.length && !loading;
 

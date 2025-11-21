@@ -157,6 +157,50 @@ export async function GET(
     return NextResponse.json({ error: itemsErr.message }, { status: 400 });
   }
 
+  // 5b) Collect all product IDs used by bundle items
+  const productIdSet = new Set<string>();
+
+  (itemRows ?? []).forEach((row: any) => {
+    const directProductId = row.product_id;
+    const variantProductId = row.product_variants?.products?.id;
+
+    if (directProductId) {
+      productIdSet.add(String(directProductId));
+    }
+    if (variantProductId) {
+      productIdSet.add(String(variantProductId));
+    }
+  });
+
+  const productIds = Array.from(productIdSet);
+
+  // 5c) For those products, count how many variants they have
+  //     AND sum total inventory across all variants
+  const variantCountByProductId: Record<string, number> = {};
+  const totalVariantStockByProductId: Record<string, number> = {};
+
+  if (productIds.length > 0) {
+    const { data: variantRows, error: vErr } = await client
+      .from("product_variants")
+      .select("product_id, inventory_qty")
+      .in("product_id", productIds);
+
+    if (vErr) {
+      console.error("[bundle GET] variant count error:", vErr);
+      // not fatal – just skip counts / totals
+    } else if (variantRows) {
+      (variantRows as any[]).forEach((vr) => {
+        const pid = String(vr.product_id);
+        const qty = vr.inventory_qty ?? 0;
+
+        variantCountByProductId[pid] = (variantCountByProductId[pid] ?? 0) + 1;
+        totalVariantStockByProductId[pid] =
+          (totalVariantStockByProductId[pid] ?? 0) + qty;
+      });
+    }
+  }
+
+  // 5d) Map items including variantCount + totalVariantStock
   const items =
     itemRows?.map((row: any) => {
       const variant = row.product_variants;
@@ -164,8 +208,7 @@ export async function GET(
       const productDirect = row.products;
       const product = productDirect ?? productFromVariant ?? null;
 
-      const baseName =
-        row.item_name ?? product?.name ?? "Unnamed product";
+      const baseName = row.item_name ?? product?.name ?? "Unnamed product";
 
       let suffix = "";
       if (variant?.options_json && typeof variant.options_json === "object") {
@@ -178,15 +221,31 @@ export async function GET(
       }
 
       const kind: "variant" | "single" =
-        row.kind ??
-        (row.variant_id ? "variant" : "single");
+        row.kind ?? (row.variant_id ? "variant" : "single");
+
+      // which product_id to use for counts/totals
+      const productIdForCount = product
+        ? String(product.id)
+        : row.product_id
+        ? String(row.product_id)
+        : null;
+
+      const variantCount =
+        productIdForCount != null
+          ? variantCountByProductId[productIdForCount] ?? 0
+          : 0;
+
+      const totalVariantStock =
+        productIdForCount != null
+          ? totalVariantStockByProductId[productIdForCount] ?? 0
+          : 0;
 
       // 🔹 CURRENT STOCK: prefer variant stock, fallback to product stock
       let stock = 0;
       if (row.variant_id && variant) {
-        stock = variant.inventory_qty ?? 0;
+        stock = variant.inventory_qty ?? 0; // current variant's stock
       } else if (product) {
-        stock = product.inventory_qty ?? 0;
+        stock = product.inventory_qty ?? 0; // single-product stock
       }
 
       // 🔹 CURRENT PRICE: item override → variant price → product price
@@ -211,7 +270,7 @@ export async function GET(
         name: baseName + suffix,
         sku: variant?.sku ?? product?.base_sku ?? "",
         priceCents,
-        stock,
+        stock: stock === 0 ? totalVariantStock : stock, // current variant/ product stock (what you already use)
         imageUrl: variant?.image_url ?? product?.image_url ?? null,
         quantity: row.quantity ?? 1,
 
@@ -220,6 +279,11 @@ export async function GET(
         variantLabel: row.variant_label ?? null,
         choiceCount: row.choice_count ?? null,
         isMultiple: row.is_multiple ?? null,
+
+        // 👇 NEW fields for variant products
+        variantCount,        // how many variants the product has
+        totalVariantStock,
+        totalSingleStock: stock   // total stock across all variants of this product
       };
     }) ?? [];
 

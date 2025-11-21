@@ -76,6 +76,10 @@ export default function EditBundlePage() {
   const router = useRouter();
   const bundleId = params.bundleId;
 
+  const handleRemoveItem = (id: string) => {
+  setItems((prev) => prev.filter((it) => it.id !== id));
+};
+
   const [loading, setLoading] = useState(true);
 
   // bundle basics
@@ -614,20 +618,38 @@ export default function EditBundlePage() {
                             className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4"
                           >
                             {/* Common heading */}
-                            <div className="flex items-center gap-3">
-                              <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-[#E5DEFF] text-[11px] font-semibold text-[#4C1D95]">
-                                Product {idx + 1}
-                              </span>
-                              <div>
-                                <p className="font-semibold text-gray-900">
-                                  {item.name}
-                                </p>
-                                <p className="text-[11px] text-gray-500">
-                                  Current Stock Level: {item.stock} · Item Price: $
-                                  {(item.priceCents / 100).toFixed(2)}
-                                </p>
-                              </div>
-                            </div>
+                            <div className="flex items-start justify-between gap-3">
+  <div className="flex items-center gap-3">
+    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-[#E5DEFF] text-[11px] font-semibold text-[#4C1D95]">
+      Product {idx + 1}
+    </span>
+    <div>
+      <p className="font-semibold text-gray-900">
+        {item.name}
+      </p>
+
+      {item.stock && item.stock > 0 ? (
+        <p className="text-[11px] text-gray-500">
+          Current Stock Level: {item.stock} · Item Price: $
+          {(item.priceCents / 100).toFixed(2)}
+        </p>
+      ) : (
+        <p className="text-[11px] font-medium text-red-600">
+          Out of stock — remove this item to keep the bundle sellable.
+        </p>
+      )}
+    </div>
+  </div>
+
+  {/* ❌ remove this bundle item */}
+  <button
+    type="button"
+    onClick={() => handleRemoveItem(item.id)}
+    className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-500 hover:bg-gray-200 hover:text-black"
+  >
+    ×
+  </button>
+</div>
 
                             {/* VARIANT PRODUCT UI */}
                             {item.kind === "variant" && (
@@ -716,65 +738,64 @@ export default function EditBundlePage() {
                             )}
 
                             {/* SINGLE PRODUCT UI */}
-                            {item.kind === "single" && (
-                              <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
-                                {/* Number of units in bundle */}
-                                <div className="flex flex-col">
-                                  <label className="mb-1 text-[11px] text-gray-500">
-                                    No. of units in bundle
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    max={item.stock}
-                                    value={item.quantity}
-                                    onChange={(e) => {
-                                      const qty = Math.max(
-                                        1,
-                                        Math.min(
-                                          item.stock,
-                                          Number(e.target.value) || 1
-                                        )
-                                      );
-                                      setItems((prev) =>
-                                        prev.map((it) =>
-                                          it.id === item.id
-                                            ? { ...it, quantity: qty }
-                                            : it
-                                        )
-                                      );
-                                    }}
-                                    className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-                                  />
-                                </div>
+                       {item.kind === "single" && item.stock > 0 && (
+  <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+    {/* Number of units in bundle */}
+    <div className="flex flex-col">
+      <label className="mb-1 text-[11px] text-gray-500">
+        No. of units in bundle
+      </label>
+      <input
+        type="number"
+        min={1}
+        max={item.stock}
+        value={item.quantity}
+        onChange={(e) => {
+          const qty = Math.max(
+            1,
+            Math.min(item.stock, Number(e.target.value) || 1)
+          );
+          setItems((prev) =>
+            prev.map((it) =>
+              it.id === item.id ? { ...it, quantity: qty } : it
+            )
+          );
+        }}
+        className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
 
-                                {/* Stock */}
-                                <div>
-                                  <label className="mb-1 text-[11px] text-gray-500">
-                                    Current Stock Level
-                                  </label>
-                                  <input
-                                    disabled
-                                    value={item.stock}
-                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
-                                  />
-                                </div>
+    {/* Stock */}
+    <div>
+      <label className="mb-1 text-[11px] text-gray-500">
+        Current Stock Level
+      </label>
+      <input
+        disabled
+        value={item.stock}
+        className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+      />
+    </div>
 
-                                {/* Price */}
-                                <div>
-                                  <label className="mb-1 text-[11px] text-gray-500">
-                                    Item Price
-                                  </label>
-                                  <input
-                                    disabled
-                                    value={`$ ${(item.priceCents / 100).toFixed(
-                                      2
-                                    )}`}
-                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
-                                  />
-                                </div>
-                              </div>
-                            )}
+    {/* Price */}
+    <div>
+      <label className="mb-1 text-[11px] text-gray-500">
+        Item Price
+      </label>
+      <input
+        disabled
+        value={`$ ${(item.priceCents / 100).toFixed(2)}`}
+        className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+      />
+    </div>
+  </div>
+)}
+
+{item.kind === "single" && (!item.stock || item.stock <= 0) && (
+  <p className="mt-2 text-[11px] text-red-500">
+    This product currently has no stock. Please remove it from the bundle.
+  </p>
+)}
                           </div>
                         ))}
                       </div>
@@ -846,25 +867,36 @@ export default function EditBundlePage() {
 
       {/* Product picker modal */}
       <BundleProductPickerModal
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        initialSelected={items}
-        onContinue={(picked) => {
-          setItems(
-            picked.map((p) => {
-              const existing = items.find((it) => it.id === p.id);
-              return {
-                ...p,
-                quantity: existing?.quantity ?? 1,
-                variantLabel: existing?.variantLabel ?? "",
-                choiceCount: existing?.choiceCount ?? 1,
-                isMultiple: existing?.isMultiple ?? false,
-              };
-            })
-          );
-          setPickerOpen(false);
-        }}
-      />
+  open={pickerOpen}
+  onClose={() => setPickerOpen(false)}
+  initialSelected={items}
+  onContinue={(picked) => {
+    const byProductId = new Map<string | null, BundleCandidateItem>();
+
+    picked.forEach((p) => {
+      const key = (p as any).productId ?? p.id;
+      if (!byProductId.has(key)) {
+        byProductId.set(key, p);
+      }
+    });
+
+    const deduped = Array.from(byProductId.values());
+
+    setItems(
+      deduped.map((p) => {
+        const existing = items.find((it) => it.id === p.id);
+        return {
+          ...p,
+          quantity: existing?.quantity ?? 1,
+          variantLabel: existing?.variantLabel ?? "",
+          choiceCount: existing?.choiceCount ?? 1,
+          isMultiple: existing?.isMultiple ?? false,
+        };
+      })
+    );
+    setPickerOpen(false);
+  }}
+/>
     </div>
   );
 }
