@@ -56,7 +56,7 @@ export async function GET(req: Request) {
 
     const vendorId = user.id;
 
-    // ---------- 1) VARIANTS ----------
+    // ---------- 1) VARIANTS (GROUPED BY PRODUCT) ----------
     const {
       data: variantData,
       error: variantError,
@@ -94,47 +94,73 @@ export async function GET(req: Request) {
       );
     }
 
-    const variantItems: BundleSearchItem[] =
-      (variantData ?? [])
-        .map((row: any): BundleSearchItem | null => {
-          const product = row.products;
+    type VariantGroup = {
+      productId: string;
+      name: string;
+      imageUrl: string | null;
+      totalStock: number;
+      minPriceCents: number | null;
+      sku: string; // representative SKU (e.g. first variant's SKU)
+    };
 
-          // If somehow we got a variant without a product, skip it gracefully
-          if (!product) {
-            console.warn(
-              "[bundles/search-products] variant without product",
-              row.id
-            );
-            return null;
-          }
+    const variantGroups: Record<string, VariantGroup> = {};
 
-          const productName = product.name ?? "Untitled product";
-          const options = row.options_json ?? {};
+    for (const row of variantData ?? []) {
+      const product = (row as any).products;
 
-          const optionSuffix =
-            options && Object.keys(options).length
-              ? " – " +
-                Object.values(options)
-                  .map((v: any) => String(v))
-                  .join(" / ")
-              : "";
+      // If somehow we got a variant without a product, skip it gracefully
+      if (!product) {
+        console.warn(
+          "[bundles/search-products] variant without product",
+          (row as any).id
+        );
+        continue;
+      }
 
-          const variantImage = row.image_url ?? product.image_url ?? null;
+      const productId = String(product.id);
 
-          return {
-            id: String(row.id),
-            kind: "variant",
-            productId: String(product.id),
-            variantId: String(row.id),
-            name: productName + optionSuffix,
-            sku: row.sku as string,
-            priceCents: row.price_cents ?? 0,
-            stock: row.inventory_qty ?? 0,
-            imageUrl: variantImage,
-          };
+      if (!variantGroups[productId]) {
+        variantGroups[productId] = {
+          productId,
+          name: product.name ?? "Untitled product",
+          imageUrl: (row as any).image_url ?? product.image_url ?? null,
+          totalStock: 0,
+          minPriceCents: null,
+          sku: (row as any).sku ?? "",
+        };
+      }
+
+      const group = variantGroups[productId];
+
+      // Accumulate stock
+      const stock = (row as any).inventory_qty ?? 0;
+      group.totalStock += stock;
+
+      // Track minimum price (or change this to max/avg if you prefer)
+      const price = (row as any).price_cents;
+      if (typeof price === "number") {
+        if (group.minPriceCents === null || price < group.minPriceCents) {
+          group.minPriceCents = price;
+        }
+      }
+    }
+
+    const variantItems: BundleSearchItem[] = Object.values(variantGroups)
+      // Only keep products that still have stock
+      .filter((group) => group.totalStock > 0)
+      .map(
+        (group): BundleSearchItem => ({
+          id: group.productId,
+          kind: "variant", // marks this as a "variant product"
+          productId: group.productId,
+          variantId: null, // aggregated, not a single variant
+          name: group.name,
+          sku: group.sku,
+          priceCents: group.minPriceCents ?? 0, // "from" price
+          stock: group.totalStock, // total across all variants
+          imageUrl: group.imageUrl,
         })
-        // typed guard: now TS knows everything here is BundleSearchItem
-        .filter((item): item is BundleSearchItem => item !== null);
+      );
 
     // ---------- 2) SINGLE PRODUCTS ----------
     const {
