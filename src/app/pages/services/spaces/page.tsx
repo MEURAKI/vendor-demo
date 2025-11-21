@@ -10,6 +10,7 @@ import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.confi
 import { supabase } from "../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useAuthGuard } from "../../../../hooks/useAuthGuard";
+import AppModal from "../../../../components/common/AppModal";
 
 type SpaceRow = {
   id: string;
@@ -40,6 +41,61 @@ export default function SpacesPage() {
   const [rows, setRows] = useState<SpaceRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+
+  const [trashModalOpen, setTrashModalOpen] = useState(false);
+  const [spaceIdToTrash, setSpaceIdToTrash] = useState<string | null>(null);
+  const [trashError, setTrashError] = useState<string | null>(null);
+  const [trashLoading, setTrashLoading] = useState(false);
+
+  function openTrashModal(spaceId: string) {
+    setSpaceIdToTrash(spaceId);
+    setTrashError(null);
+    setTrashModalOpen(true);
+  }
+
+  function closeTrashModal() {
+    setTrashModalOpen(false);
+    setSpaceIdToTrash(null);
+    setTrashError(null);
+  }
+
+  async function handleConfirmTrash() {
+    if (!spaceIdToTrash) return;
+
+    setTrashLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setTrashError("You are not logged in.");
+        return;
+      }
+
+      const res = await fetch(`/api/spaces/${spaceIdToTrash}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("[Trash Space Error]", data);
+        setTrashError(data.error || "Failed to delete space.");
+        return;
+      }
+
+      // success – close modal and reload list
+      closeTrashModal();
+      // simple reload; you could also call a refetch helper
+      window.location.reload();
+    } finally {
+      setTrashLoading(false);
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -286,14 +342,23 @@ export default function SpacesPage() {
                           </span>
                         </td>
                         <td className="px-3 py-3 text-center">
-                          <button
-                            className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
-                            onClick={() =>
-                              router.push(`/pages/services/spaces/${r.id}/edit`)
-                            }
-                          >
-                            Edit
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
+                              onClick={() =>
+                                router.push(`/pages/services/spaces/${r.id}/edit`)
+                              }
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openTrashModal(r.id)}
+                              className="rounded-full border border-gray-300 bg-white px-4 py-1.5 text-[11px] text-gray-700 hover:bg-red-50 hover:text-red-700 transition"
+                            >
+                              Trash
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -302,6 +367,28 @@ export default function SpacesPage() {
               </table>
             </div>
 
+            <AppModal
+              open={trashModalOpen}
+              title="Move space to trash?"
+              message={
+                <div className="space-y-2 text-xs">
+                  <p>
+                    This will remove the space from your storefront. Any services using this space may no longer be bookable.
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    You can always create a new space later.
+                  </p>
+                  {trashError && (
+                    <p className="mt-2 text-[11px] text-red-600">
+                      {trashError}
+                    </p>
+                  )}
+                </div>
+              }
+              primaryLabel={trashLoading ? "Deleting..." : "Yes, move to trash"}
+              onPrimaryClick={trashLoading ? undefined : handleConfirmTrash}
+              onClose={trashLoading ? undefined : closeTrashModal}
+            />
             <div className="mt-4 text-[11px] text-gray-500">
               Showing {filtered.length} spaces
             </div>

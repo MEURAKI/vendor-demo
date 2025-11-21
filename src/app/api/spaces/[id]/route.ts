@@ -214,3 +214,30 @@ export async function PUT(
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(  req: Request,
+{ params }: { params: { id: string } }) {
+  const supabase = createRouteHandlerClient({ cookies });
+
+  try {
+    // If you want to also scope by vendor_id, add `.eq("vendor_id", someVendorId)`
+    const { error } = await supabase
+      .from("spaces")
+      .delete()
+      .eq("id", params.id)
+      .single();
+
+    if (error) {
+      console.error("[spaces DELETE] error:", error);
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[spaces DELETE] unexpected error:", err);
+    return NextResponse.json(
+      { error: "Unexpected error while deleting space" },
+      { status: 500 }
+    );
+  }
+}
