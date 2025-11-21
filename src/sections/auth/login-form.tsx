@@ -112,7 +112,9 @@ export default function LoginForm() {
 
       if (signErr || !session) {
         const msg =
-          signErr?.message?.toLowerCase().includes("invalid login credentials") ||
+          signErr?.message
+            ?.toLowerCase()
+            .includes("invalid login credentials") ||
           signErr?.message?.toLowerCase().includes("invalid credentials")
             ? "Invalid email or password."
             : signErr?.message || "Unable to sign in.";
@@ -159,18 +161,17 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col lg:flex-row">
-      {/* LEFT – FORM; scrolls on smaller/short screens */}
-        <div className="flex-1 flex justify-center lg:items-center overflow-y-auto">
+    <div className="h-screen bg-white flex flex-col lg:flex-row">
+      {/* LEFT – FORM; full height, 20px padding top/bottom, scrollable */}
+      <div className="flex-1 flex justify-center lg:items-center overflow-y-auto py-5">
         <div
-        className="
-          w-full max-w-sm
-          sm:max-w-md
-          xl:max-w-lg
-          px-4 sm:px-6 md:px-10 xl:px-16
-          py-5 sm:py-8 md:py-10 xl:py-12
-        "
-      >
+          className="
+            w-full max-w-sm
+            sm:max-w-md
+            xl:max-w-lg
+            px-4 sm:px-6 md:px-10 xl:px-16
+          "
+        >
           {/* Heading */}
           <div className="mb-5 sm:mb-7 md:mb-8">
             <h1
@@ -204,7 +205,8 @@ export default function LoginForm() {
                 value={formData.email}
                 onChange={(e) => {
                   setFormData({ ...formData, email: e.target.value });
-                  if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+                  if (errors.email)
+                    setErrors((p) => ({ ...p, email: undefined }));
                 }}
                 className={[
                   "mt-2 w-full rounded-2xl px-4",
@@ -218,7 +220,10 @@ export default function LoginForm() {
                 aria-describedby={errors.email ? "email-error" : undefined}
               />
               {errors.email && (
-                <p id="email-error" className="mt-1 text-[11px] sm:text-xs text-rose-600">
+                <p
+                  id="email-error"
+                  className="mt-1 text-[11px] sm:text-xs text-rose-600"
+                >
                   {errors.email}
                 </p>
               )}
@@ -250,7 +255,10 @@ export default function LoginForm() {
                 aria-describedby={errors.password ? "password-error" : undefined}
               />
               {errors.password && (
-                <p id="password-error" className="mt-1 text-[11px] sm:text-xs text-rose-600">
+                <p
+                  id="password-error"
+                  className="mt-1 text-[11px] sm:text-xs text-rose-600"
+                >
                   {errors.password}
                 </p>
               )}
@@ -325,7 +333,7 @@ export default function LoginForm() {
               "
             >
               <svg
-                className="h-4 w-4 sm:h-5 sm:w-5"
+                className="h-4 w-4.sm:h-5 sm:w-5"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
               >
@@ -372,7 +380,7 @@ export default function LoginForm() {
           </form>
 
           {/* Footer Logo */}
-          <div className="mt-1 sm:mt-3 mb-2 flex justify-center overflow-y-auto">
+          <div className="mt-4 mb-4 flex justify-center">
             <Image
               src="/images/logo-meuraki.svg"
               alt="Meuraki"
@@ -385,28 +393,28 @@ export default function LoginForm() {
       </div>
 
       {/* RIGHT – HERO (desktop only) */}
-      <div className="hidden lg:flex lg:flex-1 relative min-h-screen">
-      <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
-        <Image
-          src="/images/hero-bg.gif"
-          alt="Animated background"
-          fill
-          priority
-          unoptimized
-          className="object-cover"
-        />
-        <div className="absolute inset-0 flex items-center justify-center">
+      <div className="hidden lg:flex lg:flex-1 relative">
+        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
           <Image
-            src="/images/hero-overlay.png"
-            alt="Meuraki overlay"
-            width={320}
-            height={640}
-            className="rounded-[28px] pointer-events-none"
+            src="/images/hero-bg.gif"
+            alt="Animated background"
+            fill
+            priority
+            unoptimized
+            className="object-cover"
           />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Image
+              src="/images/hero-overlay.png"
+              alt="Meuraki overlay"
+              width={320}
+              height={640}
+              className="rounded-[28px] pointer-events-none"
+            />
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
       </div>
-    </div>
     </div>
   );
 }
