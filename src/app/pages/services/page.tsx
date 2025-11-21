@@ -65,6 +65,18 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
   const [providersFile, setProvidersFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  const handleCancel = () => {
+  if (uploading) return;
+
+  // Clear selected files
+  setSpacesFile(null);
+  setProvidersFile(null);
+  setServicesFile(null);
+
+  // Close modal / drawer
+  onClose();
+};
+
   if (!open) return null;
 
   async function uploadOne(
@@ -157,12 +169,12 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
 
   {/* Spaces (Step 1) */}
   <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
-    <div className="text-[10px] font-semibold text-sky-600 mb-1">
+    <div className="text-[10px] font-semibold text-pink-600 mb-1">
       Step 1 — Upload Spaces
     </div>
 
     <div className="flex items-center justify-between">
-      <div className="font-semibold text-slate-900">Spaces CSV</div>
+      <div className="font-semibold text-maroon-900">Spaces CSV</div>
       <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-[13px]">
         🏢
       </span>
@@ -189,7 +201,7 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
 
   {/* Providers (Step 2) */}
   <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
-    <div className="text-[10px] font-semibold text-emerald-600 mb-1">
+    <div className="text-[10px] font-semibold text-red-600 mb-1">
       Step 2 — Upload Providers
     </div>
 
@@ -262,7 +274,7 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCancel}
               className="inline-flex items-center rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-[11px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
               disabled={uploading}
             >

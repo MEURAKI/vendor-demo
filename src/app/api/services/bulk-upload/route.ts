@@ -1,4 +1,3 @@
-// app/api/services/bulk-upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { parse } from "csv-parse/sync";
@@ -125,6 +124,42 @@ function parseExpiryType(raw: string | undefined | null): "anytime" | "duration"
   return "duration";
 }
 
+/**
+ * Build description tabs from CSV columns:
+ *  - Accordion_Title_1..5
+ *  - Accordion_Description_1..5 OR Accordion_Desc_1..5
+ *
+ * If title is missing but body exists, fallback to "Section N".
+ * position = index - 1 (0-based).
+ */
+function buildDescriptionTabs(
+  row: Record<string, string>
+): { title: string; body: string; position: number }[] {
+  const tabs: { title: string; body: string; position: number }[] = [];
+
+  for (let i = 1; i <= 5; i++) {
+    const titleKey = `Accordion_Title_${i}`;
+    const descKey1 = `Accordion_Description_${i}`;
+    const descKey2 = `Accordion_Desc_${i}`;
+
+    const titleRaw = (row[titleKey] || "").trim();
+    const bodyRaw = (
+      (row[descKey1] || row[descKey2]) ||
+      ""
+    ).trim();
+
+    if (titleRaw || bodyRaw) {
+      tabs.push({
+        title: titleRaw || `Section ${i}`,
+        body: bodyRaw,
+        position: i - 1,
+      });
+    }
+  }
+
+  return tabs;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 0) Auth via Bearer token
@@ -208,7 +243,9 @@ export async function POST(req: NextRequest) {
 
       const locationTypes = normalizeLocationTypes(row["Location_Type"]);
       const finalLocationTypes =
-        locationTypes.length > 0 ? locationTypes : (["in_person"] as LocationType[]);
+        locationTypes.length > 0
+          ? locationTypes
+          : (["in_person"] as LocationType[]);
 
       // Build some tags from a few useful fields
       const groupName = (row["Service_ID_Group_Name"] || "").trim();
@@ -225,27 +262,8 @@ export async function POST(req: NextRequest) {
       const imageUrls = parseImageUrls(mainImage, subImages);
       const cover = imageUrls[0] ?? null;
 
-      // Description tabs
-      const tabs: { title: string; body: string; position: number }[] = [];
-      const t1 = (row["Accordion_Title_1"] || "").trim();
-      const d1 = (row["Accordion_Description_1"] || "").trim();
-      const t2 = (row["Accordion_Title_2"] || "").trim();
-      const d2 = (row["Accordion_Desc_2"] || "").trim();
-
-      if (t1 || d1) {
-        tabs.push({
-          title: t1 || "Section 1",
-          body: d1 || "",
-          position: 0,
-        });
-      }
-      if (t2 || d2) {
-        tabs.push({
-          title: t2 || "Section 2",
-          body: d2 || "",
-          position: 1,
-        });
-      }
+      // 🔥 NEW: dynamic description tabs 1–5
+      const tabs = buildDescriptionTabs(row);
 
       // Basic pricing / availability to feed into service_location_settings
       const price = parsePrice(row["Price_Per_Person"]);
@@ -388,8 +406,7 @@ export async function POST(req: NextRequest) {
             location_type: locType,
             sku: serviceInsert.sku,
             max_participants: maxParticipants,
-            price_cents:
-              price != null ? Math.round(price * 100) : null,
+            price_cents: price != null ? Math.round(price * 100) : null,
             discount_type: discountType,
             discount_value: discountValue,
             discount_cap: null,
