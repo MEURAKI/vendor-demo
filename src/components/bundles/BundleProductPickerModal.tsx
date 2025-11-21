@@ -141,8 +141,8 @@ export function BundleProductPickerModal({
   const showEmptyState = !query && !results.length && !loading;
 
   return (
-    <div className="fixed inset-0 z-50 flex.items-center justify-center bg-black/40">
-      <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+       <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-8 py-6">
           <div>
