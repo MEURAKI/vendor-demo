@@ -5,7 +5,7 @@ const { format } = require("@fast-csv/format");
 
 require("dotenv").config();
 
-const INPUT_FILE = "emails.csv";
+const INPUT_FILE = "abc.csv";
 const OUTPUT_FILE = "created_users.csv";
 
 // ---- CONFIG ----
