@@ -1093,7 +1093,7 @@ export default function EditProductPage({
       {/* Variant modal */}
       {showVariantModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-3xl bg.white shadow-xl">
+          <div className="max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-4 py-3 sm:px-6 sm:py-4">
               <div>
                 <h2 className="text-sm font-semibold sm:text-lg">
