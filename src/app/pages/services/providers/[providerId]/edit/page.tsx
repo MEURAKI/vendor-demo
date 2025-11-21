@@ -40,6 +40,9 @@ type LoadedProvider = {
   name: string;
   specialisation_areas: string | null;
   description: string | null;
+  designation: string | null;
+  years_experience: number | null;
+  clients_served: number | null;
   whatsapp_country_code: string | null;
   whatsapp_number: string | null;
   wellness_dimensions: string[] | null;
@@ -147,6 +150,9 @@ const [clientsServed, setClientsServed] = useState<number | null>(null);
         setWhatsNumber(p.whatsapp_number ?? "");
         setWellness(p.wellness_dimensions ?? []);
         setCategories(p.categories ?? []);
+        setDesignation(p.designation ?? "");
+        setYearsExperience(p.years_experience ?? null);
+        setClientsServed(p.clients_served ?? null);
         setTags((p.tags ?? []));
         setStatus(p.status ?? "draft");
 
@@ -286,6 +292,9 @@ const [clientsServed, setClientsServed] = useState<number | null>(null);
         name,
         specialisationAreas,
         description,
+        designation,
+        yearsExperience,
+        clientsServed,
         status: nextStatus,
         whatsappCountryCode: whatsCountry,
         whatsappNumber: whatsNumber,
