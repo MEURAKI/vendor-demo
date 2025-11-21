@@ -47,6 +47,15 @@ export default function WellnessCategoryTagsSection({
   categoryPlaceholder = "e.g. Apparel, Classes",
   tagPlaceholder = "e.g. Limited Edition, Bestseller",
 }: Props) {
+console.log("WellnessCategoryTagsSection rendered", categories, selectedWellnessIds);
+
+      const cleanWellnessDimensions = Array.from(
+      new Set(
+        (selectedWellnessIds ?? [])
+          .map((v) => Number(String(v).trim()))
+          .filter((n) => Number.isFinite(n))
+      )
+    );
 
   return (
     <section className="rounded-2xl border border-[#ECECFB] bg-[#FBFBFE] p-4 sm:p-6">
@@ -70,7 +79,7 @@ export default function WellnessCategoryTagsSection({
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {wellnessOptions.map((w) => {
-              const active = selectedWellnessIds.includes(w.id);
+              const active = cleanWellnessDimensions.includes(Number(w.id));
               const iconSrc = `/images/wellness/${w.slug}`;
 
               return (

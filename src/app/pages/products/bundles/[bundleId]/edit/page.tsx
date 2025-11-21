@@ -39,8 +39,8 @@ type LoadedBundle = {
   startAt?: string | null;
   endAt?: string | null;
   imageUrl: string | null;
-  wellnessIds: (string | number)[];
-  categoryIds: (string | number)[];
+  wellnessDimensions: (string | number)[];
+  categories: (string | number)[];
   tags: string[];
   items: (BundleCandidateItem & { quantity?: number })[];
 };
@@ -218,8 +218,8 @@ export default function EditBundlePage() {
         setBundleImageUrl(data.imageUrl ?? null);
 
         // wellness / categories / tags (keep ALL selected IDs)
-        setSelectedWellnessIds((data.wellnessIds ?? []).map(String));
-        setCategories((data.categoryIds ?? []).map(String));
+        setSelectedWellnessIds((data.wellnessDimensions ?? []).map(String));
+        setCategories((data.categories ?? []).map(String));
         setTags(data.tags ?? []);
 
         // items

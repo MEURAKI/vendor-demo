@@ -185,11 +185,14 @@ export async function GET(
 
       const cleanWellnessDimensions = Array.from(
       new Set(
-        (categoryIds ?? [])
+        (wellnessIds ?? [])
           .map((v) => Number(String(v).trim()))
           .filter((n) => Number.isFinite(n))
       )
     );
+
+    console.log("cleanWellnessDimensions", wellnessIds);
+    console.log("categoryIds", categoryIds);
 
   return NextResponse.json({
     id: bundle.id as string,
@@ -209,8 +212,8 @@ export async function GET(
         }
       : null,
     imageUrl: (bundle.image_url as string) ?? null,
-    wellnessIds: wellnessIds,
-    categoryIds: cleanWellnessDimensions,
+    wellnessDimensions: cleanWellnessDimensions,
+    categories: categoryIds,
     tags,
     items,
   });
