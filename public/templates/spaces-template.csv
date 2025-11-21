@@ -1,0 +1,4 @@
+Space_ID,Space_Name,Space_Type,Address,City,Country,Postal_Code,Map_Link,google_places_id,Platform_Type,Host_Email,Integration_Status,Contact_Email,Contact_Number,Space_Image,Reviews_Count,Reviews_Rating,Facilities
+SPC-SG-CHTCM-INPERSON-001,Come Here TCM Clinic,In Person ,"302 Ubi Ave 1, #01-11, Singapore 400302",Singapore,Singapore,400302,https://maps.app.goo.gl/uzYP4ZPaDPXviUrd8,EiczMDIgVWJpIEF2ZSAxLCAjMDEgMTEsIFNpbmdhcG9yZSA0MDAzMDIiIRofChYKFAoSCe8XRT_3F9oxEUfqgtSoaRKmEgUwMSAxMQ,,,,comehere@tcmgowhere.sg,91829318,,,,
+SPC-SG-CHTCM-PRIV-001,Client's Home,Private,,Singapore,Singapore,,,,,,,comehere@tcmgowhere.sg,91829318,,,,
+SPC-VIR-CHTCM-01,Online,Virtual ,,,,,,,,,,comehere@tcmgowhere.sg,91829318,,,,

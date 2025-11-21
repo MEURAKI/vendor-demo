@@ -165,105 +165,135 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
         </div>
 
         {/* Body */}
-<div className="mt-6 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
+ <div className="mt-6 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
+          {/* Spaces (Step 1) */}
+          <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
+            <div className="text-[10px] font-semibold text-pink-600 mb-1">
+              Step 1 — Upload Spaces
+            </div>
 
-  {/* Spaces (Step 1) */}
-  <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
-    <div className="text-[10px] font-semibold text-pink-600 mb-1">
-      Step 1 — Upload Spaces
-    </div>
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-maroon-900">Spaces CSV</div>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-[13px]">
+                🏢
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Physical spaces / venues linked to your services.
+            </p>
 
-    <div className="flex items-center justify-between">
-      <div className="font-semibold text-maroon-900">Spaces CSV</div>
-      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-[13px]">
-        🏢
-      </span>
-    </div>
-    <p className="mt-1 text-[11px] text-slate-500">
-      Physical spaces / venues linked to your services.
-    </p>
-    <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
-      <span>{spacesFile ? "Change file" : "Choose file"}</span>
-      <span className="text-[10px] opacity-80">.csv</span>
-      <input
-        type="file"
-        accept=".csv"
-        onChange={(e) => setSpacesFile(e.target.files?.[0] ?? null)}
-        className="hidden"
-      />
-    </label>
-    {spacesFile && (
-      <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
-        Selected: <span className="font-medium">{spacesFile.name}</span>
-      </p>
-    )}
-  </div>
+            {/* NEW: template link */}
+            <a
+              href="/templates/spaces-template.csv"
+              download
+              className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-violet-700 underline-offset-2 hover:underline"
+            >
+              ⬇ Download template
+            </a>
 
-  {/* Providers (Step 2) */}
-  <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
-    <div className="text-[10px] font-semibold text-red-600 mb-1">
-      Step 2 — Upload Providers
-    </div>
+            <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
+              <span>{spacesFile ? "Change file" : "Choose file"}</span>
+              <span className="text-[10px] opacity-80">.csv</span>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setSpacesFile(e.target.files?.[0] ?? null)}
+                className="hidden"
+              />
+            </label>
+            {spacesFile && (
+              <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
+                Selected: <span className="font-medium">{spacesFile.name}</span>
+              </p>
+            )}
+          </div>
 
-    <div className="flex items-center justify-between">
-      <div className="font-semibold text-slate-900">Providers CSV</div>
-      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-[13px]">
-        👤
-      </span>
-    </div>
-    <p className="mt-1 text-[11px] text-slate-500">
-      Coaches / practitioners who deliver these services.
-    </p>
-    <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
-      <span>{providersFile ? "Change file" : "Choose file"}</span>
-      <span className="text-[10px] opacity-80">.csv</span>
-      <input
-        type="file"
-        accept=".csv"
-        onChange={(e) => setProvidersFile(e.target.files?.[0] ?? null)}
-        className="hidden"
-      />
-    </label>
-    {providersFile && (
-      <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
-        Selected: <span className="font-medium">{providersFile.name}</span>
-      </p>
-    )}
-  </div>
+          {/* Providers (Step 2) */}
+          <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
+            <div className="text-[10px] font-semibold text-red-600 mb-1">
+              Step 2 — Upload Providers
+            </div>
 
-  {/* Services (Step 3) */}
-  <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
-    <div className="text-[10px] font-semibold text-violet-600 mb-1">
-      Step 3 — Upload Services
-    </div>
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-slate-900">Providers CSV</div>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-[13px]">
+                👤
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Coaches / practitioners who deliver these services.
+            </p>
 
-    <div className="flex items-center justify-between">
-      <div className="font-semibold text-slate-900">Services CSV</div>
-      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-[13px]">
-        🧾
-      </span>
-    </div>
-    <p className="mt-1 text-[11px] text-slate-500">
-      Core service definitions (names, pricing, duration, etc.).
-    </p>
-    <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
-      <span>{servicesFile ? "Change file" : "Choose file"}</span>
-      <span className="text-[10px] opacity-80">.csv</span>
-      <input
-        type="file"
-        accept=".csv"
-        onChange={(e) => setServicesFile(e.target.files?.[0] ?? null)}
-        className="hidden"
-      />
-    </label>
-    {servicesFile && (
-      <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
-        Selected: <span className="font-medium">{servicesFile.name}</span>
-      </p>
-    )}
-  </div>
+            {/* NEW: template link */}
+            <a
+              href="/templates/providers-template.csv"
+              download
+              className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-violet-700 underline-offset-2 hover:underline"
+            >
+              ⬇ Download template
+            </a>
 
-</div>
+            <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
+              <span>{providersFile ? "Change file" : "Choose file"}</span>
+              <span className="text-[10px] opacity-80">.csv</span>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setProvidersFile(e.target.files?.[0] ?? null)}
+                className="hidden"
+              />
+            </label>
+            {providersFile && (
+              <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
+                Selected:{" "}
+                <span className="font-medium">{providersFile.name}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Services (Step 3) */}
+          <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
+            <div className="text-[10px] font-semibold text-violet-600 mb-1">
+              Step 3 — Upload Services
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-slate-900">Services CSV</div>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-[13px]">
+                🧾
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Core service definitions (names, pricing, duration, etc.).
+            </p>
+
+            {/* NEW: template link */}
+            <a
+              href="/templates/services-template.csv"
+              download
+              className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-violet-700 underline-offset-2 hover:underline"
+            >
+              ⬇ Download template
+            </a>
+
+            <label className="mt-3 flex cursor-pointer items-center justify-between rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-black">
+              <span>{servicesFile ? "Change file" : "Choose file"}</span>
+              <span className="text-[10px] opacity-80">.csv</span>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setServicesFile(e.target.files?.[0] ?? null)}
+                className="hidden"
+              />
+            </label>
+            {servicesFile && (
+              <p className="mt-2 line-clamp-2 text-[11px] text-slate-600">
+                Selected:{" "}
+                <span className="font-medium">{servicesFile.name}</span>
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* Footer */}
         <div className="mt-7 flex items-center justify-between text-[11px]">
