@@ -1,32 +1,26 @@
 // app/api/providers/bulk-upload/route.ts
+// (Consider moving to app/api/spaces/bulk-upload/route.ts later)
+
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { parse } from "csv-parse/sync";
+import { cookies } from "next/headers";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// SERVICE KEY – server-side only
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-// Node runtime
 export const runtime = "nodejs";
 
-type ProviderStatus = "draft" | "active" | "unavailable";
-
-type Qualification = {
-  title: string;
-  institute: string;
-  year: string;
-};
+type SpaceStatus = "draft" | "active" | "unavailable";
 
 type PreparedRow = {
-  providerInsert: {
+  spaceInsert: {
     vendor_id: string;
     name: string;
-    specialisation_areas: string | null;
     description: string | null;
-    status: ProviderStatus;
+    status: SpaceStatus;
+    space_type: "in_person" | "online" | "hybrid";
+    address: string | null;
+    postal_code: string | null;
+    map_link: string | null;
+    google_business_place_id: string | null;
     whatsapp_country_code: string | null;
     whatsapp_number: string | null;
     wellness_dimensions: string[];
@@ -34,7 +28,6 @@ type PreparedRow = {
     tags: string[];
     cover_image_url: string | null;
     total_images: number;
-    qualifications: Qualification[]; // 👈 stored as JSONB in DB
   };
   imageUrls: string[];
 };
@@ -48,94 +41,47 @@ function parseListCell(value: string | undefined | null): string[] {
     .filter(Boolean);
 }
 
-// crude parser for "65 8233 3832" → { code: "65", number: "82333832" }
+// crude parser for "65 91829318" → { code: "65", number: "91829318" }
+// or "91829318" → { code: null, number: "91829318" }
 function parseWhatsapp(raw: string | undefined | null): {
   countryCode: string | null;
   number: string | null;
 } {
   if (!raw) return { countryCode: null, number: null };
-  const digits = raw.replace(/[^\d]/g, ""); // keep only numbers
-
+  const digits = raw.replace(/[^\d]/g, "");
   if (!digits) return { countryCode: null, number: null };
 
-  // If more than 8 digits, treat first part as country code, last 8 as number
   if (digits.length > 8) {
     const number = digits.slice(-8);
     const countryCode = digits.slice(0, digits.length - 8);
     return { countryCode, number };
   }
 
-  // Otherwise, treat as number only
   return { countryCode: null, number: digits };
 }
 
-/**
- * Build qualifications[] from any columns matching:
- *  - Qualification_<N>_Title
- *  - Qualification_<N>_Institute
- *  - Qualification_<N>_Year
- *
- * N can be 1,2,3,...,10,... dynamically.
- */
-function buildQualificationsDynamic(row: Record<string, string>): Qualification[] {
-  const indices = new Set<number>();
+// map CSV Space_Type → "in_person" | "online" | "hybrid"
+function mapSpaceType(raw: string | undefined | null): "in_person" | "online" | "hybrid" {
+  if (!raw) return "in_person";
+  const v = raw.trim().toLowerCase();
 
-  // Find all indices from keys like "Qualification_3_Title"
-  for (const key of Object.keys(row)) {
-    const match = key.match(/^Qualification_(\d+)_Title$/i);
-    if (match) {
-      indices.add(Number(match[1]));
-    }
-  }
+  if (v.includes("online") || v.includes("virtual")) return "online";
+  if (v.includes("hybrid")) return "hybrid";
 
-  const quals: Qualification[] = [];
-
-  [...indices]
-    .sort((a, b) => a - b)
-    .forEach((idx) => {
-      const title = (row[`Qualification_${idx}_Title`] || "").trim();
-      const institute = (row[`Qualification_${idx}_Institute`] || "").trim();
-      const year = (row[`Qualification_${idx}_Year`] || "").trim();
-
-      // only push if there is at least something
-      if (title || institute || year) {
-        quals.push({
-          title,
-          institute,
-          year,
-        });
-      }
-    });
-
-  return quals;
+  // "In Person", "Private", etc. → treat as in-person
+  return "in_person";
 }
 
 export async function POST(req: NextRequest) {
   try {
-    // 0) Auth via Bearer token
-    const authHeader = req.headers.get("authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const supabase = createRouteHandlerClient({ cookies });
 
-    if (!token) {
-      return NextResponse.json(
-        { error: "Missing Authorization token" },
-        { status: 401 }
-      );
+    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !auth?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    const vendorId = user.id;
+    const vendorId = auth.user.id;
 
     // 1) Read CSV from multipart form-data
     const formData = await req.formData();
@@ -170,71 +116,66 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3) Map CSV rows -> provider inserts
+    // 3) Map CSV rows -> space inserts
     const prepared: PreparedRow[] = [];
 
     records.forEach((row, index) => {
       const rowNumber = index + 2; // header is row 1
 
-      const name = (row["Provider_Name"] || "").trim();
+      const name = (row["Space_Name"] || "").trim();
       if (!name) {
         console.warn(
-          `[providers bulk] Skipping row ${rowNumber} – missing Provider_Name`
+          `[spaces bulk] Skipping row ${rowNumber} – missing Space_Name`
         );
         return;
       }
 
-      const specialisationAreas =
-        (row["Specialisation_Areas"] || "").trim() || null;
-      const description =
-        (row["Profile_Paragraphs"] || "").trim() || null;
+      const spaceType = mapSpaceType(row["Space_Type"]);
+      const address = (row["Address"] || "").trim() || null;
+      const postalCode = (row["Postal_Code"] || "").trim() || null;
+      const mapLink = (row["Map_Link"] || "").trim() || null;
+      const googleBusinessPlaceId =
+        (row["google_places_id"] || "").trim() || null;
 
-      const whatsappRaw = (row["Contact_Whatsapp_Number"] || "").trim();
-      const { countryCode, number } = parseWhatsapp(whatsappRaw);
+      // Integration_Status → status (fallback to "active")
+      const integrationStatus = (row["Integration_Status"] || "").trim();
+      let status: SpaceStatus = "active";
+      const statusLower = integrationStatus.toLowerCase();
+      if (statusLower === "draft") status = "draft";
+      if (statusLower === "unavailable") status = "unavailable";
 
-      // arrays
-      const categories = parseListCell(row["Provider_Categories"]);
-      const wellnessDimensions = parseListCell(
-        row["Provider_Wellness_Dimension"]
-      );
+      // Contact number -> WhatsApp fields
+      const contactNumberRaw = (row["Contact_Number"] || "").trim();
+      const { countryCode, number } = parseWhatsapp(contactNumberRaw);
 
-      // tags from linked services / availability / instagram link
-      const linkedServices = parseListCell(row["Linked_Services"]);
-      const availabilityTags = parseListCell(row["Provider_Availability"]);
-      const instagramLink = (row["Provider_Instagram_Link"] || "").trim();
-      const extraTags: string[] = [];
-      if (instagramLink) extraTags.push(instagramLink);
+      // Facilities -> tags (so they’re not lost)
+      const facilities = parseListCell(row["Facilities"]);
 
-      const tags = [...linkedServices, ...availabilityTags, ...extraTags];
-
-      // images: could be one or multiple URLs separated by comma/semicolon
-      const imageUrls = parseListCell(row["Provider_Image"]);
+      // Images
+      const imageUrls = parseListCell(row["Space_Image"]);
       const cleanImages = imageUrls.filter(
         (url) => url && !url.startsWith("blob:")
       );
       const cover = cleanImages[0] ?? null;
 
-      // 🔥 dynamic qualifications from any Qualification_<N>_* columns
-      const qualifications = buildQualificationsDynamic(row);
-
-      // default all imported providers as active
-      const status: ProviderStatus = "active";
-
       prepared.push({
-        providerInsert: {
+        spaceInsert: {
           vendor_id: vendorId,
           name,
-          specialisation_areas: specialisationAreas,
-          description,
+          description: null, // CSV has no description column
           status,
+          space_type: spaceType,
+          address,
+          postal_code: postalCode,
+          map_link: mapLink,
+          google_business_place_id: googleBusinessPlaceId,
           whatsapp_country_code: countryCode,
           whatsapp_number: number,
-          wellness_dimensions: wellnessDimensions,
-          categories,
-          tags,
+          wellness_dimensions: [], // not provided in CSV
+          categories: [], // not provided in CSV
+          tags: facilities, // using Facilities as tags
           cover_image_url: cover,
           total_images: cleanImages.length,
-          qualifications,
         },
         imageUrls: cleanImages,
       });
@@ -242,41 +183,41 @@ export async function POST(req: NextRequest) {
 
     if (!prepared.length) {
       return NextResponse.json(
-        { error: "No valid provider rows found in CSV" },
+        { error: "No valid space rows found in CSV" },
         { status: 400 }
       );
     }
 
-    // 4) Insert into providers
-    const providerRows = prepared.map((p) => p.providerInsert);
+    // 4) Insert into spaces
+    const spaceRows = prepared.map((p) => p.spaceInsert);
 
     const { data: inserted, error: insertError } = await supabase
-      .from("providers")
-      .insert(providerRows)
+      .from("spaces")
+      .insert(spaceRows)
       .select("id");
 
     if (insertError) {
-      console.error("[providers bulk] insert error:", insertError);
+      console.error("[spaces bulk] insert error:", insertError);
       return NextResponse.json(
-        { error: "Failed to insert providers", details: insertError.message },
-        { status: 500 }
+        { error: "Failed to insert spaces", details: insertError.message },
+        { status: 400 }
       );
     }
 
-    const insertedProviders = (inserted ?? []) as { id: string }[];
+    const insertedSpaces = (inserted ?? []) as { id: string }[];
 
-    // 5) Insert provider_images
+    // 5) Insert space_images
     const imageRows: {
-      provider_id: string;
+      space_id: string;
       image_url: string;
       position: number;
     }[] = [];
 
-    insertedProviders.forEach((prov, idx) => {
+    insertedSpaces.forEach((space, idx) => {
       const imgs = prepared[idx]?.imageUrls ?? [];
       imgs.forEach((url, pos) => {
         imageRows.push({
-          provider_id: prov.id,
+          space_id: space.id,
           image_url: url,
           position: pos,
         });
@@ -285,20 +226,20 @@ export async function POST(req: NextRequest) {
 
     if (imageRows.length) {
       const { error: imgErr } = await supabase
-        .from("provider_images")
+        .from("space_images")
         .insert(imageRows);
       if (imgErr) {
-        console.error("[providers bulk] provider_images insert error:", imgErr);
-        // not fatal; providers are already created
+        console.error("[spaces bulk] space_images insert error:", imgErr);
+        // not fatal; spaces are already created
       }
     }
 
     return NextResponse.json({
       ok: true,
-      insertedCount: insertedProviders.length,
+      insertedCount: insertedSpaces.length,
     });
   } catch (err: any) {
-    console.error("Providers bulk upload error:", err);
+    console.error("Spaces bulk upload error:", err);
     return NextResponse.json(
       { error: "Unexpected error", details: err?.message },
       { status: 500 }

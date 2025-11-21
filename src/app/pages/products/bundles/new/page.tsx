@@ -614,62 +614,63 @@ export default function NewBundlePage() {
                                   }
                                 />
 
-                                <div className="mt-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-                                      value={item.choiceCount ?? 1}
-                                      min={1}
-                                      max={item.variantCount || item.stock}
-                                      onChange={(e) =>
-                                        setItems((prev) =>
-                                          prev.map((it) =>
-                                            it.id === item.id
-                                              ? {
-                                                  ...it,
-                                                  choiceCount: Math.max(
-                                                    1,
-                                                    Math.min(
-                                                      item.variantCount ||
-                                                        item.stock,
-                                                      Number(
-                                                        e.target.value
-                                                      ) || 1
-                                                    )
-                                                  ),
-                                                }
-                                              : it
-                                          )
-                                        )
-                                      }
-                                    />
-                                    <span className="text-[11px] text-gray-500">
-                                      / {item.variantCount ?? 0} Available
-                                      Variants
-                                    </span>
-                                  </div>
+                               <div className="mt-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+  <div className="flex items-center gap-2">
+    <input
+      type="number"
+      className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+      value={item.choiceCount ?? 1}
+      min={1}
+      max={item.variantCount}
+      disabled={!item.isMultiple}  // 🔥 Disable when not multiple
+      onChange={(e) =>
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === item.id
+              ? {
+                  ...it,
+                  choiceCount: Math.max(
+                    1,
+                    Math.min(
+                      item.variantCount,
+                      Number(e.target.value) || 1
+                    )
+                  ),
+                }
+              : it
+          )
+        )
+      }
+    />
 
-                                  <label className="flex items-center gap-2 text-[11px] text-gray-600">
-                                    <input
-                                      type="checkbox"
-                                      checked={item.isMultiple ?? false}
-                                      onChange={(e) =>
-                                        setItems((prev) =>
-                                          prev.map((it) =>
-                                            it.id === item.id
-                                              ? {
-                                                  ...it,
-                                                  isMultiple: e.target.checked,
-                                                }
-                                              : it
-                                          )
-                                        )
-                                      }
-                                    />
-                                    Select Option, if this is a multiple choice
-                                  </label>
-                                </div>
+    <span className="text-[11px] text-gray-500">
+      / {item.variantCount} Available Variants
+    </span>
+  </div>
+
+  <label className="flex items-center gap-2 text-[11px] text-gray-600">
+    <input
+      type="checkbox"
+      checked={item.isMultiple ?? false}
+      onChange={(e) =>
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === item.id
+              ? {
+                  ...it,
+                  isMultiple: e.target.checked,
+                  choiceCount: e.target.checked
+                    ? it.choiceCount // keep existing
+                    : 1, // 🔥 Reset to 1 if toggled off
+                }
+              : it
+          )
+        )
+      }
+    />
+    Select option, if this is a multiple choice
+  </label>
+</div>
                               </div>
                             )}
 
