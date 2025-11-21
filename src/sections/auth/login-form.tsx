@@ -154,36 +154,24 @@ export default function LoginForm() {
   // Block UI while checking session
   if (checkingSession) {
     return (
-      <div className="h-screen flex items-center justify-center bg-white">
+      <div className="flex h-screen items-center justify-center bg-white">
         <ClipLoader size={28} />
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden bg-white lg:flex-row">
       {/* LEFT – FORM, pinned to top on small screens, centered on lg+ */}
-      <div className="flex-1 flex justify-center items-start lg:items-center py-5">
-        <div
-          className="
-            w-full max-w-sm
-            sm:max-w-md
-            xl:max-w-lg
-            px-4 sm:px-6 md:px-10 xl:px-16
-          "
-        >
+      <div className="flex flex-1 items-start justify-center py-5 lg:items-center">
+        <div className="w-full max-w-sm px-4 sm:max-w-md sm:px-6 lg:max-w-lg lg:px-10 xl:px-14">
           {/* Heading */}
-          <div className="mb-4 sm:mb-6 md:mb-7">
-            <h1
-              className="
-                text-2xl sm:text-3xl md:text-[32px] xl:text-4xl
-                font-extrabold leading-tight text-black
-              "
-            >
+          <div className="mb-4 sm:mb-6 md:mb-8">
+            <h1 className="text-2xl font-extrabold leading-tight text-black sm:text-3xl md:text-4xl lg:text-5xl">
               MEURAKI
               <br /> Vendor Portal
             </h1>
-            <p className="mt-2 sm:mt-3 text-xs sm:text-sm md:text-base text-gray-500">
+            <p className="mt-2 text-xs text-gray-500 sm:mt-3 sm:text-sm md:text-base">
               Welcome back! Please sign in to access your account.
             </p>
           </div>
@@ -196,7 +184,7 @@ export default function LoginForm() {
           >
             {/* Email */}
             <div>
-              <label className="text-black font-semibold tracking-wide text-xs sm:text-sm">
+              <label className="text-xs font-semibold tracking-wide text-black sm:text-sm">
                 EMAIL ADDRESS
               </label>
               <input
@@ -209,9 +197,9 @@ export default function LoginForm() {
                     setErrors((p) => ({ ...p, email: undefined }));
                 }}
                 className={[
-                  "mt-2 w-full rounded-2xl px-4",
-                  "h-10 sm:h-11 md:h-12 xl:h-14",
-                  "bg-[#EFEDFF] border text-gray-900 placeholder-gray-500",
+                  "mt-2 w-full rounded-2xl border px-4",
+                  "h-10 sm:h-11 md:h-12 lg:h-12 xl:h-14",
+                  "bg-[#EFEDFF] text-gray-900 placeholder-gray-500",
                   "focus:outline-none focus:ring-2 focus:ring-purple-500",
                   errors.email ? "border-rose-500" : "border-transparent",
                 ].join(" ")}
@@ -222,7 +210,7 @@ export default function LoginForm() {
               {errors.email && (
                 <p
                   id="email-error"
-                  className="mt-1 text-[11px] sm:text-xs text-rose-600"
+                  className="mt-1 text-xs text-rose-600 sm:text-sm"
                 >
                   {errors.email}
                 </p>
@@ -231,7 +219,7 @@ export default function LoginForm() {
 
             {/* Password */}
             <div>
-              <label className="text-black font-semibold tracking-wide text-xs sm:text-sm">
+              <label className="text-xs font-semibold tracking-wide text-black sm:text-sm">
                 PASSWORD
               </label>
               <input
@@ -244,9 +232,9 @@ export default function LoginForm() {
                     setErrors((p) => ({ ...p, password: undefined }));
                 }}
                 className={[
-                  "mt-2 w-full rounded-2xl px-4",
-                  "h-10 sm:h-11 md:h-12 xl:h-14",
-                  "bg-[#EFEDFF] border text-gray-900 placeholder-gray-500",
+                  "mt-2 w-full rounded-2xl border px-4",
+                  "h-10 sm:h-11 md:h-12 lg:h-12 xl:h-14",
+                  "bg-[#EFEDFF] text-gray-900 placeholder-gray-500",
                   "focus:outline-none focus:ring-2 focus:ring-purple-500",
                   errors.password ? "border-rose-500" : "border-transparent",
                 ].join(" ")}
@@ -257,7 +245,7 @@ export default function LoginForm() {
               {errors.password && (
                 <p
                   id="password-error"
-                  className="mt-1 text-[11px] sm:text-xs text-rose-600"
+                  className="mt-1 text-xs text-rose-600 sm:text-sm"
                 >
                   {errors.password}
                 </p>
@@ -266,7 +254,7 @@ export default function LoginForm() {
 
             {/* Remember me */}
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm text-gray-500">
+              <label className="flex items-center gap-2 text-xs text-gray-500 sm:text-sm">
                 <input
                   type="checkbox"
                   checked={formData.rememberMe}
@@ -284,24 +272,16 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="
-                w-full rounded-full
-                h-10 sm:h-11 md:h-12 xl:h-14
-                bg-black text-white
-                text-sm sm:text-[15px] md:text-base
-                font-medium shadow-lg shadow-black/10
-                hover:bg-gray-900 transition-colors
-                disabled:opacity-70
-              "
+              className="h-10 w-full rounded-full bg-black text-sm font-medium text-white shadow-lg shadow-black/10 transition-colors hover:bg-gray-900 disabled:opacity-70 sm:h-11 sm:text-sm md:h-12 md:text-base xl:h-14"
             >
               {loading ? "Signing in…" : "Login"}
             </button>
 
             {/* Forgot password */}
-            <div className="text-center -mt-1 sm:-mt-2">
+            <div className=" -mt-1 text-center sm:-mt-2">
               <Link
                 href="/pages/auth/forgot-password"
-                className="text-[11px] sm:text-xs md:text-sm font-medium text-purple-600 hover:text-purple-700"
+                className="text-xs font-medium text-purple-600 hover:text-purple-700 sm:text-sm"
               >
                 Forgot your password?
               </Link>
@@ -313,7 +293,7 @@ export default function LoginForm() {
                 <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-white px-3 text-[11px] sm:text-xs md:text-sm text-gray-500">
+                <span className="bg-white px-3 text-xs text-gray-500 sm:text-sm">
                   Or
                 </span>
               </div>
@@ -323,14 +303,7 @@ export default function LoginForm() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="
-                w-full rounded-2xl border border-gray-200
-                h-10 sm:h-11 md:h-12 xl:h-14
-                bg-white
-                flex items-center justify-center gap-3
-                text-gray-700 text-sm sm:text-[15px] md:text-base
-                font-medium shadow-sm hover:shadow transition-shadow
-              "
+              className="flex h-10 w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm transition-shadow hover:shadow sm:h-11 sm:text-sm md:h-12 md:text-base xl:h-14"
             >
               <svg
                 className="h-4 w-4 sm:h-5 sm:w-5"
@@ -358,17 +331,17 @@ export default function LoginForm() {
             </button>
 
             {/* Subtext + register link */}
-            <div className="text-center mb-3 sm:mb-4">
-              <p className="text-[11px] sm:text-xs md:text-sm text-gray-500">
+            <div className="mb-3 text-center sm:mb-4">
+              <p className="text-xs text-gray-500 sm:text-sm">
                 Don&apos;t have an account?{" "}
                 <Link
                   href="/pages/auth/register"
-                  className="text-purple-600 hover:text-purple-700 font-medium"
+                  className="font-medium text-purple-600 hover:text-purple-700"
                 >
                   Register your brand
                 </Link>
               </p>
-              <div className="mt-3 sm:mt-4 flex justify-center">
+              <div className="mt-3 flex justify-center sm:mt-4">
                 <Image
                   src="/images/register-doodle.svg"
                   alt="Register doodle"
@@ -380,7 +353,7 @@ export default function LoginForm() {
           </form>
 
           {/* Footer Logo */}
-          <div className="mt-4 mb-4 flex justify-center">
+          <div className="mb-4 mt-4 flex justify-center">
             <Image
               src="/images/logo-meuraki.svg"
               alt="Meuraki"
@@ -393,8 +366,8 @@ export default function LoginForm() {
       </div>
 
       {/* RIGHT – HERO (desktop only) */}
-      <div className="hidden lg:flex lg:flex-1 relative">
-        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
+      <div className="relative hidden flex-1 lg:flex">
+        <div className="absolute inset-0 overflow-hidden lg:rounded-l-3xl">
           <Image
             src="/images/hero-bg.gif"
             alt="Animated background"
@@ -409,7 +382,7 @@ export default function LoginForm() {
               alt="Meuraki overlay"
               width={320}
               height={640}
-              className="rounded-[28px] pointer-events-none"
+              className="pointer-events-none rounded-3xl"
             />
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />

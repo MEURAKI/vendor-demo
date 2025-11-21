@@ -35,6 +35,9 @@ export default function NewProviderPage() {
   const [name, setName] = useState("");
   const [specialisationAreas, setSpecialisationAreas] = useState("");
   const [description, setDescription] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [yearsExperience, setYearsExperience] = useState<number | "">("");
+  const [clientsServed, setClientsServed] = useState<number | "">("");
 
   const [whatsCountry, setWhatsCountry] = useState("+65");
   const [whatsNumber, setWhatsNumber] = useState("");
@@ -187,6 +190,9 @@ export default function NewProviderPage() {
       tags,
       images,
       qualifications: cleanedQualifications,
+      designation,
+      yearsExperience: typeof yearsExperience === "number" ? yearsExperience : null,
+      clientsServed: typeof clientsServed === "number" ? clientsServed : null,
     };
 
     const res = await fetch("/api/providers", {
@@ -251,49 +257,91 @@ export default function NewProviderPage() {
               {/* LEFT COLUMN */}
               <div className="space-y-6">
                 {/* General Information */}
-                <section className="rounded-3xl border border-[#ECECFB] bg-white p-6">
-                  <h2 className="mb-4 text-sm font-semibold text-gray-900">
-                    General Information
-                  </h2>
-                  <div className="space-y-4 text-xs">
-                    <div>
-                      <label className="text-[11px] font-semibold text-gray-800">
-                        Provider Name
-                      </label>
-                      <input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
+              <section className="rounded-3xl border border-[#ECECFB] bg-white p-6">
+  <h2 className="mb-4 text-sm font-semibold text-gray-900">
+    General Information
+  </h2>
 
-                    <div>
-                      <label className="text-[11px] font-semibold text-gray-800">
-                        Specialisation Areas
-                      </label>
-                      <textarea
-                        value={specialisationAreas}
-                        onChange={(e) =>
-                          setSpecialisationAreas(e.target.value)
-                        }
-                        rows={3}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
+  <div className="space-y-4 text-xs">
+    {/* Provider Name */}
+    <div>
+      <label className="text-[11px] font-semibold text-gray-800">
+        Provider Name
+      </label>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
 
-                    <div>
-                      <label className="text-[11px] font-semibold text-gray-800">
-                        Provider Description
-                      </label>
-                      <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        rows={5}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </section>
+    {/* Designation */}
+    <div>
+      <label className="text-[11px] font-semibold text-gray-800">
+        Designation
+      </label>
+      <input
+        value={designation}
+        onChange={(e) => setDesignation(e.target.value)}
+        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+
+    {/* Years of Experience */}
+    <div>
+      <label className="text-[11px] font-semibold text-gray-800">
+        Years of Experience
+      </label>
+      <input
+        type="number"
+        min={0}
+        value={yearsExperience}
+        onChange={(e) => setYearsExperience(Number(e.target.value))}
+        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+
+    {/* Clients Served */}
+    <div>
+      <label className="text-[11px] font-semibold text-gray-800">
+        Clients Served
+      </label>
+      <input
+        type="number"
+        min={0}
+        value={clientsServed}
+        onChange={(e) => setClientsServed(Number(e.target.value))}
+        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+
+    {/* Specialisation Areas */}
+    <div>
+      <label className="text-[11px] font-semibold text-gray-800">
+        Specialisation Areas
+      </label>
+      <textarea
+        value={specialisationAreas}
+        onChange={(e) => setSpecialisationAreas(e.target.value)}
+        rows={3}
+        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+
+    {/* Provider Description */}
+    <div>
+      <label className="text-[11px] font-semibold text-gray-800">
+        Provider Description
+      </label>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={5}
+        className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+      />
+    </div>
+  </div>
+</section>
 
                 {/* Qualifications */}
                 <section className="rounded-3xl border border-[#ECECFB] bg-white">

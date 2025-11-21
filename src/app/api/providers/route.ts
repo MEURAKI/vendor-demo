@@ -29,6 +29,9 @@ export async function GET(req: Request) {
       id,
       name,
       description,
+      designation,
+      years_experience,
+      clients_served,
       whatsapp_country_code,
       whatsapp_number,
       status,
@@ -73,6 +76,9 @@ export async function POST(req: Request) {
     name,
     specialisationAreas,
     description,
+    designation,
+    yearsExperience,
+    clientsServed,
     status,
     whatsappCountryCode,
     whatsappNumber,
@@ -85,6 +91,9 @@ export async function POST(req: Request) {
     name: string;
     specialisationAreas?: string;
     description?: string;
+    designation?: string;
+    yearsExperience?: number;
+    clientsServed?: number;
     status: ProviderStatus;
     whatsappCountryCode?: string;
     whatsappNumber?: string;
@@ -107,6 +116,9 @@ export async function POST(req: Request) {
       name,
       specialisation_areas: specialisationAreas,
       description,
+      designation,
+      years_experience: yearsExperience,
+      clients_served: clientsServed,
       status,
       whatsapp_country_code: whatsappCountryCode,
       whatsapp_number: whatsappNumber,

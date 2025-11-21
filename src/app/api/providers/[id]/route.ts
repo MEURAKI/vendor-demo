@@ -24,6 +24,9 @@ export async function GET(
       name,
       specialisation_areas,
       description,
+      designation,
+      years_experience,
+      clients_served,
       whatsapp_country_code,
       whatsapp_number,
       status,
@@ -64,6 +67,9 @@ export async function GET(
     name: provider.name,
     specialisation_areas: provider.specialisation_areas,
     description: provider.description,
+    designation: provider.designation,
+    years_experience: provider.years_experience,
+    clients_served: provider.clients_served,
     whatsapp_country_code: provider.whatsapp_country_code,
     whatsapp_number: provider.whatsapp_number,
     status: provider.status as ProviderStatus,
@@ -103,6 +109,9 @@ export async function PUT(
     name,
     specialisationAreas,
     description,
+    designation,
+    yearsExperience,
+    clientsServed,
     status,
     whatsappCountryCode,
     whatsappNumber,
@@ -115,6 +124,9 @@ export async function PUT(
     name?: string;
     specialisationAreas?: string;
     description?: string;
+    designation?: string;
+    yearsExperience?: number;
+    clientsServed?: number;
     status?: ProviderStatus;
     whatsappCountryCode?: string;
     whatsappNumber?: string;

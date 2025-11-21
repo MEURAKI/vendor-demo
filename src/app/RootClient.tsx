@@ -10,6 +10,7 @@ const AUTH_PAGES = [
   "/pages/auth/login",
   "/pages/auth/register",
   "/pages/auth/forgot-password",
+  "/pages/auth/reset-password",
 ];
 
 function isAuthPage(path: string) {
