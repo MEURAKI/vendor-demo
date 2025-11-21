@@ -1,6 +1,6 @@
 [auth]
 site_url = "https://vendor.meuraki.com.sg"
-additional_redirect_urls = ["https://vendor.meuraki.com.sg/pages/auth/callback"]
+additional_redirect_urls = ["https://subscriber.meuraki.com.sg/pages/auth/callback"]
 
 [auth.external.google]
 enabled = true

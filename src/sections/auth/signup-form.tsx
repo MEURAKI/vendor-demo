@@ -9,7 +9,7 @@ import { useToast } from "../../components/toast/ToastProvider";
 
 const redirectTo =
   process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI ||
-  "https://vendor.meuraki.com.sg/pages/auth/callback";
+  "https://subscriber.meuraki.com.sg/pages/auth/callback";
 
 export default function SignupForm() {
   const router = useRouter();

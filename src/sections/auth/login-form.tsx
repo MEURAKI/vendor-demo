@@ -10,7 +10,7 @@ import ClipLoader from "react-spinners/ClipLoader";
 
 const redirectTo =
   process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI ||
-  "https://vendor.meuraki.com.sg/pages/auth/callback";
+  "https://subscriber.meuraki.com.sg/pages/auth/callback";
 
 type Errors = { email?: string; password?: string; form?: string };
 
@@ -163,11 +163,11 @@ export default function LoginForm() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-white lg:flex-row">
       {/* LEFT – FORM, pinned to top on small screens, centered on lg+ */}
-      <div className="flex flex-1 items-start justify-center py-5 lg:items-center">
+      <div className="flex flex-1 items-start justify-center py-5 lg:items-center h-auto">
         <div className="w-full max-w-sm px-4 sm:max-w-md sm:px-6 lg:max-w-lg lg:px-10 xl:px-14">
           {/* Heading */}
           <div className="mb-4 sm:mb-6 md:mb-8">
-            <h1 className="text-2xl font-extrabold leading-tight text-black sm:text-3xl md:text-4xl lg:text-5xl">
+            <h1 className="text-xl font-extrabold leading-tight text-black sm:text-3xl md:text-4xl lg:text-5xl mt-10">
               MEURAKI
               <br /> Vendor Portal
             </h1>
