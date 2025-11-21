@@ -161,9 +161,9 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="h-screen bg-white flex flex-col lg:flex-row">
-      {/* LEFT – FORM; full height, 20px padding top/bottom, scrollable */}
-      <div className="flex-1 flex justify-center lg:items-center overflow-y-auto py-5">
+    <div className="h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
+      {/* LEFT – FORM, pinned to top on small screens, centered on lg+ */}
+      <div className="flex-1 flex justify-center items-start lg:items-center py-5">
         <div
           className="
             w-full max-w-sm
@@ -173,10 +173,10 @@ export default function LoginForm() {
           "
         >
           {/* Heading */}
-          <div className="mb-5 sm:mb-7 md:mb-8">
+          <div className="mb-4 sm:mb-6 md:mb-7">
             <h1
               className="
-                text-2xl sm:text-3xl md:text-4xl xl:text-5xl
+                text-2xl sm:text-3xl md:text-[32px] xl:text-4xl
                 font-extrabold leading-tight text-black
               "
             >
@@ -333,7 +333,7 @@ export default function LoginForm() {
               "
             >
               <svg
-                className="h-4 w-4.sm:h-5 sm:w-5"
+                className="h-4 w-4 sm:h-5 sm:w-5"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
               >
