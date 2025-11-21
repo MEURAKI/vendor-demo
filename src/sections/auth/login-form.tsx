@@ -161,7 +161,7 @@ export default function LoginForm() {
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row">
       {/* LEFT – FORM; scrolls on smaller/short screens */}
-      <div className="flex-1 flex justify-center lg:items-center">
+        <div className="flex-1 flex justify-center lg:items-center overflow-y-auto">
         <div
         className="
           w-full max-w-sm
@@ -372,7 +372,7 @@ export default function LoginForm() {
           </form>
 
           {/* Footer Logo */}
-          <div className="mt-1 sm:mt-3 mb-2 flex justify-center">
+          <div className="mt-1 sm:mt-3 mb-2 flex justify-center overflow-y-auto">
             <Image
               src="/images/logo-meuraki.svg"
               alt="Meuraki"
