@@ -24,8 +24,7 @@ type CsvMappingKey =
   | "discountType"
   | "discountValue"
   | "discountStart"
-  | "discountEnd"
-  ; // 👈 NEW
+  | "discountEnd";
 
 type Mapping = Record<CsvMappingKey, string>;
 
@@ -45,6 +44,7 @@ type ParsedRow = {
   wellnessNames: string[];
   categoryNames: string[];
   tags: string[];
+  sections: { title: string; body: string; sort_order: number }[]; // 👈 NEW
 };
 
 // Helper to safely get a mapped field from a row
@@ -64,6 +64,43 @@ function parseList(str: string): string[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/**
+ * Build description sections from CSV columns:
+ *  - Accordion_Title_1..5
+ *  - Accordion_Description_1..5 OR Accordion_Desc_1..5
+ *
+ * No mapping required – uses header names directly.
+ * If title is missing but body exists, fallback to "Section N".
+ * sort_order = i - 1 (0-based).
+ */
+function buildDescriptionSections(
+  row: Record<string, string>
+): { title: string; body: string; sort_order: number }[] {
+  const sections: { title: string; body: string; sort_order: number }[] = [];
+
+  for (let i = 1; i <= 5; i++) {
+    const titleKey = `Accordion_Title_${i}`;
+    const descKey1 = `Accordion_Description_${i}`;
+    const descKey2 = `Accordion_Desc_${i}`;
+
+    const titleRaw = (row[titleKey] || "").trim();
+    const bodyRaw = (
+      (row[descKey1] || row[descKey2]) ||
+      ""
+    ).trim();
+
+    if (titleRaw || bodyRaw) {
+      sections.push({
+        title: titleRaw || `Section ${i}`,
+        body: bodyRaw,
+        sort_order: i - 1,
+      });
+    }
+  }
+
+  return sections;
 }
 
 // ---------- POST handler ----------
@@ -149,9 +186,8 @@ export async function POST(req: NextRequest) {
       const sku =
         getMappedValue(row, mapping, "sku") ||
         getMappedValue(row, mapping, "productUniqueCode");
-      
-      const description = getMappedValue(row, mapping, "description");
 
+      const description = getMappedValue(row, mapping, "description");
       const inventoryRaw = getMappedValue(row, mapping, "inventory");
 
       // Skip rows missing key fields
@@ -168,11 +204,6 @@ export async function POST(req: NextRequest) {
 
       const priceNumber = priceRaw ? Number(priceRaw) : NaN;
       const inventoryNumber = inventoryRaw ? Number(inventoryRaw) : NaN;
-
-      const discountType = getMappedValue(row, mapping, "discountType");
-      const discountValue = getMappedValue(row, mapping, "discountValue");
-      const discountStart = getMappedValue(row, mapping, "discountStart");
-      const discountEnd = getMappedValue(row, mapping, "discountEnd");
 
       const product: ProductInsert = {
         name,
@@ -193,13 +224,14 @@ export async function POST(req: NextRequest) {
       const categoryStr = getMappedValue(row, mapping, "category");
       const tagsStr = getMappedValue(row, mapping, "tags");
 
-
+      const sections = buildDescriptionSections(row); // 👈 NEW
 
       parsedRows.push({
         product,
         wellnessNames: parseList(wellnessStr),
         categoryNames: parseList(categoryStr),
         tags: parseList(tagsStr),
+        sections,
       });
     });
 
@@ -248,12 +280,17 @@ export async function POST(req: NextRequest) {
     categoryRows.forEach((c: any) => {
       categoryIdByName[c.name.trim().toLowerCase()] = c.id;
     });
-    
 
-    // 6) Build join-table rows
+    // 6) Build join-table + section rows
     const wellnessJoins: { product_id: string; dimension_id: string }[] = [];
     const categoryJoins: { product_id: string; category: string }[] = [];
     const tagJoins: { product_id: string; tag: string }[] = [];
+    const sectionRows: {
+      product_id: string;
+      sort_order: number;
+      title: string;
+      body: string;
+    }[] = [];
 
     parsedRows.forEach((row) => {
       const inserted = insertedBySku[row.product.base_sku];
@@ -268,18 +305,26 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      // categories
+      // categories (free text)
       row.categoryNames.forEach((n) => {
-        // const id = categoryIdByName[n.toLowerCase()];
-          categoryJoins.push({ product_id: productId, category: n });
+        categoryJoins.push({ product_id: productId, category: n });
       });
 
       // tags (free text)
       row.tags.forEach((t) => {
         tagJoins.push({ product_id: productId, tag: t });
       });
-    });
 
+      // 👇 NEW: description sections (accordions)
+      row.sections.forEach((s) => {
+        sectionRows.push({
+          product_id: productId,
+          sort_order: s.sort_order,
+          title: s.title,
+          body: s.body,
+        });
+      });
+    });
 
     // 7) Insert into join tables (if any)
     if (wellnessJoins.length) {
@@ -290,6 +335,9 @@ export async function POST(req: NextRequest) {
     }
     if (tagJoins.length) {
       await supabase.from("product_tags").insert(tagJoins);
+    }
+    if (sectionRows.length) {
+      await supabase.from("product_description_sections").insert(sectionRows);
     }
 
     return NextResponse.json({
