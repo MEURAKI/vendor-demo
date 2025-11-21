@@ -45,9 +45,9 @@ export async function GET(req: NextRequest) {
 
   // 2) Vendor products (include image_url)
   const { data: products, error } = await client
-  .from("products")
-  .select(
-    `
+    .from("products")
+    .select(
+      `
       id,
       name,
       base_sku,
@@ -60,9 +60,9 @@ export async function GET(req: NextRequest) {
         category
       )
     `
-  )
-  .eq("vendor_id", user.id)
-  .order("created_at", { ascending: false });
+    )
+    .eq("vendor_id", user.id)
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
@@ -74,30 +74,44 @@ export async function GET(req: NextRequest) {
 
   const productIds = products.map((p: any) => p.id);
 
-  // 3) Aggregate variants (for stock + variant count)
+  // 3) Aggregate variants (for stock + variant count + variant price)
   const { data: variants, error: vErr } = await client
     .from("product_variants")
-    .select("product_id, inventory_qty")
+    .select("product_id, inventory_qty, price_cents")
     .in("product_id", productIds);
 
-  const variantAgg: Record<string, { count: number; stock: number }> = {};
+  const variantAgg: Record<
+    string,
+    { count: number; stock: number; priceCents: number | null }
+  > = {};
 
   if (!vErr && variants) {
     variants.forEach((v: any) => {
       if (!variantAgg[v.product_id]) {
-        variantAgg[v.product_id] = { count: 0, stock: 0 };
+        variantAgg[v.product_id] = { count: 0, stock: 0, priceCents: null };
       }
-      variantAgg[v.product_id].count += 1;
-      variantAgg[v.product_id].stock += v.inventory_qty ?? 0;
+
+      const agg = variantAgg[v.product_id];
+
+      agg.count += 1;
+      agg.stock += v.inventory_qty ?? 0;
+
+      // Choose how you want to aggregate price:
+      // here we take the *lowest* non-null variant price for the product
+      if (v.price_cents !== null && v.price_cents !== undefined) {
+        if (agg.priceCents === null || v.price_cents < agg.priceCents) {
+          agg.priceCents = v.price_cents;
+        }
+      }
     });
   }
 
   // 4) Shape response
   const payload = products.map((p: any) => {
-    const agg = variantAgg[p.id] ?? { count: 0, stock: 0 };
+    const agg = variantAgg[p.id] ?? { count: 0, stock: 0, priceCents: null };
 
     const categories =
-    p.product_categories?.map((c: any) => c.category) ?? [];
+      p.product_categories?.map((c: any) => c.category) ?? [];
 
     return {
       id: p.id,
@@ -105,17 +119,20 @@ export async function GET(req: NextRequest) {
       type: p.is_variant ? "Variant" : "Single",
       baseSku: p.base_sku,
       status: p.status,
-      priceCents: p.price_cents,
+      // If product price_cents is null and variants exist, use variant price
+      priceCents:
+        p.price_cents !== null && p.price_cents !== undefined
+          ? p.price_cents
+          : agg.priceCents,
       stock: p.is_variant ? agg.stock : p.inventory_qty,
       variantCount: agg.count,
-      imageUrl: p.image_url ?? null, 
-      categories: categories.join(", ")// URL stored in DB
+      imageUrl: p.image_url ?? null,
+      categories: categories.join(", "),
     };
   });
 
   return NextResponse.json({ products: payload });
 }
-
 /**
  * POST /api/products
  * Create a new product (matches NewProductPage body shape)

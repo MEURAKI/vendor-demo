@@ -47,8 +47,6 @@ export default function WellnessCategoryTagsSection({
   categoryPlaceholder = "e.g. Apparel, Classes",
   tagPlaceholder = "e.g. Limited Edition, Bestseller",
 }: Props) {
-console.log("WellnessCategoryTagsSection rendered", categories, selectedWellnessIds);
-
       const cleanWellnessDimensions = Array.from(
       new Set(
         (selectedWellnessIds ?? [])
