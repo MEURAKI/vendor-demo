@@ -16,6 +16,7 @@ import SettingsNav from "../../../../components/settings/SettingsNav";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { useToast } from "../../../../components/toast/ToastProvider";
 import AppModal from "../../../../components/common/AppModal";
+import Image from "next/image";
 
 declare const google: any; // for TS, Google Maps is loaded via <Script>
 
@@ -56,6 +57,9 @@ type VendorBusiness = {
   google_business_page_id: string | null;
   business_tags: string | null;
 
+  // ✅ NEW: banner URL
+  shop_banner_url: string | null;
+
   // fulfilment
   fulfilment_delivery: boolean;
   fulfilment_pickup: boolean;
@@ -92,6 +96,9 @@ function ShopSettingsPageInner() {
 const [modalTitle, setModalTitle] = useState("");
 const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
 
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerError, setBannerError] = useState<string | null>(null);
+
   // Google Places
   const [placesLoaded, setPlacesLoaded] = useState(false);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
@@ -106,6 +113,68 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", tab);
     router.replace(`${pathname}?${params.toString()}`);
+  }
+
+   async function handleBannerChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !vb) return;
+
+    setBannerError(null);
+
+    if (!file.type.startsWith("image/")) {
+      setBannerError("Please upload an image file (JPG, PNG, etc.)");
+      return;
+    }
+
+    try {
+      setBannerUploading(true);
+
+      // Choose your bucket name here (make sure it exists in Supabase)
+      const bucket = "shop-banners";
+
+      // Simple predictable path per vendor
+      const filePath = `${vb.id}/shop-banner-${Date.now()}.${file.name
+        .split(".")
+        .pop()}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error(uploadError);
+        setBannerError("Failed to upload banner. Please try again.");
+        return;
+      }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from(bucket).getPublicUrl(filePath);
+
+      setVb((prev) =>
+        prev
+          ? {
+              ...prev,
+              shop_banner_url: publicUrl,
+            }
+          : prev
+      );
+
+      successToast({
+        title: "Banner uploaded",
+        description: "Your shop banner image has been updated.",
+      });
+    } catch (err) {
+      console.error(err);
+      setBannerError("Unexpected error while uploading banner.");
+    } finally {
+      setBannerUploading(false);
+      // reset input so same file can be re-selected
+      e.target.value = "";
+    }
   }
 
   // Initial load: profile + vendor_business
@@ -143,6 +212,7 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
               shop_address,
               google_place_id,
               google_business_page_id,
+              shop_banner_url,
               business_tags,
               fulfilment_delivery,
               fulfilment_pickup,
@@ -185,6 +255,7 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
         google_business_page_id: "",
         business_tags: "",
 
+        shop_banner_url: null,
         fulfilment_delivery: false,
         fulfilment_pickup: false,
         delivery_days_standard: "3 – 5 days",
@@ -282,6 +353,7 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
       frame_id: src.frame_id,
       commission_type: src.commission_type,
       commission_rate: src.commission_rate,
+      shop_banner_url: src.shop_banner_url,
 
       shop_address: (src.shop_address || "").trim(),
       google_place_id: src.google_place_id || null,
@@ -605,6 +677,66 @@ const autocompleteRef = useRef<any>(null);
                       }
                       placeholder="custom-handle"
                     />
+                  </div>
+                </section>
+                <div className="border-t border-gray-200" />
+
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Shop Banner
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Upload a wide banner image shown at the top of your shop page.
+                      Recommended ratio 3:1 (e.g. 1200×400px).
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {vb.shop_banner_url && (
+                      <div className="relative h-32 w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                        <Image
+                          src={vb.shop_banner_url}
+                          alt="Shop banner preview"
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <label
+                        htmlFor="shop-banner-input"
+                        className="inline-flex items-center justify-center rounded-full bg-black px-4 py-2 text-xs font-semibold text-white hover:bg-gray-900 cursor-pointer"
+                      >
+                        {bannerUploading ? "Uploading…" : "Upload banner image"}
+                      </label>
+                      <input
+                        id="shop-banner-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBannerChange}
+                        className="hidden"
+                      />
+
+                      {vb.shop_banner_url && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVb((prev) =>
+                              prev ? { ...prev, shop_banner_url: null } : prev
+                            )
+                          }
+                          className="text-[11px] text-gray-500 hover:text-red-600"
+                        >
+                          Remove banner
+                        </button>
+                      )}
+                    </div>
+
+                    {bannerError && (
+                      <p className="text-[11px] text-red-600">{bannerError}</p>
+                    )}
                   </div>
                 </section>
                 <div className="border-t border-gray-200" />

@@ -1219,7 +1219,7 @@ function BusinessSettingsPageInner() {
           <div className="mt-6 divide-y divide-gray-200 overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <VerificationRow
               label="Business Logo"
-              missing={completeness.missing.logo}
+              missing={true}
               href="/pages/setting/business?tab=business"
               cta="Go to Business Information"
             />

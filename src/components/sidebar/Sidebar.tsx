@@ -218,17 +218,17 @@ export default function Sidebar({
 
         <div className="mt-auto space-y-1.5 pt-4 border-t border-ink-line">
   {/* SETTINGS */}
-  {/* <Link
+  <Link
     href="/pages/setting/profile"
     className={[
       "flex items-center gap-3 rounded-lg px-2.5 py-2 text-neu-200 hover:bg-ink-700",
       collapsed ? "justify-center" : "",
     ].join(" ")}
     title="Settings"
-  > */}
-    {/* <Settings className="h-5 w-5 text-neu-300" />
+  >
+     <Settings className="h-5 w-5 text-neu-300" />
     {!collapsed && <span className="text-sm">Settings</span>}
-  </Link> */}
+  </Link>
 
   {/* HELP */}
   {/* <Link
@@ -241,7 +241,7 @@ export default function Sidebar({
   >
     <HelpCircle className="h-5 w-5 text-neu-300" />
     {!collapsed && <span className="text-sm">Help</span>}
-  </Link> */}
+  </Link> */} 
 
   {/* LOGOUT */}
   <button
