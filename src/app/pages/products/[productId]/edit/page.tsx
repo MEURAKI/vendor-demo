@@ -424,7 +424,7 @@ export default function EditProductPage({
 
         // pricing / inventory + variants
         if (data.isVariant) {
-          setPrice(undefined);
+          setPrice((data.priceCents ?? 0) / 100);
           setInventory(undefined);
 
           const loadedVariants: VariantRow[] = (data.variants ?? []).map(
@@ -712,7 +712,7 @@ export default function EditProductPage({
         description,
         baseSku,
         isVariant,
-        priceCents: isVariant ? 0 : Math.round((price ?? 0) * 100),
+        priceCents: isVariant ? Math.round((price ?? 0) * 100) : Math.round((price ?? 0) * 100),
         inventoryQty: isVariant ? 0 : inventory ?? 0,
         discount: discountType
           ? {

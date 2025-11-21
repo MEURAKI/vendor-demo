@@ -912,7 +912,7 @@ export default function NewProductPage() {
         description,
         baseSku,
         isVariant,
-        priceCents: isVariant ? 0 : Math.round((price ?? 0) * 100),
+        priceCents: isVariant ? Math.round((price ?? 0) * 100) : Math.round((price ?? 0) * 100),
         inventoryQty: isVariant ? 0 : inventory ?? 0,
         discount: discountType
           ? {

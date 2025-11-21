@@ -240,7 +240,7 @@ export async function PUT(
       description: body.description,
       base_sku: body.baseSku,
       is_variant: body.isVariant,
-      price_cents: body.isVariant ? null : body.priceCents,
+      price_cents: body.isVariant ? body.priceCents : body.priceCents,
       discount_type: body.discount?.type ?? null,
       discount_value: body.discount?.value ?? null,
       discount_start_at: body.discount?.start ?? null,

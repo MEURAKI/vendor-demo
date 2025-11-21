@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
       description,
       base_sku: baseSku,
       is_variant: isVariant,
-      price_cents: isVariant ? null : priceCents,
+      price_cents: isVariant ? priceCents : priceCents,
       discount_type: discount?.type ?? null,
       discount_value: discount?.value ?? null,
       discount_start_at: discount?.start ?? null,
