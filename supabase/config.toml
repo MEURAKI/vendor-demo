@@ -1,5 +1,5 @@
 [auth]
-site_url = "https://vendor.meuraki.com.sg"
+site_url = "https://subscriber.meuraki.com.sg"
 additional_redirect_urls = ["https://subscriber.meuraki.com.sg/pages/auth/callback"]
 
 [auth.external.google]

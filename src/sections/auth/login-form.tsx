@@ -161,17 +161,17 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-white lg:flex-row">
-      {/* LEFT – FORM, pinned to top on small screens, centered on lg+ */}
-      <div className="flex flex-1 items-start justify-center py-5 lg:items-center h-auto">
-        <div className="w-full max-w-sm px-4 sm:max-w-md sm:px-6 lg:max-w-lg lg:px-10 xl:px-14">
+    <div className="flex h-screen flex-col bg-white lg:flex-row">
+      {/* LEFT – FORM (scrollable if overflow) */}
+      <div className="flex flex-1 items-start justify-center py-4 lg:items-center lg:py-0 overflow-y-auto">
+        <div className="w-full max-w-sm px-4 sm:max-w-md sm:px-6 lg:max-w-lg lg:px-8 xl:px-10">
           {/* Heading */}
-          <div className="mb-4 sm:mb-6 md:mb-8">
-            <h1 className="text-xl font-extrabold leading-tight text-black sm:text-3xl md:text-4xl lg:text-5xl mt-10">
+          <div className="mb-3 sm:mb-4 md:mb-5">
+            <h1 className="mt-4 sm:mt-5 lg:mt-6 text-xl font-extrabold leading-tight text-black sm:text-3xl md:text-4xl lg:text-5xl">
               MEURAKI
               <br /> Vendor Portal
             </h1>
-            <p className="mt-2 text-xs text-gray-500 sm:mt-3 sm:text-sm md:text-base">
+            <p className="mt-2 text-xs text-gray-500 sm:mt-2 sm:text-sm md:text-sm">
               Welcome back! Please sign in to access your account.
             </p>
           </div>
@@ -180,7 +180,7 @@ export default function LoginForm() {
           <form
             onSubmit={handleSubmit}
             noValidate
-            className="space-y-4 sm:space-y-5 md:space-y-6"
+            className="space-y-3 sm:space-y-4 md:space-y-5"
           >
             {/* Email */}
             <div>
@@ -198,7 +198,7 @@ export default function LoginForm() {
                 }}
                 className={[
                   "mt-2 w-full rounded-2xl border px-4",
-                  "h-10 sm:h-11 md:h-12 lg:h-12 xl:h-14",
+                  "h-9 sm:h-10 md:h-11 lg:h-11 xl:h-12",
                   "bg-[#EFEDFF] text-gray-900 placeholder-gray-500",
                   "focus:outline-none focus:ring-2 focus:ring-purple-500",
                   errors.email ? "border-rose-500" : "border-transparent",
@@ -233,7 +233,7 @@ export default function LoginForm() {
                 }}
                 className={[
                   "mt-2 w-full rounded-2xl border px-4",
-                  "h-10 sm:h-11 md:h-12 lg:h-12 xl:h-14",
+                  "h-9 sm:h-10 md:h-11 lg:h-11 xl:h-12",
                   "bg-[#EFEDFF] text-gray-900 placeholder-gray-500",
                   "focus:outline-none focus:ring-2 focus:ring-purple-500",
                   errors.password ? "border-rose-500" : "border-transparent",
@@ -272,13 +272,13 @@ export default function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="h-10 w-full rounded-full bg-black text-sm font-medium text-white shadow-lg shadow-black/10 transition-colors hover:bg-gray-900 disabled:opacity-70 sm:h-11 sm:text-sm md:h-12 md:text-base xl:h-14"
+              className="h-9 w-full rounded-full bg-black text-xs font-medium text-white shadow-lg shadow-black/10 transition-colors hover:bg-gray-900 disabled:opacity-70 sm:h-10 sm:text-sm md:h-11 md:text-sm xl:h-12"
             >
               {loading ? "Signing in…" : "Login"}
             </button>
 
             {/* Forgot password */}
-            <div className=" -mt-1 text-center sm:-mt-2">
+            <div className="-mt-1 text-center sm:-mt-1">
               <Link
                 href="/pages/auth/forgot-password"
                 className="text-xs font-medium text-purple-600 hover:text-purple-700 sm:text-sm"
@@ -288,7 +288,7 @@ export default function LoginForm() {
             </div>
 
             {/* Divider */}
-            <div className="relative my-4 sm:my-5 md:my-6">
+            <div className="relative my-3 sm:my-4 md:my-4">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200" />
               </div>
@@ -303,7 +303,7 @@ export default function LoginForm() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="flex h-10 w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm transition-shadow hover:shadow sm:h-11 sm:text-sm md:h-12 md:text-base xl:h-14"
+              className="flex h-9 w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white text-xs font-medium text-gray-700 shadow-sm transition-shadow hover:shadow sm:h-10 sm:text-sm md:h-11 md:text-sm xl:h-12"
             >
               <svg
                 className="h-4 w-4 sm:h-5 sm:w-5"
@@ -331,7 +331,7 @@ export default function LoginForm() {
             </button>
 
             {/* Subtext + register link */}
-            <div className="mb-3 text-center sm:mb-4">
+            <div className="mb-2 text-center sm:mb-3">
               <p className="text-xs text-gray-500 sm:text-sm">
                 Don&apos;t have an account?{" "}
                 <Link
@@ -341,24 +341,24 @@ export default function LoginForm() {
                   Register your brand
                 </Link>
               </p>
-              <div className="mt-3 flex justify-center sm:mt-4">
+              <div className="mt-2 flex justify-center sm:mt-3">
                 <Image
                   src="/images/register-doodle.svg"
                   alt="Register doodle"
-                  width={140}
-                  height={60}
+                  width={130}
+                  height={55}
                 />
               </div>
             </div>
           </form>
 
           {/* Footer Logo */}
-          <div className="mb-4 mt-4 flex justify-center">
+          <div className="mb-3 mt-3 flex justify-center">
             <Image
               src="/images/logo-meuraki.svg"
               alt="Meuraki"
-              width={120}
-              height={28}
+              width={110}
+              height={26}
               className="opacity-60"
             />
           </div>

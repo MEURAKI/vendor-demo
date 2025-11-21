@@ -112,24 +112,26 @@ export default function SignupForm() {
   };
 
   return (
-    // Full-screen 2-column layout on desktop
-    <div className="min-h-screen lg:h-screen bg-white lg:grid lg:grid-cols-2">
+    // Full-page scroll (scrollbar on far right), 2-column on desktop
+    <div className="flex min-h-screen flex-col bg-white lg:flex-row">
       {/* Left – Form */}
-      <div className="flex h-full items-center justify-center px-6 sm:px-10 lg:px-16 py-10 overflow-y-auto">
+      <div className="flex flex-1 items-start justify-center px-6 sm:px-10 lg:px-16 py-8 lg:items-center">
         <div className="w-full max-w-md">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-black mb-1">
+          <div className="mb-6">
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-black mb-1">
               Create an account
             </h1>
-            <p className="text-gray-500">Please fill in your login details</p>
+            <p className="text-xs sm:text-sm text-gray-500">
+              Please fill in your login details
+            </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
-              <label className="text-black font-semibold tracking-wide text-sm">
+              <label className="text-black font-semibold tracking-wide text-xs sm:text-sm">
                 EMAIL ADDRESS
               </label>
               <input
@@ -138,7 +140,7 @@ export default function SignupForm() {
                 onChange={(e) =>
                   setFormData((s) => ({ ...s, email: e.target.value }))
                 }
-                className="mt-2 w-full h-14 rounded-2xl px-4
+                className="mt-2 w-full h-11 sm:h-12 rounded-2xl px-4
                            bg-[#EFEDFF] border border-transparent
                            text-gray-900 placeholder-gray-500
                            focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -149,7 +151,7 @@ export default function SignupForm() {
 
             {/* Password */}
             <div>
-              <label className="text-black font-semibold tracking-wide text-sm">
+              <label className="text-black font-semibold tracking-wide text-xs sm:text-sm">
                 PASSWORD
               </label>
               <input
@@ -158,7 +160,7 @@ export default function SignupForm() {
                 onChange={(e) =>
                   setFormData((s) => ({ ...s, password: e.target.value }))
                 }
-                className={`mt-2 w-full h-14 rounded-2xl px-4
+                className={`mt-2 w-full h-11 sm:h-12 rounded-2xl px-4
                            bg-[#EFEDFF] border
                            ${
                              formData.password && !allGood
@@ -173,11 +175,11 @@ export default function SignupForm() {
               />
 
               {formData.password.length > 0 && (
-                <div id="password-hints" className="mt-3">
-                  <p className="text-xs text-gray-500 mb-2">
+                <div id="password-hints" className="mt-2">
+                  <p className="text-xs text-gray-500 mb-1.5">
                     Password must include:
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     <Req ok={checks.lower} label="1 lowercase" />
                     <Req ok={checks.upper} label="1 uppercase" />
                     <Req ok={checks.number} label="1 number" />
@@ -189,7 +191,7 @@ export default function SignupForm() {
             </div>
 
             {/* Terms */}
-            <label className="flex items-start gap-3 text-sm text-gray-600">
+            <label className="flex items-start gap-3 text-xs sm:text-sm text-gray-600">
               <input
                 type="checkbox"
                 checked={formData.acceptTerms}
@@ -226,7 +228,7 @@ export default function SignupForm() {
             <button
               type="submit"
               disabled={!allGood}
-              className={`w-full h-14 rounded-full text-base font-medium transition-colors shadow-lg
+              className={`w-full h-11 sm:h-12 rounded-full text-sm sm:text-base font-medium transition-colors shadow-lg
                          ${
                            allGood
                              ? "bg-black text-white hover:bg-gray-900"
@@ -237,12 +239,14 @@ export default function SignupForm() {
             </button>
 
             {/* Divider */}
-            <div className="relative my-6">
+            <div className="relative my-4 sm:my-5">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-white px-3 text-sm text-gray-500">Or</span>
+                <span className="bg-white px-3 text-xs sm:text-sm text-gray-500">
+                  Or
+                </span>
               </div>
             </div>
 
@@ -250,11 +254,11 @@ export default function SignupForm() {
             <button
               type="button"
               onClick={handleGoogleSignup}
-              className="w-full h-14 rounded-2xl bg-white border border-gray-200
-                         flex items-center justify-center gap-3 text-gray-700 font-medium
+              className="w-full h-11 sm:h-12 rounded-2xl bg-white border border-gray-200
+                         flex items-center justify-center gap-3 text-sm text-gray-700 font-medium
                          shadow-sm hover:shadow transition-shadow"
             >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -276,7 +280,7 @@ export default function SignupForm() {
             </button>
 
             {/* Switch to login */}
-            <p className="text-center text-sm text-gray-600">
+            <p className="text-center text-xs sm:text-sm text-gray-600">
               Already have an account?{" "}
               <Link
                 href="/pages/auth/login"
@@ -288,7 +292,7 @@ export default function SignupForm() {
           </form>
 
           {/* Footer logo */}
-          <div className="mt-10 flex justify-center">
+          <div className="mt-8 flex justify-center">
             <Image
               src="/images/logo-meuraki.svg"
               alt="Meuraki"
@@ -300,8 +304,8 @@ export default function SignupForm() {
         </div>
       </div>
 
-      {/* Right – hero panel (full height, no gap) */}
-      <div className="hidden lg:block relative">
+      {/* Right – hero panel */}
+      <div className="relative hidden flex-1 lg:flex">
         <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
           {/* GIF background – full column */}
           <Image
@@ -313,12 +317,12 @@ export default function SignupForm() {
             className="object-cover"
           />
 
-          {/* PNG overlay – centered card, not stretched */}
+          {/* PNG overlay – centered card */}
           <div className="absolute inset-0 flex items-center justify-center">
             <Image
               src="/images/hero-overlay.png"
               alt="Meuraki overlay"
-              width={320} // adjust if needed
+              width={320}
               height={640}
               className="rounded-[28px] pointer-events-none"
             />
