@@ -114,6 +114,7 @@ const DIMENSION_ICON_MAP: Record<string, string> = {
   Social: "/images/wellness/social-realm.png",
   Spiritual: "/images/wellness/spiritual-realm.png",
 };
+
 /* ---------------------- INNER PAGE (with hooks) ---------------------- */
 
 function ShopSettingsPageInner() {
@@ -340,6 +341,69 @@ function ShopSettingsPageInner() {
 
   /* --------------------- Google Places setup --------------------- */
 
+  // Resolve a pasted / typed address into a specific business place using PlacesService
+  function resolveAddressToPlace(address: string) {
+    if (!placesLoaded || !address) return;
+    if (typeof window === "undefined") return;
+
+    const g = (window as any).google;
+    if (!g?.maps?.places?.PlacesService) return;
+
+    const service = new g.maps.places.PlacesService(
+      document.createElement("div")
+    );
+
+    service.findPlaceFromQuery(
+      {
+        query: address,
+        fields: ["formatted_address", "place_id", "name", "url", "website"],
+      },
+      (results: any[], status: string) => {
+        if (
+          status !== g.maps.places.PlacesServiceStatus.OK ||
+          !results ||
+          !results.length
+        ) {
+          // No good match -> keep raw text
+          return;
+        }
+
+        const best = results[0];
+
+        const formatted =
+          best.formatted_address ||
+          addressInputRef.current?.value ||
+          address;
+        const placeId = best.place_id || "";
+        const businessPageId =
+          placeId ||
+          (best.url as string | undefined) ||
+          (best.website as string | undefined) ||
+          "";
+
+        setVb((prev) =>
+          prev
+            ? {
+                ...prev,
+                shop_address: formatted,
+                google_place_id: placeId,
+                google_business_page_id: businessPageId,
+              }
+            : prev
+        );
+      }
+    );
+  }
+
+  function handleAddressBlur() {
+    if (!vb?.shop_address) return;
+
+    // If they pasted / typed and we don't have a place id yet, resolve it
+    if (!vb.google_place_id) {
+      resolveAddressToPlace(vb.shop_address);
+    }
+  }
+
   useEffect(() => {
     if (!placesLoaded) return;
     if (!addressInputRef.current) return;
@@ -347,9 +411,15 @@ function ShopSettingsPageInner() {
     const g = (window as any).google;
     if (!g?.maps?.places?.Autocomplete) return;
 
-    const autocomplete = new g.maps.places.Autocomplete(addressInputRef.current, {
-      types: ["geocode"],
-    });
+    const autocomplete = new g.maps.places.Autocomplete(
+      addressInputRef.current,
+      {
+        // Prefer actual business places
+        types: ["establishment"],
+        componentRestrictions: { country: "sg" },
+        fields: ["formatted_address", "place_id", "name", "url", "website"],
+      }
+    );
 
     autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
@@ -499,8 +569,7 @@ function ShopSettingsPageInner() {
   if (loading || !vb || !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-                <ClipLoader size="md" color="gray" />
-
+        <ClipLoader size="md" color="gray" />
       </div>
     );
   }
@@ -509,9 +578,9 @@ function ShopSettingsPageInner() {
 
   return (
     <>
-      {/* Google Places script */}
+      {/* Google Places script – v2 style (weekly) */}
       <Script
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&v=weekly`}
         strategy="afterInteractive"
         onLoad={() => setPlacesLoaded(true)}
       />
@@ -642,8 +711,12 @@ function ShopSettingsPageInner() {
                       Shop Address
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Start typing to search your business location via Google Places.
-                      Pick one from the dropdown suggestions.
+                      Paste the exact address from Google (e.g.{" "}
+                      <span className="font-mono text-[11px]">
+                        1 Kim Seng Promenade #02-102/103 Great World City, Singapore
+                        237994
+                      </span>
+                      ) or search and select from suggestions.
                     </p>
                   </div>
                   <div className="space-y-4">
@@ -653,10 +726,18 @@ function ShopSettingsPageInner() {
                       value={vb.shop_address ?? ""}
                       onChange={(e) =>
                         setVb((prev) =>
-                          prev ? { ...prev, shop_address: e.target.value } : prev
+                          prev
+                            ? {
+                                ...prev,
+                                shop_address: e.target.value,
+                                // reset so blur will re-resolve to a business place
+                                google_place_id: null,
+                              }
+                            : prev
                         )
                       }
-                      placeholder="Type address and pick from suggestions"
+                      onBlur={handleAddressBlur}
+                      placeholder="Paste or type your full address"
                     />
 
                     <div className="hidden">
@@ -667,7 +748,7 @@ function ShopSettingsPageInner() {
                         disabled
                         className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-gray-900"
                         value={vb.google_business_page_id ?? ""}
-                        placeholder="Automatically set after selecting address"
+                        placeholder="Automatically set after selecting / resolving address"
                       />
                     </div>
                   </div>
@@ -771,47 +852,47 @@ function ShopSettingsPageInner() {
                 <div className="border-t border-gray-200" />
 
                 {/* Wellness Dimensions */}
-<section className="mt-8">
-  <div className="text-sm font-semibold text-gray-900">
-    Select Your Wellness Dimensions
-  </div>
-  <p className="mt-1 text-xs text-gray-500">
-    Choose one or more dimensions that best represent your brand focus.
-  </p>
+                <section className="mt-8">
+                  <div className="text-sm font-semibold text-gray-900">
+                    Select Your Wellness Dimensions
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Choose one or more dimensions that best represent your brand focus.
+                  </p>
 
-  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-    {DIMENSIONS.map((d) => {
-      const active = dimensions.includes(d);
-      const iconSrc = DIMENSION_ICON_MAP[d];
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {DIMENSIONS.map((d) => {
+                      const active = dimensions.includes(d);
+                      const iconSrc = DIMENSION_ICON_MAP[d];
 
-      return (
-        <button
-          key={d}
-          type="button"
-          onClick={() => toggleIn(dimensions, d, setDimensions)}
-          className={clsx(
-            "flex w-full flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-3 text-center text-[11px] leading-tight transition focus:outline-none focus:ring-2 focus:ring-[#5B33FF]/40",
-            active
-              ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
-              : "border-gray-200 bg-white text-gray-700 hover:border-[#C4B5FF]"
-          )}
-        >
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
-            <img
-              src={iconSrc}
-              alt={d}
-              className="h-full w-full object-contain"
-            />
-          </div>
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => toggleIn(dimensions, d, setDimensions)}
+                          className={clsx(
+                            "flex w-full flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-3 text-center text-[11px] leading-tight transition focus:outline-none focus:ring-2 focus:ring-[#5B33FF]/40",
+                            active
+                              ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
+                              : "border-gray-200 bg-white text-gray-700 hover:border-[#C4B5FF]"
+                          )}
+                        >
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
+                            <img
+                              src={iconSrc}
+                              alt={d}
+                              className="h-full w-full object-contain"
+                            />
+                          </div>
 
-          <span className="break-words break-all">{d}</span>
-        </button>
-      );
-    })}
-  </div>
+                          <span className="break-words break-all">{d}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-  <div className="mt-8 border-gray-200" />
-</section>
+                  <div className="mt-8 border-gray-200" />
+                </section>
 
                 {/* Business Category */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -834,7 +915,7 @@ function ShopSettingsPageInner() {
                 </section>
                 <div className="border-t border-gray-200" />
 
-                    <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
                       Shop Description / Bio (Short)
@@ -862,7 +943,7 @@ function ShopSettingsPageInner() {
                   </div>
                 </section>
 
-                                <div className="border-t border-gray-200" />
+                <div className="border-t border-gray-200" />
 
                 {/* Business #Tags */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -887,9 +968,6 @@ function ShopSettingsPageInner() {
                   />
                 </section>
                 <div className="border-t border-gray-200" />
-
-                {/* Short bio */}
-            
 
                 {/* Contact email */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -1243,8 +1321,7 @@ export default function ShopSettingsPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-white">
-                  <ClipLoader size="md" color="gray" />
-
+          <ClipLoader size="md" color="gray" />
         </div>
       }
     >
