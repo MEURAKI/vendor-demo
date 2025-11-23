@@ -51,6 +51,9 @@ type VendorBusiness = {
   commission_type: string | null;
   commission_rate: number | null;
 
+  // ✅ dimensions as array, since DB is an array
+  dimensions: string[] | null;
+
   // NEW: address / google / tags
   shop_address: string | null;
   google_place_id: string | null;
@@ -74,6 +77,31 @@ type VendorBusiness = {
 
 type TabKey = "general" | "fulfilment";
 
+/* ---------------------- Simple Pill component ---------------------- */
+
+type DimensionPillProps = {
+  label: string;
+  selected: boolean;
+  onToggle: () => void;
+};
+
+function DimensionPill({ label, selected, onToggle }: DimensionPillProps) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={[
+        "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border transition",
+        selected
+          ? "bg-black text-white border-black"
+          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100",
+      ].join(" ")}
+    >
+      {label}
+    </button>
+  );
+}
+
 /* ---------------------- INNER PAGE (with hooks) ---------------------- */
 
 function ShopSettingsPageInner() {
@@ -88,13 +116,14 @@ function ShopSettingsPageInner() {
   const [saving, setSaving] = useState(false);
   const { successToast, errorToast } = useToast();
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [dimensions, setDimensions] = useState<string[]>([]);
 
   const urlTab = (searchParams.get("tab") as TabKey) || "general";
   const [activeTab, setActiveTab] = useState<TabKey>(urlTab);
 
   const [modalOpen, setModalOpen] = useState(false);
-const [modalTitle, setModalTitle] = useState("");
-const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
 
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerError, setBannerError] = useState<string | null>(null);
@@ -102,6 +131,25 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
   // Google Places
   const [placesLoaded, setPlacesLoaded] = useState(false);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+
+  const DIMENSIONS = [
+    "Physical",
+    "Emotional",
+    "Mental",
+    "Occupational",
+    "Financial",
+    "Environmental",
+    "Social",
+    "Spiritual",
+  ];
+
+  const toggleIn = (
+    arr: string[],
+    value: string,
+    setArr: (next: string[]) => void
+  ) => {
+    setArr(arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]);
+  };
 
   // Keep local state in sync with URL
   useEffect(() => {
@@ -115,7 +163,7 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
     router.replace(`${pathname}?${params.toString()}`);
   }
 
-   async function handleBannerChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleBannerChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !vb) return;
 
@@ -129,10 +177,8 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
     try {
       setBannerUploading(true);
 
-      // Choose your bucket name here (make sure it exists in Supabase)
       const bucket = "shop-banners";
 
-      // Simple predictable path per vendor
       const filePath = `${vb.id}/shop-banner-${Date.now()}.${file.name
         .split(".")
         .pop()}`;
@@ -172,7 +218,6 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
       setBannerError("Unexpected error while uploading banner.");
     } finally {
       setBannerUploading(false);
-      // reset input so same file can be re-selected
       e.target.value = "";
     }
   }
@@ -222,7 +267,8 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
               delivery_rate_express,
               pickup_address,
               pickup_postal_code,
-              delivery_days_note
+              delivery_days_note,
+              dimensions
             `
           )
           .eq("id", user.id)
@@ -265,6 +311,8 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
         pickup_address: "",
         pickup_postal_code: "",
         delivery_days_note: "",
+        // default to empty array for dimensions
+        dimensions: [],
       };
 
       const merged: VendorBusiness = { ...defaults, ...(vbRow || {}) };
@@ -272,6 +320,8 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
       setProfile(profTyped);
       setVb(merged);
       setBioCount(merged.shop_bio?.length || 0);
+      // hydrate local dimensions state from DB
+      setDimensions(merged.dimensions ?? []);
       setLoading(false);
     })();
   }, []);
@@ -287,16 +337,14 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
 
     const autocomplete = new g.maps.places.Autocomplete(addressInputRef.current, {
       types: ["geocode"],
-      // you can restrict to SG if you want:
-      // componentRestrictions: { country: "sg" },
     });
 
     autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
-      const formatted = place.formatted_address || addressInputRef.current?.value || "";
+      const formatted =
+        place.formatted_address || addressInputRef.current?.value || "";
       const placeId = place.place_id || "";
 
-      // for now we store place_id twice; you can map this to whatever ID you like
       const businessPageId =
         placeId ||
         (place.url as string | undefined) ||
@@ -371,73 +419,39 @@ const [modalMessage, setModalMessage] = useState<JSX.Element | null>(null);
       pickup_postal_code: src.pickup_postal_code,
       delivery_days_note: src.delivery_days_note,
 
+      // ✅ send as Postgres array (text[]) via Supabase
+      dimensions: dimensions.length ? dimensions : null,
+
       updated_at: new Date().toISOString(),
     };
   }
 
-const autocompleteRef = useRef<any>(null);
-
-  useEffect(() => {
-  // run only in browser
-  if (typeof window === "undefined") return;
-  if (autocompleteRef.current) return; // already initialised
-  if (!addressInputRef.current) return;
-
-  const g = (window as any).google;
-  if (!g?.maps?.places) return; // script not ready yet
-
-  const autocomplete = new g.maps.places.Autocomplete(addressInputRef.current, {
-    types: ["geocode"],
-    // optional: restrict to SG
-    componentRestrictions: { country: ["sg"] },
-  });
-
-  autocomplete.addListener("place_changed", () => {
-    const place = autocomplete.getPlace();
-    const formatted =
-      place.formatted_address || addressInputRef.current?.value || "";
-    const placeId = place.place_id || "";
-
-    setVb((prev) =>
-      prev
-        ? {
-            ...prev,
-            shop_address: formatted,
-            google_business_page_id: placeId,
-          }
-        : prev
-    );
-  });
-
-  autocompleteRef.current = autocomplete;
-}, [setVb]);
-
   async function save(tab: TabKey) {
     if (!vb) return;
 
-      if (tab === "general") {
-    const trimmedSlug = (vb.shop_slug || "").trim();
+    if (tab === "general") {
+      const trimmedSlug = (vb.shop_slug || "").trim();
 
-    if (!trimmedSlug) {
-      setModalTitle("Add your shop URL");
-      setModalMessage(
-        <>
-          <p className="text-xs text-gray-700">
-            To save your shop settings, please add a <strong>Shop URL / Handle</strong>.
-          </p>
-          <p className="mt-2 text-[11px] text-gray-500">
-            This is the last part of your public shop link, e.g.&nbsp;
-            <span className="font-mono text-[11px]">
-              https://meuraki.com.sg/<span className="underline">your-shop</span>
-            </span>
-            .
-          </p>
-        </>
-      );
-      setModalOpen(true);
-      return; // ⛔ stop here, don’t save
+      if (!trimmedSlug) {
+        setModalTitle("Add your shop URL");
+        setModalMessage(
+          <>
+            <p className="text-xs text-gray-700">
+              To save your shop settings, please add a <strong>Shop URL / Handle</strong>.
+            </p>
+            <p className="mt-2 text-[11px] text-gray-500">
+              This is the last part of your public shop link, e.g.&nbsp;
+              <span className="font-mono text-[11px]">
+                https://meuraki.com.sg/<span className="underline">your-shop</span>
+              </span>
+              .
+            </p>
+          </>
+        );
+        setModalOpen(true);
+        return;
+      }
     }
-  }
 
     setSaving(true);
 
@@ -449,6 +463,7 @@ const autocompleteRef = useRef<any>(null);
 
     setSaving(false);
     if (error) {
+      console.error(error);
       errorToast({
         title: "Error",
         description:
@@ -489,13 +504,13 @@ const autocompleteRef = useRef<any>(null);
       />
 
       <AppModal
-      open={modalOpen}
-      title={modalTitle}
-      message={modalMessage}
-      primaryLabel="Okay, got it"
-      onPrimaryClick={() => setModalOpen(false)}
-      onClose={() => setModalOpen(false)}
-    />
+        open={modalOpen}
+        title={modalTitle}
+        message={modalMessage}
+        primaryLabel="Okay, got it"
+        onPrimaryClick={() => setModalOpen(false)}
+        onClose={() => setModalOpen(false)}
+      />
 
       <div className="flex h-screen bg-[#F7F7FB]">
         <Sidebar config={sidebarConfig} />
@@ -608,42 +623,42 @@ const autocompleteRef = useRef<any>(null);
                 </section>
 
                 {/* Shop Address + Google Business Page ID */}
-              <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-  <div>
-    <div className="text-sm font-semibold text-gray-900">
-      Shop Address
-    </div>
-    <p className="mt-1 text-xs text-gray-500">
-      Start typing to search your business location via Google Places.
-      Pick one from the dropdown suggestions.
-    </p>
-  </div>
-  <div className="space-y-4">
-    <input
-      ref={addressInputRef}
-      className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-      value={vb.shop_address ?? ""}
-      onChange={(e) =>
-        setVb((prev) =>
-          prev ? { ...prev, shop_address: e.target.value } : prev
-        )
-      }
-      placeholder="Type address and pick from suggestions"
-    />
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Shop Address
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Start typing to search your business location via Google Places.
+                      Pick one from the dropdown suggestions.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <input
+                      ref={addressInputRef}
+                      className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                      value={vb.shop_address ?? ""}
+                      onChange={(e) =>
+                        setVb((prev) =>
+                          prev ? { ...prev, shop_address: e.target.value } : prev
+                        )
+                      }
+                      placeholder="Type address and pick from suggestions"
+                    />
 
-    <div>
-      <label className="mb-1 block text-xs text-gray-500">
-        Google Business Page ID (Filled automatically)
-      </label>
-      <input
-        disabled
-        className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-gray-900"
-        value={vb.google_business_page_id ?? ""}
-        placeholder="Automatically set after selecting address"
-      />
-    </div>
-  </div>
-</section>
+                    <div>
+                      <label className="mb-1 block text-xs text-gray-500">
+                        Google Business Page ID (Filled automatically)
+                      </label>
+                      <input
+                        disabled
+                        className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-gray-900"
+                        value={vb.google_business_page_id ?? ""}
+                        placeholder="Automatically set after selecting address"
+                      />
+                    </div>
+                  </div>
+                </section>
 
                 <div className="border-t border-gray-200" />
 
@@ -681,6 +696,7 @@ const autocompleteRef = useRef<any>(null);
                 </section>
                 <div className="border-t border-gray-200" />
 
+                {/* Shop Banner */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
@@ -740,6 +756,27 @@ const autocompleteRef = useRef<any>(null);
                   </div>
                 </section>
                 <div className="border-t border-gray-200" />
+
+                {/* Wellness Dimensions */}
+                <section className="mt-8">
+                  <div className="text-sm font-semibold text-gray-900">
+                    Select Your Wellness Dimensions
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Choose one or more dimensions that best represent your brand focus.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {DIMENSIONS.map((d) => (
+                      <DimensionPill
+                        key={d}
+                        label={d}
+                        selected={dimensions.includes(d)}
+                        onToggle={() => toggleIn(dimensions, d, setDimensions)}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-8 border-gray-200" />
+                </section>
 
                 {/* Business Category */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -842,7 +879,7 @@ const autocompleteRef = useRef<any>(null);
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
-                      Shop Contact Phone Number
+                      Shop WhatsApp Number
                     </div>
                     <p className="mt-1 text-xs text-gray-500">For customer inquiries.</p>
                   </div>

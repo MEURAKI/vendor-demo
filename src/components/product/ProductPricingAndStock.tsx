@@ -165,10 +165,11 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
           <div className="mt-2 grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)]">
             <input
               type="text"
+              readOnly
               value={baseSku}
               onChange={(e) => onBaseSkuChange(e.target.value.toUpperCase())}
               placeholder="INNERDRIVETM–GRUNGE-TEE"
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm uppercase tracking-wide text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+              className="rounded-Choose one or more dimensions that best represent your brand focus.2xl border border-gray-200 bg-white px-4 py-2.5 text-sm uppercase tracking-wide text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none"
             />
             <input
               type="text"
