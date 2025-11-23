@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
+import ClipLoader from "react-spinners/ClipLoader";
 
 function readHash() {
   const hash = typeof window !== "undefined" ? window.location.hash : "";
@@ -82,9 +83,9 @@ export default function ResetPasswordPage() {
   if (!ready) {
     return (
       <div className="grid min-h-screen place-items-center bg-white">
-        <p className="text-gray-600">Loading…</p>
+               <ClipLoader size="md" color="gray" />
       </div>
-    );
+    ); 
   }
 
   return (

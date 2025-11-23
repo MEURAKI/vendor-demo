@@ -326,7 +326,7 @@ const [clientsServed, setClientsServed] = useState<number | null>(null);
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#050509]">
-        <p className="text-xs text-gray-300">Loading provider…</p>
+                <ClipLoader size="md" color="gray" />
       </div>
     );
   }

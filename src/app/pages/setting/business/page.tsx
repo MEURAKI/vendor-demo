@@ -1298,7 +1298,7 @@ function BusinessSettingsPageInner() {
   if (loading || !profile || !biz) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-gray-600">Loading business settings…</p>
+        <ClipLoader size="md" color="gray" />
       </div>
     );
   }
@@ -1337,7 +1337,7 @@ export default function BusinessSettingsPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-white">
-          <p className="text-gray-600">Loading business settings…</p>
+                 <ClipLoader size="md" color="gray" />
         </div>
       }
     >

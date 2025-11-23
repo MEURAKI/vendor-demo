@@ -7,6 +7,7 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import Link from "next/link";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type DocKind = "vendor_agreement" | "uen_acra" | "product_certificate" | "service_certificate";
 type DocRow = {
@@ -97,7 +98,8 @@ export default function VerificationStatusPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-gray-600">Loading…</p>
+               <ClipLoader size="md" color="gray" />
+
       </div>
     );
   }

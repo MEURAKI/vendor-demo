@@ -18,6 +18,7 @@ import { useToast } from "../../../../components/toast/ToastProvider";
 import AppModal from "../../../../components/common/AppModal";
 import Image from "next/image";
 import clsx from "clsx";
+import ClipLoader from "react-spinners/ClipLoader";
 
 declare const google: any; // for TS, Google Maps is loaded via <Script>
 
@@ -498,7 +499,8 @@ function ShopSettingsPageInner() {
   if (loading || !vb || !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-gray-600">Loading shop settings…</p>
+                <ClipLoader size="md" color="gray" />
+
       </div>
     );
   }
@@ -1241,7 +1243,8 @@ export default function ShopSettingsPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-white">
-          <p className="text-gray-600">Loading shop settings…</p>
+                  <ClipLoader size="md" color="gray" />
+
         </div>
       }
     >

@@ -240,7 +240,8 @@ export default function BrandStoryOfferingsPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-gray-600">Loading…</p>
+                <ClipLoader size="md" color="gray" />
+
       </div>
     );
   }

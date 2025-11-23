@@ -270,7 +270,8 @@ export default function EditSpacePage({
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#050509]">
-        <p className="text-xs text-gray-300">Loading space…</p>
+                <ClipLoader size="md" color="gray" />
+
       </div>
     );
   }

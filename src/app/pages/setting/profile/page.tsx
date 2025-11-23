@@ -9,6 +9,7 @@ import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import SettingsNav from "../../../../components/settings/SettingsNav";
+import ClipLoader from "react-spinners/ClipLoader";
 
 /* ------------------- Types ------------------- */
 
@@ -584,7 +585,8 @@ function AccountSettingsPageInner() {
   if (loading || !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-gray-600">Loading settings…</p>
+                <ClipLoader size="md" color="gray" />
+
       </div>
     );
   }
@@ -1168,7 +1170,8 @@ export default function AccountSettingsPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-white">
-          <p className="text-gray-600">Loading account settings…</p>
+                  <ClipLoader size="md" color="gray" />
+
         </div>
       }
     >
