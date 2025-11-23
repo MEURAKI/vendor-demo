@@ -386,42 +386,42 @@ function BusinessSettingsPageInner() {
 
   /* ---------- Sidebar config ---------- */
 
-  const completeness = useMemo(() => {
-    if (!biz) {
-      return {
-        missing: { logo: true, policy: true, certificates: true, payout: true },
-        overallIncomplete: true,
-        navAlerts: {} as Record<string, boolean>,
-      };
-    }
-
-    const hasLogo = !!biz.brand_logo_url;
-    const hasPolicy = !!biz.policy_url;
-
-    const hasAnyCert =
-      docs.filter(
-        (d) => d.kind === "product_certificate" || d.kind === "service_certificate"
-      ).length > 0;
-
-    const hasPayout =
-      !!payout?.stripe_account_id || !!payout?.bank_holder_name;
-
-    const missing = {
-      logo: !hasLogo,
-      policy: !hasPolicy,
-      certificates: !hasAnyCert,
-      payout: !hasPayout,
+const completeness = useMemo(() => {
+  if (!biz) {
+    return {
+      missing: { logo: true, policy: true, certificates: true, payout: true },
+      overallIncomplete: true,
+      navAlerts: {} as Record<string, boolean>,
     };
+  }
 
-    const overallIncomplete = Object.values(missing).some(Boolean);
+  const hasLogo = !!biz.brand_logo_url;
+  const hasPolicy = !!biz.policy_url;
 
-    const navAlerts = {
-      "/pages/setting/business": overallIncomplete, // entire business settings
-      "/pages/setting/payouts": missing.payout,
-    };
+  const hasAnyCert =
+    docs.filter(
+      (d) => d.kind === "product_certificate" || d.kind === "service_certificate"
+    ).length > 0;
 
-    return { missing, overallIncomplete, navAlerts };
-  }, [biz, docs, payout]);
+  const hasPayout =
+    !!payout?.stripe_account_id || !!payout?.bank_holder_name;
+
+  const missing = {
+    logo: !hasLogo,
+    policy: !hasPolicy,
+    certificates: !hasAnyCert,
+    payout: !hasPayout,
+  };
+
+  const overallIncomplete = Object.values(missing).some(Boolean);
+
+  const navAlerts = {
+    "/pages/setting/business": overallIncomplete,
+    "/pages/setting/payouts": missing.payout,
+  };
+
+  return { missing, overallIncomplete, navAlerts };
+}, [biz, docs, payout]);
 
   const sidebarConfig = useMemo(
     () =>
@@ -1189,63 +1189,65 @@ function BusinessSettingsPageInner() {
     );
   }
 
-  function renderVerificationTab() {
-    return (
-      <>
-        <div className="mt-8">
-          {/* Account status card */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-[15px] font-semibold text-gray-900">Account Status</div>
-              {completeness.overallIncomplete ? (
-                <span className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
-                  ● Incomplete Registration
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  ● Complete
-                </span>
-              )}
+function renderVerificationTab() {
+  return (
+    <>
+      <div className="mt-8">
+        {/* Account status card */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div className="text-[15px] font-semibold text-gray-900">
+              Account Status
             </div>
-
-            {completeness.overallIncomplete && (
-              <div className="mt-4 rounded-xl bg-black px-4 py-2 text-sm font-medium text-white">
-                Some required details are missing
-              </div>
+            {completeness.overallIncomplete ? (
+              <span className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+                ● Incomplete Registration
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                ● Complete
+              </span>
             )}
           </div>
 
-          {/* Missing checklist */}
-          <div className="mt-6 divide-y divide-gray-200 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <VerificationRow
-              label="Business Logo"
-              missing={true}
-              href="/pages/setting/business?tab=business"
-              cta="Go to Business Information"
-            />
-            <VerificationRow
-              label="Refund Policy link"
-              missing={completeness.missing.policy}
-              href="/pages/setting/business?tab=docs"
-              cta="Go to Documents & Agreements"
-            />
-            <VerificationRow
-              label="Upload Business Certificates"
-              missing={completeness.missing.certificates}
-              href="/pages/setting/business?tab=docs"
-              cta="Go to Business Settings"
-            />
-            <VerificationRow
-              label="Payout Details"
-              missing={completeness.missing.payout}
-              href="/pages/setting/payouts"
-              cta="Go to Payout Details"
-            />
-          </div>
+          {completeness.overallIncomplete && (
+            <div className="mt-4 rounded-xl bg-black px-4 py-2 text-sm font-medium text-white">
+              Some required details are missing
+            </div>
+          )}
         </div>
-      </>
-    );
-  }
+
+        {/* Missing checklist */}
+        <div className="mt-6 divide-y divide-gray-200 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <VerificationRow
+            label="Business Logo"
+            missing={completeness.missing.logo}  
+            href="/pages/setting/business?tab=business"
+            cta="Go to Business Information"
+          />
+          <VerificationRow
+            label="Refund Policy link"
+            missing={completeness.missing.policy}
+            href="/pages/setting/business?tab=docs"
+            cta="Go to Documents & Agreements"
+          />
+          <VerificationRow
+            label="Upload Business Certificates"
+            missing={completeness.missing.certificates}
+            href="/pages/setting/business?tab=docs"
+            cta="Go to Business Settings"
+          />
+          <VerificationRow
+            label="Payout Details"
+            missing={completeness.missing.payout}
+            href="/pages/setting/payouts"
+            cta="Go to Payout Details"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
 
   /* ---------- Sticky footer per tab ---------- */
 
