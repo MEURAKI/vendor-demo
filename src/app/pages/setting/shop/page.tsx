@@ -17,6 +17,7 @@ import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.confi
 import { useToast } from "../../../../components/toast/ToastProvider";
 import AppModal from "../../../../components/common/AppModal";
 import Image from "next/image";
+import clsx from "clsx";
 
 declare const google: any; // for TS, Google Maps is loaded via <Script>
 
@@ -102,6 +103,16 @@ function DimensionPill({ label, selected, onToggle }: DimensionPillProps) {
   );
 }
 
+const DIMENSION_ICON_MAP: Record<string, string> = {
+  Physical: "/images/wellness/physical-realm.png",
+  Emotional: "/images/wellness/emotional-realm.png",
+  Mental: "/images/wellness/mental-realm.png",
+  Occupational: "/images/wellness/occupational-realm.png",
+  Financial: "/images/wellness/financial-realm.png",
+  Environmental: "/images/wellness/Environmental-realm.png", // capital E in your file
+  Social: "/images/wellness/social-realm.png",
+  Spiritual: "/images/wellness/spiritual-realm.png",
+};
 /* ---------------------- INNER PAGE (with hooks) ---------------------- */
 
 function ShopSettingsPageInner() {
@@ -758,25 +769,47 @@ function ShopSettingsPageInner() {
                 <div className="border-t border-gray-200" />
 
                 {/* Wellness Dimensions */}
-                <section className="mt-8">
-                  <div className="text-sm font-semibold text-gray-900">
-                    Select Your Wellness Dimensions
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Choose one or more dimensions that best represent your brand focus.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {DIMENSIONS.map((d) => (
-                      <DimensionPill
-                        key={d}
-                        label={d}
-                        selected={dimensions.includes(d)}
-                        onToggle={() => toggleIn(dimensions, d, setDimensions)}
-                      />
-                    ))}
-                  </div>
-                  <div className="mt-8 border-gray-200" />
-                </section>
+<section className="mt-8">
+  <div className="text-sm font-semibold text-gray-900">
+    Select Your Wellness Dimensions
+  </div>
+  <p className="mt-1 text-xs text-gray-500">
+    Choose one or more dimensions that best represent your brand focus.
+  </p>
+
+  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+    {DIMENSIONS.map((d) => {
+      const active = dimensions.includes(d);
+      const iconSrc = DIMENSION_ICON_MAP[d];
+
+      return (
+        <button
+          key={d}
+          type="button"
+          onClick={() => toggleIn(dimensions, d, setDimensions)}
+          className={clsx(
+            "flex w-full flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-3 text-center text-[11px] leading-tight transition focus:outline-none focus:ring-2 focus:ring-[#5B33FF]/40",
+            active
+              ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
+              : "border-gray-200 bg-white text-gray-700 hover:border-[#C4B5FF]"
+          )}
+        >
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
+            <img
+              src={iconSrc}
+              alt={d}
+              className="h-full w-full object-contain"
+            />
+          </div>
+
+          <span className="break-words break-all">{d}</span>
+        </button>
+      );
+    })}
+  </div>
+
+  <div className="mt-8 border-gray-200" />
+</section>
 
                 {/* Business Category */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">

@@ -16,6 +16,24 @@ type InventoryStatus =
   | "published"
   | "inactive";
 
+type ProductImageRow = {
+  url: string;
+  sort_order: number | null;
+};
+
+// helper to safely get the first image from product_images[]
+function getFirstImage(
+  images: ProductImageRow[] | null | undefined
+): string | null {
+  if (!images || images.length === 0) return null;
+
+  const sorted = [...images].sort(
+    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  );
+
+  return sorted[0]?.url ?? null;
+}
+
 export async function GET(req: Request) {
   const client = supa();
 
@@ -45,7 +63,6 @@ export async function GET(req: Request) {
     );
   }
 
-  // assumes products.vendor_id references the logged-in vendor
   const vendorId = user.id;
 
   /* ----------------- 1) LOAD ALL PRODUCTS FOR THIS VENDOR ----------------- */
@@ -64,10 +81,15 @@ export async function GET(req: Request) {
       vendor_id,
       product_categories (
         category
+      ),
+      product_images (
+        url,
+        sort_order
       )
     `
     )
     .eq("vendor_id", vendorId);
+
 
   if (productsError) {
     console.error("[inventory] products error:", productsError);
@@ -79,7 +101,6 @@ export async function GET(req: Request) {
 
   const products = productsData ?? [];
 
-  // split into single products and variant products
   const singleProducts = products.filter((p: any) => !p.is_variant);
   const variantParentProducts = products.filter((p: any) => p.is_variant);
 
@@ -99,7 +120,8 @@ export async function GET(req: Request) {
         price_cents,
         inventory_qty,
         options_json,
-        product_id
+        product_id,
+        image_url
       `
       )
       .in("product_id", variantParentIds);
@@ -117,46 +139,55 @@ export async function GET(req: Request) {
 
   /* ----------------- 3) MAP VARIANT ROWS ----------------- */
 
-  const variantRows = variantData.map((v: any) => {
-    const product = variantParentProducts.find(
-      (p: any) => p.id === v.product_id
-    );
+  const variantRows = (variantData
+    .map((v: any) => {
+      const product = variantParentProducts.find(
+        (p: any) => p.id === v.product_id
+      );
 
-    // if for some reason there's no matching product, skip this row
-    if (!product) {
-      return null;
-    }
+      if (!product) return null;
 
-    const catRel = product.product_categories?.[0];
-    const categoryName = catRel?.category ?? "—";
+      const catRel = product.product_categories?.[0];
+      const categoryName = catRel?.category ?? "—";
 
-    let variantLabel: string | null = null;
-    if (v.options_json && typeof v.options_json === "object") {
-      const parts = Object.values(v.options_json as Record<string, string>);
-      if (parts.length) {
-        variantLabel = parts.join(" · ");
+      let variantLabel: string | null = null;
+      if (v.options_json && typeof v.options_json === "object") {
+        const parts = Object.values(v.options_json as Record<string, string>);
+        if (parts.length) {
+          variantLabel = parts.join(" · ");
+        }
       }
-    }
 
-    const stock = v.inventory_qty ?? 0;
+      const stock = v.inventory_qty ?? 0;
 
-    let status: InventoryStatus =
-      (product.status as InventoryStatus) ?? "draft";
-    if (stock <= 0) status = "out_of_stock";
+      let status: InventoryStatus =
+        (product.status as InventoryStatus) ?? "draft";
+      if (stock <= 0) status = "out_of_stock";
 
-    return {
-      id: String(v.id),
-      productId: String(product.id),
-      productName: product.name ?? "Untitled product",
-      variantLabel,
-      category: categoryName,
-      priceCents: v.price_cents ?? 0,
-      stock,
-      sku: v.sku ?? product.base_sku ?? "",
-      status,
-      // imageUrl: v.image_url ?? product.image_url ?? null,
-    };
-  }).filter(Boolean) as {
+      // 1️⃣ first try variant-specific image (column on product_variants)
+      const variantImage = v.image_url || null;
+
+      // 2️⃣ fallback to product's first image from product_images[]
+      const productFirstImage = getFirstImage(
+        product.product_images as ProductImageRow[] | null | undefined
+      );
+
+      const imageUrl = variantImage ?? productFirstImage;
+
+      return {
+        id: String(v.id),
+        productId: String(product.id),
+        productName: product.name ?? "Untitled product",
+        variantLabel,
+        category: categoryName,
+        priceCents: v.price_cents ?? 0,
+        stock,
+        sku: v.sku ?? product.base_sku ?? "",
+        status,
+        imageUrl,
+      };
+    })
+    .filter(Boolean) as {
     id: string;
     productId: string;
     productName: string;
@@ -166,7 +197,8 @@ export async function GET(req: Request) {
     stock: number;
     sku: string;
     status: InventoryStatus;
-  }[];
+    imageUrl: string | null;
+  }[]);
 
   /* ----------------- 4) MAP SINGLE PRODUCT ROWS ----------------- */
 
@@ -179,6 +211,11 @@ export async function GET(req: Request) {
     let status: InventoryStatus = (p.status as InventoryStatus) ?? "draft";
     if (stock <= 0) status = "out_of_stock";
 
+    // first image for product from product_images[]
+    const productFirstImage = getFirstImage(
+      p.product_images as ProductImageRow[] | null | undefined
+    );
+
     return {
       id: String(p.id),
       productId: String(p.id),
@@ -189,7 +226,7 @@ export async function GET(req: Request) {
       stock,
       sku: p.base_sku ?? "",
       status,
-      // imageUrl: p.image_url ?? null,
+      imageUrl: productFirstImage,
     };
   });
 

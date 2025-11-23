@@ -75,48 +75,48 @@ export default function WellnessCategoryTagsSection({
           <p className="mt-1 text-[11px] text-gray-500">
             Choose one or more wellness dimensions.
           </p>
-<div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
-  {wellnessOptions.map((w) => {
-    const active = cleanWellnessDimensions.includes(Number(w.id));
-    const iconSrc = `/images/wellness/${w.slug}`;
+            <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3">
+              {wellnessOptions.map((w) => {
+                const active = cleanWellnessDimensions.includes(Number(w.id));
+                const iconSrc = `/images/wellness/${w.slug}`;
 
-    return (
-      <button
-        key={w.id}
-        type="button"
-        onClick={() => {
-          onChangeWellness(
-            active
-              ? selectedWellnessIds.filter((id) => id !== w.id)
-              : [...selectedWellnessIds, w.id]
-          );
-        }}
-        className={clsx(
-          // ✅ full width, flex-col on small, no overflow
-          "flex w-full flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-3 text-center text-[11px] leading-tight transition focus:outline-none focus:ring-2 focus:ring-[#5B33FF]/40",
-          active
-            ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
-            : "border-gray-200 bg-white text-gray-700 hover:border-[#C4B5FF]"
-        )}
-      >
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
-          <Image
-            src={iconSrc}
-            alt={w.name}
-            width={32}
-            height={32}
-            className="h-full w-full object-contain"
-          />
-        </div>
+                return (
+                  <button
+                    key={w.id}
+                    type="button"
+                    onClick={() => {
+                      onChangeWellness(
+                        active
+                          ? selectedWellnessIds.filter((id) => id !== w.id)
+                          : [...selectedWellnessIds, w.id]
+                      );
+                    }}
+                    className={clsx(
+                      // ✅ full width, flex-col on small, no overflow
+                      "flex w-full flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-3 text-center text-[11px] leading-tight transition focus:outline-none focus:ring-2 focus:ring-[#5B33FF]/40",
+                      active
+                        ? "border-[#5B33FF] bg-[#EFEDFF] text-[#1B1529]"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-[#C4B5FF]"
+                    )}
+                  >
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F5F3FF]">
+                      <Image
+                        src={iconSrc}
+                        alt={w.name}
+                        width={32}
+                        height={32}
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
 
-        {/* ✅ text wraps, no more cutting outside pill */}
-        <span className="break-words break-all">
-          {w.name}
-        </span>
-      </button>
-    );
-  })}
-</div>
+                    {/* ✅ text wraps, no more cutting outside pill */}
+                    <span className="break-words break-all">
+                      {w.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
         </div>
 
         {/* Categories as chips */}
