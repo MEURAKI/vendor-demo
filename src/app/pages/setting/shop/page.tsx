@@ -646,7 +646,7 @@ function ShopSettingsPageInner() {
                       placeholder="Type address and pick from suggestions"
                     />
 
-                    <div>
+                    <div className="hidden">
                       <label className="mb-1 block text-xs text-gray-500">
                         Google Business Page ID (Filled automatically)
                       </label>
@@ -799,32 +799,7 @@ function ShopSettingsPageInner() {
                 </section>
                 <div className="border-t border-gray-200" />
 
-                {/* Business #Tags */}
-                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  <div>
-                    <div className="text-sm font-semibold text-gray-900">
-                      Business #Tags
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Primary focus tags. Use comma or space separated hashtags (e.g.
-                      #yoga, #yogamats).
-                    </p>
-                  </div>
-                  <input
-                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                    value={vb.business_tags ?? ""}
-                    onChange={(e) =>
-                      setVb((prev) =>
-                        prev ? { ...prev, business_tags: e.target.value } : prev
-                      )
-                    }
-                    placeholder="#yoga, #yogamats"
-                  />
-                </section>
-                <div className="border-t border-gray-200" />
-
-                {/* Short bio */}
-                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
                       Shop Description / Bio (Short)
@@ -851,7 +826,35 @@ function ShopSettingsPageInner() {
                     </div>
                   </div>
                 </section>
+
+                                <div className="border-t border-gray-200" />
+
+                {/* Business #Tags */}
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Business #Tags
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Primary focus tags. Use comma or space separated hashtags (e.g.
+                      #yoga, #yogamats).
+                    </p>
+                  </div>
+                  <input
+                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                    value={vb.business_tags ?? ""}
+                    onChange={(e) =>
+                      setVb((prev) =>
+                        prev ? { ...prev, business_tags: e.target.value } : prev
+                      )
+                    }
+                    placeholder="#yoga, #yogamats"
+                  />
+                </section>
                 <div className="border-t border-gray-200" />
+
+                {/* Short bio */}
+            
 
                 {/* Contact email */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
