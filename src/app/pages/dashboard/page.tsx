@@ -216,6 +216,42 @@ export default function DashboardPage() {
             },
           ],
         },
+        {
+        id: "orders-bookings",
+        label: "Orders & Bookings",
+        groups: [
+          {
+            id: "orders",
+            label: "Orders",
+            icon: "Boxes",
+            items: [
+              // make these paths match your actual routes
+              { id: "o-all", label: "All Orders", href: "/pages/vendor/orders" },
+              { id: "o-pending", label: "Pending", href: "/pages/vendor/orders/pending" },
+              { id: "o-delivery", label: "Delivery Orders", href: "/pages/vendor/orders/delivery" },
+              { id: "o-pickup", label: "Pickup Orders", href: "/pages/vendor/orders/pickup" },
+            ],
+          },
+          {
+            id: "bookings",
+            label: "Bookings",
+            icon: "CalendarDays",
+            items: [
+              { id: "b-all", label: "All Bookings", href: "/vendor/bookings" },
+              { id: "b-upcoming", label: "Upcoming", href: "/vendor/bookings/upcoming" },
+              { id: "b-reschedules", label: "Reschedules", href: "/vendor/bookings/reschedules" },
+              { id: "b-cancelled", label: "Cancelled", href: "/vendor/bookings/cancelled" },
+            ],
+          },
+          {
+            id: "customers",
+            label: "Customers",
+            icon: "Users",
+            items: [{ id: "c-all", label: "Customers", href: "/vendor/customers" }],
+          },
+        ],
+      },
+
       ],
     };
   }, [profile]);
