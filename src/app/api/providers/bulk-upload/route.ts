@@ -14,13 +14,18 @@ export const runtime = "nodejs";
 
 type ProviderStatus = "draft" | "active" | "unavailable";
 
+type Qualification = {
+  year: string;
+  title: string;
+  institute: string;
+};
+
 type PreparedRow = {
   providerInsert: {
     vendor_id: string;
     name: string;
     specialisation_areas: string | null;
     description: string | null;
-    status: ProviderStatus;
     whatsapp_country_code: string | null;
     whatsapp_number: string | null;
     wellness_dimensions: string[];
@@ -28,6 +33,11 @@ type PreparedRow = {
     tags: string[];
     cover_image_url: string | null;
     total_images: number;
+    status: ProviderStatus;
+    qualifications: Qualification[];
+    designation?: string | null;
+    years_experience?: number | null;
+    clients_served?: number | null;
   };
   imageUrls: string[];
 };
@@ -60,6 +70,13 @@ function parseWhatsapp(raw: string | undefined | null): {
 
   // Otherwise, treat as number only
   return { countryCode: null, number: digits };
+}
+
+// safe integer parse: "" or NaN → null
+function parseIntOrNull(value: string | undefined | null): number | null {
+  if (!value) return null;
+  const n = parseInt(value, 10);
+  return Number.isNaN(n) ? null : n;
 }
 
 export async function POST(req: NextRequest) {
@@ -130,21 +147,47 @@ export async function POST(req: NextRequest) {
 
       const name = (row["Provider_Name"] || "").trim();
       if (!name) {
-        console.warn(`[providers bulk] Skipping row ${rowNumber} – missing Provider_Name`);
+        console.warn(
+          `[providers bulk] Skipping row ${rowNumber} – missing Provider_Name`
+        );
         return;
       }
 
-      const specialisationAreas = (row["Specialisation_Areas"] || "").trim() || null;
+      const specialisationAreas =
+        (row["Specialisation_Areas"] || "").trim() || null;
       const description = (row["Profile_Paragraphs"] || "").trim() || null;
 
+      // 🔹 Qualifications 1..15
+      const qualifications: Qualification[] = [];
+      const MAX_QUALIFICATIONS = 15;
+
+      for (let i = 1; i <= MAX_QUALIFICATIONS; i++) {
+        const title =
+          (row[`Qualification_${i}_Title`] || "").trim();
+        const institute =
+          (row[`Qualification_${i}_Institute`] || "").trim();
+        const year =
+          (row[`Qualification_${i}_Year`] || "").trim();
+
+        // Skip if all three empty
+        if (!title && !institute && !year) continue;
+
+        qualifications.push({
+          title,
+          institute,
+          year,
+        });
+      }
+
+      // WhatsApp
       const whatsappRaw = (row["Contact_Whatsapp_Number"] || "").trim();
       const { countryCode, number } = parseWhatsapp(whatsappRaw);
 
-      // arrays
+      // Arrays
       const categories = parseListCell(row["Provider_Categories"]);
       const wellnessDimensions = parseListCell(row["Provider_Wellness_Dimension"]);
 
-      // make some tags from linked services / availability / instagram
+      // Tags: linked services + availability + instagram link
       const linkedServices = parseListCell(row["Linked_Services"]);
       const availabilityTags = parseListCell(row["Provider_Availability"]);
       const instagramLink = (row["Provider_Instagram_Link"] || "").trim();
@@ -153,12 +196,16 @@ export async function POST(req: NextRequest) {
 
       const tags = [...linkedServices, ...availabilityTags, ...extraTags];
 
-      // images: could be one or multiple URLs separated by comma
+      // Images: could be one or multiple URLs separated by comma / semicolon
       const imageUrls = parseListCell(row["Provider_Image"]);
       const cleanImages = imageUrls.filter(
         (url) => url && !url.startsWith("blob:")
       );
       const cover = cleanImages[0] ?? null;
+
+      // Optional numeric fields from CSV
+      const yearsExperience = parseIntOrNull(row["Years_Experience"]);
+      const clientsServed = parseIntOrNull(row["Clients_Served"]);
 
       // default all imported providers as active
       const status: ProviderStatus = "active";
@@ -177,6 +224,10 @@ export async function POST(req: NextRequest) {
           tags,
           cover_image_url: cover,
           total_images: cleanImages.length,
+          qualifications,
+          designation: null, // or map from CSV if you add a column
+          years_experience: yearsExperience,
+          clients_served: clientsServed,
         },
         imageUrls: cleanImages,
       });
@@ -200,7 +251,10 @@ export async function POST(req: NextRequest) {
     if (insertError) {
       console.error("[providers bulk] insert error:", insertError);
       return NextResponse.json(
-        { error: "Failed to insert providers", details: insertError.message },
+        {
+          error: "Failed to insert providers",
+          details: insertError.message,
+        },
         { status: 500 }
       );
     }
@@ -208,7 +262,11 @@ export async function POST(req: NextRequest) {
     const insertedProviders = (inserted ?? []) as { id: string }[];
 
     // 5) Insert provider_images
-    const imageRows: { provider_id: string; image_url: string; position: number }[] = [];
+    const imageRows: {
+      provider_id: string;
+      image_url: string;
+      position: number;
+    }[] = [];
 
     insertedProviders.forEach((prov, idx) => {
       const imgs = prepared[idx]?.imageUrls ?? [];
@@ -226,7 +284,10 @@ export async function POST(req: NextRequest) {
         .from("provider_images")
         .insert(imageRows);
       if (imgErr) {
-        console.error("[providers bulk] provider_images insert error:", imgErr);
+        console.error(
+          "[providers bulk] provider_images insert error:",
+          imgErr
+        );
         // not fatal; providers are already created
       }
     }
