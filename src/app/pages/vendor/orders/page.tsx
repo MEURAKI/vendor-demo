@@ -243,7 +243,7 @@ export default function OrdersPage() {
                           </td>
                           <td className="px-6 py-4 text-right">
                             <Link
-                              href={`/vendor/orders/${order.id}`}
+                              href={`/pages/vendor/orders/${order.id}`}
                               className="text-sm font-medium text-slate-900 underline-offset-4 hover:underline"
                             >
                               View

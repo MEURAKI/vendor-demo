@@ -44,7 +44,7 @@ export default function OrderItemsPage() {
     <div className="min-h-screen bg-slate-100 px-6 py-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-4 text-sm text-slate-500">
-          <Link href="/vendor/orders" className="hover:underline">
+          <Link href="/pages/vendor/orders" className="hover:underline">
             Back to orders
           </Link>
         </div>
