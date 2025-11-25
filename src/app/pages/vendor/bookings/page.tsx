@@ -16,12 +16,7 @@ type Profile = {
   onboarding_completed: boolean;
 };
 
-type OrderStatus =
-  | "placed"
-  | "fulfilled"
-  | "shipped"
-  | "delivered"
-  | "cancelled";
+type OrderStatus = "placed" | "fulfilled" | "shipped" | "delivered" | "cancelled";
 
 type PaymentStatus = "pending" | "paid" | "refunded" | "failed";
 
@@ -52,11 +47,7 @@ type OrderItemWithOrder = {
   orders: OrderForBooking | null;
 };
 
-type BookingStatus =
-  | "confirmed"
-  | "awaiting_payment"
-  | "completed"
-  | "cancelled";
+type BookingStatus = "confirmed" | "awaiting_payment" | "completed" | "cancelled";
 
 type BookingRow = {
   id: string; // order_item id
@@ -70,6 +61,8 @@ type BookingRow = {
   status: BookingStatus;
   statusLabel: string;
   totalLabel: string;
+  orderStatus: OrderStatus;
+  paymentStatus: PaymentStatus;
 };
 
 type FilterTab = "all" | "upcoming" | "completed" | "cancelled";
@@ -119,7 +112,7 @@ function deriveLocationLabel(
     try {
       optionsSnapshot = JSON.parse(optionsSnapshot);
     } catch {
-      // ignore
+      // ignore bad JSON
     }
   }
 
@@ -133,7 +126,7 @@ function deriveLocationLabel(
     return fromOptions;
   }
 
-  // Fallback – you can refine this when you have more location schema
+  // Fallback – refine when you have richer schema
   return "Studio / location not set";
 }
 
@@ -153,6 +146,7 @@ export default function BookingsPage() {
 
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
+  const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -182,7 +176,7 @@ export default function BookingsPage() {
 
       if (profileData) setProfile(profileData as Profile);
 
-      // Load service line items joined with their orders
+      // Load SERVICE line items joined with their orders
       const { data: itemsData, error: itemsError } = await supabase
         .from("order_items")
         .select(
@@ -236,6 +230,8 @@ export default function BookingsPage() {
             status,
             statusLabel: bookingStatusLabel[status],
             totalLabel: formatCurrencyFromCents(row.line_subtotal_cents),
+            orderStatus: order.status,
+            paymentStatus: order.payment_status,
           };
         });
 
@@ -256,11 +252,13 @@ export default function BookingsPage() {
   );
 
   const filtered = rows.filter((row) => {
+    const term = search.trim().toLowerCase();
     const matchesSearch =
-      !search ||
-      row.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      row.serviceName.toLowerCase().includes(search.toLowerCase()) ||
-      row.bookingCode.toLowerCase().includes(search.toLowerCase());
+      !term ||
+      row.customerName.toLowerCase().includes(term) ||
+      row.serviceName.toLowerCase().includes(term) ||
+      row.bookingCode.toLowerCase().includes(term) ||
+      row.orderCode.toLowerCase().includes(term);
 
     if (!matchesSearch) return false;
 
@@ -272,6 +270,71 @@ export default function BookingsPage() {
     return true;
   });
 
+  async function handleBookingStatusChange(bookingId: string, newStatus: BookingStatus) {
+    const booking = rows.find((r) => r.id === bookingId);
+    if (!booking) return;
+
+    setStatusSavingId(bookingId);
+    setError(null);
+
+    try {
+      // Map booking status → order status / payment status
+      const orderUpdates: Partial<OrderForBooking> = {};
+
+      if (newStatus === "completed") {
+        orderUpdates.status = "delivered";
+      } else if (newStatus === "cancelled") {
+        orderUpdates.status = "cancelled";
+      } else if (newStatus === "confirmed") {
+        // treat as fulfilled; tweak this mapping if you want
+        orderUpdates.status = "fulfilled";
+      }
+
+      if (newStatus === "awaiting_payment") {
+        orderUpdates.payment_status = "pending";
+      }
+
+      if (Object.keys(orderUpdates).length > 0) {
+        const { error: updateError } = await supabase
+          .from("orders")
+          .update(orderUpdates)
+          .eq("id", booking.orderId);
+
+        if (updateError) {
+          console.error(updateError);
+          setError("Failed to update booking status.");
+          setStatusSavingId(null);
+          return;
+        }
+      }
+
+      // Update local state
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === bookingId
+            ? {
+                ...row,
+                status: newStatus,
+                statusLabel: bookingStatusLabel[newStatus],
+                orderStatus:
+                  newStatus === "completed"
+                    ? "delivered"
+                    : newStatus === "cancelled"
+                    ? "cancelled"
+                    : newStatus === "confirmed"
+                    ? "fulfilled"
+                    : row.orderStatus,
+                paymentStatus:
+                  newStatus === "awaiting_payment" ? "pending" : row.paymentStatus,
+              }
+            : row
+        )
+      );
+    } finally {
+      setStatusSavingId(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
@@ -280,7 +343,7 @@ export default function BookingsPage() {
     );
   }
 
-  if (error) {
+  if (error && rows.length === 0) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
         {error}
@@ -299,13 +362,18 @@ export default function BookingsPage() {
           <div className="flex-1 overflow-auto px-6 py-6">
             <div className="mx-auto max-w-6xl">
               {/* Header */}
-              <div className="mb-6">
-                <h1 className="text-2xl font-semibold text-slate-900">
-                  Bookings
-                </h1>
-                <p className="text-sm text-slate-500">
-                  Manage upcoming and past service sessions.
-                </p>
+              <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-semibold text-slate-900">
+                    Bookings
+                  </h1>
+                  <p className="text-sm text-slate-500">
+                    Manage upcoming and past service sessions. (Service lines only)
+                  </p>
+                </div>
+                <div className="rounded-full bg-black px-4 py-1.5 text-xs font-medium text-white shadow-sm">
+                  {rows.length} booking{rows.length === 1 ? "" : "s"}
+                </div>
               </div>
 
               {/* Filters row */}
@@ -356,11 +424,18 @@ export default function BookingsPage() {
               <div className="mb-4 rounded-full bg-white px-4 py-2 shadow-sm">
                 <input
                   className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-                  placeholder="Search by customer or service"
+                  placeholder="Search by customer, service, booking ID, or order ID"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
+
+              {/* Error banner (non-fatal) */}
+              {error && rows.length > 0 && (
+                <div className="mb-3 rounded-2xl bg-rose-50 px-4 py-2 text-xs text-rose-700">
+                  {error}
+                </div>
+              )}
 
               {/* Table container */}
               <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
@@ -373,6 +448,7 @@ export default function BookingsPage() {
                     <thead>
                       <tr className="border-b border-slate-100 bg-[#EFE6FF] text-xs uppercase tracking-wide text-slate-600">
                         <th className="px-6 py-3">Booking ID</th>
+                        <th className="px-6 py-3">Order</th>
                         <th className="px-6 py-3">Date &amp; time</th>
                         <th className="px-6 py-3">Service</th>
                         <th className="px-6 py-3">Customer</th>
@@ -386,40 +462,81 @@ export default function BookingsPage() {
                       {filtered.map((b) => (
                         <tr
                           key={b.id}
-                          className="border-b border-slate-100 last:border-0"
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
                         >
                           <td className="px-6 py-3 text-slate-800">
-                            {b.bookingCode}
+                            <span className="font-mono text-xs font-semibold">
+                              {b.bookingCode}
+                            </span>
                           </td>
+
+                          <td className="px-6 py-3 text-slate-700">
+                            <Link
+                              href={`/pages/vendor/orders/${b.orderId}`}
+                              className="text-xs font-medium text-[#7B61FF] underline-offset-2 hover:underline"
+                            >
+                              {b.orderCode}
+                            </Link>
+                          </td>
+
                           <td className="px-6 py-3 text-slate-700">
                             {b.dateTimeLabel}
                           </td>
+
                           <td className="px-6 py-3 text-slate-800">
                             {b.serviceName}
                           </td>
+
                           <td className="px-6 py-3 text-slate-700">
                             {b.customerName}
                           </td>
+
                           <td className="px-6 py-3 text-slate-700">
                             {b.locationLabel}
                           </td>
+
                           <td className="px-6 py-3">
-                            <span
-                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${bookingStatusClasses[b.status]}`}
+                            <div
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${bookingStatusClasses[b.status]}`}
                             >
-                              {b.statusLabel}
-                            </span>
+                              <select
+                                value={b.status}
+                                disabled={statusSavingId === b.id}
+                                onChange={(e) =>
+                                  handleBookingStatusChange(
+                                    b.id,
+                                    e.target.value as BookingStatus
+                                  )
+                                }
+                                className="cursor-pointer bg-transparent pr-4 text-xs font-medium outline-none"
+                              >
+                                <option value="confirmed">
+                                  {bookingStatusLabel.confirmed}
+                                </option>
+                                <option value="awaiting_payment">
+                                  {bookingStatusLabel.awaiting_payment}
+                                </option>
+                                <option value="completed">
+                                  {bookingStatusLabel.completed}
+                                </option>
+                                <option value="cancelled">
+                                  {bookingStatusLabel.cancelled}
+                                </option>
+                              </select>
+                            </div>
                           </td>
+
                           <td className="px-6 py-3 text-slate-800">
                             {b.totalLabel}
                           </td>
+
                           <td className="px-6 py-3 text-right">
-                            <Link
-                              href={`/pages/vendor/orders/${b.orderId}`}
-                              className="inline-flex items-center rounded-full bg-[#EFE6FF] px-4 py-1.5 text-xs font-medium text-slate-800 hover:bg-[#E2D3FF]"
-                            >
-                              View
-                            </Link>
+                         <Link
+  href={`/pages/vendor/bookings/${b.id}`}
+  className="inline-flex items-center rounded-full bg-[#EFE6FF] px-4 py-1.5 text-xs font-medium text-slate-800 hover:bg-[#E2D3FF]"
+>
+  View booking
+</Link>
                           </td>
                         </tr>
                       ))}
@@ -427,7 +544,7 @@ export default function BookingsPage() {
                       {filtered.length === 0 && (
                         <tr>
                           <td
-                            colSpan={8}
+                            colSpan={9}
                             className="px-6 py-6 text-center text-sm text-slate-500"
                           >
                             No bookings found for this filter/search.
