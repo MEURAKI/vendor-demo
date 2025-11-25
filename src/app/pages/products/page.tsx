@@ -1479,6 +1479,41 @@ export default function AllProductsPage() {
     });
   }
 
+  async function handleTrash(productId: string) {
+  const confirmation = window.confirm(
+    "Are you sure you want to permanently delete this product?"
+  );
+
+  if (!confirmation) return;
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const res = await fetch(`/api/products/${productId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: session?.access_token
+          ? `Bearer ${session.access_token}`
+          : "",
+      },
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || "Failed to delete product");
+    }
+
+    // Update UI instantly
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    setSelectedIds((prev) => prev.filter((id) => id !== productId));
+  } catch (err) {
+    console.error(err);
+    alert((err as Error).message || "Error deleting product");
+  }
+}
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1706,28 +1741,6 @@ export default function AllProductsPage() {
     }
   }
 
-  async function handleTrash(productId: string) {
-    try {
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      await fetch("/api/products/bulk-update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: session?.access_token ? `Bearer ${session.access_token}` : "" },
-        body: JSON.stringify({
-          productIds: [productId],
-          status: "draft",
-          trash: true,
-        }),
-      });
-
-      await reloadAfterBulk();
-    } catch (err) {
-      console.error(err);
-      alert("Failed to move product to trash");
-    }
-  }
 
   const activeFilterCount =
   filters.type.length +

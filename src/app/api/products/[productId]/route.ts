@@ -161,7 +161,7 @@ export async function GET(
   const categoryIds = (categoryRows ?? []).map((row) => row.category);
 
   // 8) tags (simple product_tags table)
-const { data: tagRows, error: tErr } = await client
+  const { data: tagRows, error: tErr } = await client
     .from("product_tags")
     .select("tag")
     .eq("product_id", productId);
@@ -172,23 +172,26 @@ const { data: tagRows, error: tErr } = await client
 
   // Normalize: handle plain strings or old JSON like {"name":"sdf"}
   const tags =
-    (tagRows ?? []).map((row) => {
-      const raw = row.tag;
-      if (!raw) return "";
+    (tagRows ?? [])
+      .map((row) => {
+        const raw = row.tag;
+        if (!raw) return "";
 
-      // if it was stored as JSON string, try to parse
-      try {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed === "string") return parsed;
-        if (parsed && typeof parsed === "object" && "name" in parsed) {
-          return (parsed as any).name ?? raw;
+        // if it was stored as JSON string, try to parse
+        try {
+          const parsed = JSON.parse(raw);
+          if (typeof parsed === "string") return parsed;
+          if (parsed && typeof parsed === "object" && "name" in parsed) {
+            return (parsed as any).name ?? raw;
+          }
+        } catch {
+          // not JSON, just return as-is
         }
-      } catch {
-        // not JSON, just return as-is
-      }
 
-      return raw;
-    }).filter(Boolean);
+        return raw;
+      })
+      .filter(Boolean);
+
   // Final response
   return NextResponse.json({
     id: (product as any).id || "",
@@ -263,13 +266,22 @@ export async function PUT(
 
   /* ------------------ 2) Clear related tables ------------------- */
 
-  await client.from("product_description_sections").delete().eq("product_id", productId);
-  await client.from("product_wellness_dimensions").delete().eq("product_id", productId);
+  await client
+    .from("product_description_sections")
+    .delete()
+    .eq("product_id", productId);
+  await client
+    .from("product_wellness_dimensions")
+    .delete()
+    .eq("product_id", productId);
   await client.from("product_categories").delete().eq("product_id", productId);
   await client.from("product_tags").delete().eq("product_id", productId);
   await client.from("product_images").delete().eq("product_id", productId);
   await client.from("product_variants").delete().eq("product_id", productId);
-  await client.from("product_option_groups").delete().eq("product_id", productId);
+  await client
+    .from("product_option_groups")
+    .delete()
+    .eq("product_id", productId);
 
   /* ---------------- 3) Insert description sections --------------- */
 
@@ -286,54 +298,58 @@ export async function PUT(
 
   /* ------------------ 4) Wellness dimensions --------------------- */
 
-/* ------------------ 4) Wellness dimensions --------------------- */
-
-if (Array.isArray(body.wellnessIds) && body.wellnessIds.length) {
-  const wellnessRows = body.wellnessIds.map((dimensionId: string | number) => ({
-    product_id: productId,
-    // force to number in case frontend sends "1", "4", "7"
-    dimension_id:
-      typeof dimensionId === "string" ? Number(dimensionId) : dimensionId,
-  }));
-
-  const { error: wInsertErr } = await client
-    .from("product_wellness_dimensions")
-    .insert(wellnessRows);
-
-  if (wInsertErr) {
-    console.error("Wellness insert error:", wInsertErr);
-    return NextResponse.json(
-      { error: "Failed to insert wellness dimensions", details: wInsertErr.message },
-      { status: 400 }
+  if (Array.isArray(body.wellnessIds) && body.wellnessIds.length) {
+    const wellnessRows = body.wellnessIds.map(
+      (dimensionId: string | number) => ({
+        product_id: productId,
+        // force to number in case frontend sends "1", "4", "7"
+        dimension_id:
+          typeof dimensionId === "string" ? Number(dimensionId) : dimensionId,
+      })
     );
+
+    const { error: wInsertErr } = await client
+      .from("product_wellness_dimensions")
+      .insert(wellnessRows);
+
+    if (wInsertErr) {
+      console.error("Wellness insert error:", wInsertErr);
+      return NextResponse.json(
+        {
+          error: "Failed to insert wellness dimensions",
+          details: wInsertErr.message,
+        },
+        { status: 400 }
+      );
+    }
   }
-}
 
-/* ---------------------- 5) Categories -------------------------- */
+  /* ---------------------- 5) Categories -------------------------- */
 
-if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
-  const categoryRows = body.categoryIds.map((categoryId: string | number) => ({
-    product_id: productId,
-    // force to string so it always matches `category` TEXT column
-    category: String(categoryId),
-  }));
-
-  const { error: cInsertErr } = await client
-    .from("product_categories")
-    .insert(categoryRows);
-
-  if (cInsertErr) {
-    console.error("Category insert error:", cInsertErr);
-    return NextResponse.json(
-      { error: "Failed to insert categories", details: cInsertErr.message },
-      { status: 400 }
+  if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
+    const categoryRows = body.categoryIds.map(
+      (categoryId: string | number) => ({
+        product_id: productId,
+        // force to string so it always matches `category` TEXT column
+        category: String(categoryId),
+      })
     );
+
+    const { error: cInsertErr } = await client
+      .from("product_categories")
+      .insert(categoryRows);
+
+    if (cInsertErr) {
+      console.error("Category insert error:", cInsertErr);
+      return NextResponse.json(
+        { error: "Failed to insert categories", details: cInsertErr.message },
+        { status: 400 }
+      );
+    }
   }
-}
 
   /* ---------------------- 6) Tags (NEW) -------------------------- */
 
-  
   if (Array.isArray(body.tags) && body.tags.length) {
     // normalize: support ["tag"] or [{ name: "tag" }]
     const normalizedTags: string[] = body.tags
@@ -358,14 +374,14 @@ if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
   /* ------------------- 7) Gallery images ------------------------- */
 
   if (Array.isArray(body.galleryImageUrls) && body.galleryImageUrls.length) {
-  await client.from("product_images").insert(
-    body.galleryImageUrls.map((url: string, idx: number) => ({
-      product_id: productId,
-      url,                      // 👈 inserted as "url"
-      sort_order: idx,
-    }))
-  );
-}
+    await client.from("product_images").insert(
+      body.galleryImageUrls.map((url: string, idx: number) => ({
+        product_id: productId,
+        url, // 👈 inserted as "url"
+        sort_order: idx,
+      }))
+    );
+  }
 
   /* ------------------- 8) Variants + Options --------------------- */
 
@@ -428,7 +444,9 @@ if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
     });
 
     // Insert variants
-    const rawVariants: any[] = Array.isArray(body.variants) ? body.variants : [];
+    const rawVariants: any[] = Array.isArray(body.variants)
+      ? body.variants
+      : [];
 
     const variantRows = rawVariants.map((vr, idx: number) => ({
       product_id: productId,
@@ -457,20 +475,24 @@ if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
       const formVariant = rawVariants[idx];
       if (!formVariant?.options) return;
 
-      Object.entries(formVariant.options).forEach(([groupName, valueLabel]) => {
-        const group = (groups ?? []).find((g: any) => g.name === groupName);
-        if (!group) return;
+      Object.entries(formVariant.options).forEach(
+        ([groupName, valueLabel]) => {
+          const group = (groups ?? []).find(
+            (g: any) => g.name === groupName
+          );
+          if (!group) return;
 
-        const key = `${group.id}:${valueLabel}`;
-        const dbValueId = valueIdByKey[key];
+          const key = `${group.id}:${valueLabel}`;
+          const dbValueId = valueIdByKey[key];
 
-        if (dbValueId) {
-          vovRows.push({
-            variant_id: v.id,
-            value_id: dbValueId,
-          });
+          if (dbValueId) {
+            vovRows.push({
+              variant_id: v.id,
+              value_id: dbValueId,
+            });
+          }
         }
-      });
+      );
     });
 
     if (vovRows.length) {
@@ -479,4 +501,116 @@ if (Array.isArray(body.categoryIds) && body.categoryIds.length) {
   }
 
   return NextResponse.json({ ok: true, productId });
+}
+
+/**
+ * DELETE /api/products/[productId]
+ * Hard delete product + related rows
+ */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { productId: string } }
+) {
+  const { productId } = params;
+  const client = supa();
+
+  try {
+    // 1) Get variant + group ids (for join-table cleanup)
+    const { data: variantRows, error: vrErr } = await client
+      .from("product_variants")
+      .select("id")
+      .eq("product_id", productId);
+
+    if (vrErr) {
+      console.error("Error loading variants for delete:", vrErr);
+    }
+
+    const variantIds = (variantRows ?? []).map((v) => v.id);
+
+    const { data: groupRows, error: grErr } = await client
+      .from("product_option_groups")
+      .select("id")
+      .eq("product_id", productId);
+
+    if (grErr) {
+      console.error("Error loading option groups for delete:", grErr);
+    }
+
+    const groupIds = (groupRows ?? []).map((g) => g.id);
+
+    // 2) Delete join tables that depend on variants/groups
+    if (variantIds.length) {
+      const { error: vovErr } = await client
+        .from("variant_option_values")
+        .delete()
+        .in("variant_id", variantIds);
+
+      if (vovErr) {
+        console.error("Error deleting variant_option_values:", vovErr);
+      }
+    }
+
+    if (groupIds.length) {
+      const { error: povErr } = await client
+        .from("product_option_values")
+        .delete()
+        .in("group_id", groupIds);
+
+      if (povErr) {
+        console.error("Error deleting product_option_values:", povErr);
+      }
+    }
+
+    // 3) Delete other related tables
+    await client
+      .from("product_description_sections")
+      .delete()
+      .eq("product_id", productId);
+    await client
+      .from("product_wellness_dimensions")
+      .delete()
+      .eq("product_id", productId);
+    await client
+      .from("product_categories")
+      .delete()
+      .eq("product_id", productId);
+    await client
+      .from("product_tags")
+      .delete()
+      .eq("product_id", productId);
+    await client
+      .from("product_images")
+      .delete()
+      .eq("product_id", productId);
+    await client
+      .from("product_variants")
+      .delete()
+      .eq("product_id", productId);
+    await client
+      .from("product_option_groups")
+      .delete()
+      .eq("product_id", productId);
+
+    // 4) Finally delete product
+    const { error: prodErr } = await client
+      .from("products")
+      .delete()
+      .eq("id", productId);
+
+    if (prodErr) {
+      console.error("Delete product error:", prodErr);
+      return NextResponse.json(
+        { error: "Failed to delete product" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Unexpected delete error:", err);
+    return NextResponse.json(
+      { error: "Unexpected error deleting product" },
+      { status: 500 }
+    );
+  }
 }
