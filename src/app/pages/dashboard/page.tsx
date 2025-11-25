@@ -237,10 +237,10 @@ export default function DashboardPage() {
             label: "Bookings",
             icon: "CalendarDays",
             items: [
-              { id: "b-all", label: "All Bookings", href: "/vendor/bookings" },
-              { id: "b-upcoming", label: "Upcoming", href: "/vendor/bookings/upcoming" },
-              { id: "b-reschedules", label: "Reschedules", href: "/vendor/bookings/reschedules" },
-              { id: "b-cancelled", label: "Cancelled", href: "/vendor/bookings/cancelled" },
+              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" },
+              { id: "b-upcoming", label: "Upcoming", href: "/pages/vendor/bookings/upcoming" },
+              { id: "b-reschedules", label: "Reschedules", href: "/pages/vendor/bookings/reschedules" },
+              { id: "b-cancelled", label: "Cancelled", href: "/pages/vendor/bookings/cancelled" },
             ],
           },
           {
