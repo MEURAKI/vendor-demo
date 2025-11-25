@@ -423,63 +423,54 @@ export default function EditProductPage({
         }
 
         // pricing / inventory + variants
-        if (data.isVariant) {
-          setPrice((data.priceCents ?? 0) / 100);
-          setInventory(undefined);
+        // pricing / inventory + variants
+if (data.isVariant) {
+  // treat product.priceCents as the "base variant price"
+  const basePriceFromServer =
+    typeof data.priceCents === "number" ? data.priceCents / 100 : 0;
 
-          const loadedVariants: VariantRow[] = (data.variants ?? []).map(
-            (v: any) => ({
-              id: String(v.id),
-              sku: v.sku,
-              price: (v.priceCents ?? 0) / 100,
-              inventory: v.inventoryQty ?? 0,
-              imageUrl: v.imageUrl ?? null,
-              imageFile: null,
-              options: v.options ?? {},
-            })
-          );
-          setVariants(loadedVariants);
+  setPrice(basePriceFromServer);            // if you still want price filled
+  setBaseVariantPrice(basePriceFromServer); // ⭐ key: base price comes from product
+  setOriginalBaseVariantPrice(basePriceFromServer);
+  setInventory(undefined);
 
-          setOptionGroups(
-            (data.optionGroups ?? []).map((g: any) => ({
-              id: String(g.id),
-              name: g.name,
-              kind: g.kind,
-              values: (g.values ?? []).map((v: any) => ({
-                id: String(v.id),
-                label: v.label,
-                colorHex: v.colorHex,
-              })),
-            }))
-          );
+  const loadedVariants: VariantRow[] = (data.variants ?? []).map(
+    (v: any) => ({
+      id: String(v.id),
+      sku: v.sku,
+      price: (v.priceCents ?? 0) / 100,
+      inventory: v.inventoryQty ?? 0,
+      imageUrl: v.imageUrl ?? null,
+      imageFile: null,
+      options: v.options ?? {},
+    })
+  );
+  setVariants(loadedVariants);
 
-          // ✅ derive base variant price from existing variants
-          const variantPrices = loadedVariants
-            .map((v) => v.price)
-            .filter(
-              (p) => typeof p === "number" && !Number.isNaN(p as number)
-            ) as number[];
-
-          if (variantPrices.length > 0) {
-            const priceFromVariants = variantPrices[0]; // or Math.min(...variantPrices)
-            setBaseVariantPrice(priceFromVariants);
-            setOriginalBaseVariantPrice(priceFromVariants);
-          } else {
-            setBaseVariantPrice(undefined);
-            setOriginalBaseVariantPrice(undefined);
-          }
-        } else {
-          setPrice(
-            typeof data.priceCents === "number"
-              ? data.priceCents / 100
-              : undefined
-          );
-          setInventory(data.inventoryQty ?? undefined);
-          setVariants([]);
-          setOptionGroups([]);
-          setBaseVariantPrice(undefined);
-          setOriginalBaseVariantPrice(undefined);
-        }
+  setOptionGroups(
+    (data.optionGroups ?? []).map((g: any) => ({
+      id: String(g.id),
+      name: g.name,
+      kind: g.kind,
+      values: (g.values ?? []).map((v: any) => ({
+        id: String(v.id),
+        label: v.label,
+        colorHex: v.colorHex,
+      })),
+    }))
+  );
+} else {
+  setPrice(
+    typeof data.priceCents === "number"
+      ? data.priceCents / 100
+      : undefined
+  );
+  setInventory(data.inventoryQty ?? undefined);
+  setVariants([]);
+  setOptionGroups([]);
+  setBaseVariantPrice(undefined);
+  setOriginalBaseVariantPrice(undefined);
+}
 
         // sections
         const mappedSections: DescriptionSection[] = (data.sections ?? []).map(
@@ -712,7 +703,9 @@ export default function EditProductPage({
         description,
         baseSku,
         isVariant,
-        priceCents: isVariant ? Math.round((price ?? 0) * 100) : Math.round((price ?? 0) * 100),
+        priceCents: isVariant
+          ? Math.round((baseVariantPrice ?? price ?? 0) * 100)
+          : Math.round((price ?? 0) * 100),
         inventoryQty: isVariant ? 0 : inventory ?? 0,
         discount: discountType
           ? {
