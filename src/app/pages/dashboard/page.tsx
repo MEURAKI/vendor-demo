@@ -247,7 +247,7 @@ export default function DashboardPage() {
             id: "customers",
             label: "Customers",
             icon: "Users",
-            items: [{ id: "c-all", label: "Customers", href: "/vendor/customers" }],
+            items: [{ id: "c-all", label: "Customers", href: "/pages/vendor/customers" }],
           },
         ],
       },
