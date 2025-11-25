@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import Sidebar from "../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
+import ClipLoader from "react-spinners/ClipLoader";
 
 type Profile = {
   id: string;
@@ -16,12 +17,7 @@ type Profile = {
   onboarding_completed: boolean;
 };
 
-type OrderStatus =
-  | "placed"
-  | "fulfilled"
-  | "shipped"
-  | "delivered"
-  | "cancelled";
+type OrderStatus = "placed" | "fulfilled" | "shipped" | "delivered" | "cancelled";
 
 type FulfilmentStatus =
   | "pending"
@@ -196,10 +192,8 @@ function lineTypeBadge(lineType: OrderItemLineType): string {
   }
 }
 
-function buildTimeline(
-  order: Order,
-  fulfilment: OrderFulfilment | null
-): TimelineStep[] {
+// timeline builder
+function buildTimeline(order: Order, fulfilment: OrderFulfilment | null): TimelineStep[] {
   const isPickup = order.fulfilment_method === "pickup";
 
   const steps: TimelineStep[] = [];
@@ -211,11 +205,8 @@ function buildTimeline(
     done: true,
   });
 
-  // 2. Fulfilled: based on order status
-  const fulfilledDone = ["fulfilled", "shipped", "delivered"].includes(
-    order.status
-  );
-
+  // 2. Fulfilled
+  const fulfilledDone = ["fulfilled", "shipped", "delivered"].includes(order.status);
   steps.push({
     label: "Fulfilled",
     date: fulfilledDone ? formatDateTime(order.updated_at) : "—",
@@ -239,9 +230,7 @@ function buildTimeline(
     });
   } else {
     const shippedDone =
-      !!fulfilment?.shipped_at ||
-      order.status === "shipped" ||
-      order.status === "delivered";
+      !!fulfilment?.shipped_at || order.status === "shipped" || order.status === "delivered";
 
     steps.push({
       label: "Shipped",
@@ -270,9 +259,7 @@ function buildTimeline(
     label: isPickup ? "Picked up" : "Delivered",
     date:
       fulfilment?.delivered_at || fulfilment?.pickup_completed_at
-        ? formatDateTime(
-            fulfilment.delivered_at || fulfilment.pickup_completed_at!
-          )
+        ? formatDateTime(fulfilment.delivered_at || fulfilment.pickup_completed_at!)
         : finalDone
         ? formatDateTime(order.updated_at)
         : eta || "—",
@@ -283,10 +270,7 @@ function buildTimeline(
 }
 
 // Fire-and-forget call to your Mandrill-backed API
-async function sendStatusEmail(
-  orderId: string,
-  status: OrderStatus | "picked_up"
-) {
+async function sendStatusEmail(orderId: string, status: OrderStatus | "picked_up") {
   try {
     await fetch("/api/vendor/orders/send-status-email", {
       method: "POST",
@@ -297,6 +281,10 @@ async function sendStatusEmail(
   } catch (err) {
     console.error("Failed to send status email", err);
   }
+}
+
+function normalisePhone(phone: string) {
+  return phone.replace(/[^+\d]/g, "");
 }
 
 export default function OrderDetailPage() {
@@ -315,11 +303,24 @@ export default function OrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [itemsModalOpen, setItemsModalOpen] = useState(false);
 
+  // more actions dropdown
+  const [actionsOpen, setActionsOpen] = useState(false);
+
   // email modal state
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [sessionLink, setSessionLink] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState<string | null>(null);
+
+  // shipment edit fields
+  const [shippingProviderInput, setShippingProviderInput] = useState("");
+  const [trackingNumberInput, setTrackingNumberInput] = useState("");
+  const [trackingUrlInput, setTrackingUrlInput] = useState("");
+  const [etaInput, setEtaInput] = useState<string>("");
+  const [savingShipment, setSavingShipment] = useState(false);
+
+  // ref for "What to pack" scrolling
+  const whatToPackRef = useRef<HTMLDivElement | null>(null);
 
   // Load profile + order data
   useEffect(() => {
@@ -376,12 +377,9 @@ export default function OrderDetailPage() {
       setOrder(typedOrder);
 
       // Load product-only items via API
-      const itemsRes = await fetch(
-        `/api/vendor/orders/${orderId}/product-items`,
-        {
-          credentials: "include",
-        }
-      );
+      const itemsRes = await fetch(`/api/vendor/orders/${orderId}/product-items`, {
+        credentials: "include",
+      });
 
       if (!itemsRes.ok) {
         setError("Failed to load order items.");
@@ -392,20 +390,26 @@ export default function OrderDetailPage() {
       const itemsJson = (await itemsRes.json()) as { items: OrderItem[] };
       setItems(itemsJson.items || []);
 
-      // Load fulfilment row
-// Load shipment row (shipping details now live in order_shipments)
-const { data: fulfilmentData, error: fulfilmentError } = await supabase
-  .from("order_shipments")
-  .select("*")
-  .eq("order_id", orderId)
-  .maybeSingle();
-
-if (!fulfilmentError && fulfilmentData) {
-  setFulfilment(fulfilmentData as OrderFulfilment);
-}
+      // Load shipment row from order_shipments
+      const { data: fulfilmentData, error: fulfilmentError } = await supabase
+        .from("order_shipments")
+        .select("*")
+        .eq("order_id", orderId)
+        .maybeSingle();
 
       if (!fulfilmentError && fulfilmentData) {
-        setFulfilment(fulfilmentData as OrderFulfilment);
+        const f = fulfilmentData as OrderFulfilment;
+        setFulfilment(f);
+        setShippingProviderInput(f.shipping_provider ?? "");
+        setTrackingNumberInput(f.tracking_number ?? "");
+        setTrackingUrlInput(f.tracking_url ?? "");
+        setEtaInput(f.estimated_delivery_date ?? "");
+      } else {
+        // fall back to values on order if no shipment row yet
+        setShippingProviderInput(typedOrder.shipping_provider ?? "");
+        setTrackingNumberInput(typedOrder.tracking_number ?? "");
+        setTrackingUrlInput("");
+        setEtaInput("");
       }
 
       // Load activity logs
@@ -434,7 +438,78 @@ if (!fulfilmentError && fulfilmentData) {
     [profile]
   );
 
+  async function handleSaveShipment() {
+    if (!order) return;
+    setSavingShipment(true);
+    setError(null);
+
+    const nowIso = new Date().toISOString();
+
+    try {
+      let updatedRow: OrderFulfilment | null = null;
+
+      if (fulfilment) {
+        const { data, error } = await supabase
+          .from("order_shipments")
+          .update({
+            shipping_provider: shippingProviderInput || null,
+            tracking_number: trackingNumberInput || null,
+            tracking_url: trackingUrlInput || null,
+            estimated_delivery_date: etaInput || null,
+            updated_at: nowIso,
+          })
+          .eq("id", fulfilment.id)
+          .select("*")
+          .maybeSingle();
+
+        if (error) {
+          setError("Failed to save shipping details.");
+        } else if (data) {
+          updatedRow = data as OrderFulfilment;
+        }
+      } else {
+        const { data, error } = await supabase
+          .from("order_shipments")
+          .insert({
+            order_id: order.id,
+            vendor_id: order.vendor_id,
+            fulfilment_method: order.fulfilment_method,
+            status: "pending",
+            shipping_provider: shippingProviderInput || null,
+            tracking_number: trackingNumberInput || null,
+            tracking_url: trackingUrlInput || null,
+            estimated_delivery_date: etaInput || null,
+          })
+          .select("*")
+          .single();
+
+        if (error) {
+          setError("Failed to save shipping details.");
+        } else if (data) {
+          updatedRow = data as OrderFulfilment;
+        }
+      }
+
+      if (updatedRow) {
+        setFulfilment(updatedRow);
+        // also mirror provider / tracking onto order (for legacy uses)
+        setOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                shipping_provider: shippingProviderInput || null,
+                tracking_number: trackingNumberInput || null,
+              }
+            : prev
+        );
+      }
+    } finally {
+      setSavingShipment(false);
+    }
+  }
+
   async function handleMarkFinal() {
+     if (!order || order.status === "delivered") return;
     if (!order) return;
     setSaving(true);
     setError(null);
@@ -443,6 +518,9 @@ if (!fulfilmentError && fulfilmentData) {
     const isPickup = order.fulfilment_method === "pickup";
 
     try {
+      // ensure latest shipping details are in DB before email
+      await handleSaveShipment();
+
       // Update order status → delivered
       const { data: updatedOrderData, error: orderUpdateError } = await supabase
         .from("orders")
@@ -459,7 +537,7 @@ if (!fulfilmentError && fulfilmentData) {
 
       setOrder(updatedOrderData as Order);
 
-      // Update fulfilment if exists
+      // Update shipment if exists
       if (fulfilment) {
         const payload: Partial<OrderFulfilment> = {
           status: "delivered",
@@ -472,13 +550,13 @@ if (!fulfilmentError && fulfilmentData) {
           payload.delivered_at = nowIso;
         }
 
-          const { data: updatedFulfilmentData, error: fulfilmentUpdateError } =
-    await supabase
-      .from("order_shipments")
-      .update(payload)
-      .eq("id", fulfilment.id)
-      .select("*")
-      .maybeSingle();
+        const { data: updatedFulfilmentData, error: fulfilmentUpdateError } =
+          await supabase
+            .from("order_shipments")
+            .update(payload)
+            .eq("id", fulfilment.id)
+            .select("*")
+            .maybeSingle();
 
         if (!fulfilmentUpdateError && updatedFulfilmentData) {
           setFulfilment(updatedFulfilmentData as OrderFulfilment);
@@ -486,28 +564,22 @@ if (!fulfilmentError && fulfilmentData) {
       }
 
       // Insert activity log
-      const description = isPickup
-        ? "Marked as picked up"
-        : "Marked as delivered";
+      const description = isPickup ? "Marked as picked up" : "Marked as delivered";
 
-      const { data: activityInsert, error: activityInsertError } =
-        await supabase
-          .from("order_activities")
-          .insert({
-            order_id: order.id,
-            vendor_id: order.vendor_id,
-            type: isPickup ? "picked_up" : "delivered",
-            description,
-            meta: null,
-          })
-          .select("*")
-          .single();
+      const { data: activityInsert, error: activityInsertError } = await supabase
+        .from("order_activities")
+        .insert({
+          order_id: order.id,
+          vendor_id: order.vendor_id,
+          type: isPickup ? "picked_up" : "delivered",
+          description,
+          meta: null,
+        })
+        .select("*")
+        .single();
 
       if (!activityInsertError && activityInsert) {
-        setActivityLogs((prev) => [
-          activityInsert as OrderActivity,
-          ...prev,
-        ]);
+        setActivityLogs((prev) => [activityInsert as OrderActivity, ...prev]);
       }
 
       // Fire status email (delivered / picked up)
@@ -520,9 +592,9 @@ if (!fulfilmentError && fulfilmentData) {
   }
 
   async function handleChangeStatus(newStatus: OrderStatus) {
-    if (!order || newStatus === order.status) return;
+    if (!order || order.status === "delivered" || newStatus === order.status) return; // ⬅️ guard
 
-    // If they chose "delivered", reuse the dedicated flow so fulfilment & activity stay consistent
+    // If they chose "delivered", reuse the dedicated flow so shipment & activity stay consistent
     if (newStatus === "delivered") {
       await handleMarkFinal();
       return;
@@ -534,6 +606,9 @@ if (!fulfilmentError && fulfilmentData) {
     const nowIso = new Date().toISOString();
 
     try {
+      // keep shipment up to date before email fires
+      await handleSaveShipment();
+
       const { data: updatedOrder, error: orderError } = await supabase
         .from("orders")
         .update({ status: newStatus, updated_at: nowIso })
@@ -551,24 +626,20 @@ if (!fulfilmentError && fulfilmentData) {
 
       const description = `Status updated to "${newStatus}"`;
 
-      const { data: activityInsert, error: activityInsertError } =
-        await supabase
-          .from("order_activities")
-          .insert({
-            order_id: order.id,
-            vendor_id: order.vendor_id,
-            type: "note",
-            description,
-            meta: { status: newStatus },
-          })
-          .select("*")
-          .single();
+      const { data: activityInsert, error: activityInsertError } = await supabase
+        .from("order_activities")
+        .insert({
+          order_id: order.id,
+          vendor_id: order.vendor_id,
+          type: "note",
+          description,
+          meta: { status: newStatus },
+        })
+        .select("*")
+        .single();
 
       if (!activityInsertError && activityInsert) {
-        setActivityLogs((prev) => [
-          activityInsert as OrderActivity,
-          ...prev,
-        ]);
+        setActivityLogs((prev) => [activityInsert as OrderActivity, ...prev]);
       }
 
       // Send status email for relevant states
@@ -580,10 +651,7 @@ if (!fulfilmentError && fulfilmentData) {
     }
   }
 
-  async function updateItemStatus(
-    itemId: string,
-    newStatus: ItemFulfilmentStatus
-  ) {
+  async function updateItemStatus(itemId: string, newStatus: ItemFulfilmentStatus) {
     if (!order) return;
     setSavingItemId(itemId);
     setError(null);
@@ -600,35 +668,36 @@ if (!fulfilmentError && fulfilmentData) {
 
       setItems((prev) =>
         prev.map((item) =>
-          item.id === itemId
-            ? { ...item, item_fulfilment_status: newStatus }
-            : item
+          item.id === itemId ? { ...item, item_fulfilment_status: newStatus } : item
         )
       );
 
       const description = `Updated item status to "${newStatus}"`;
 
-      const { data: activityInsert, error: activityInsertError } =
-        await supabase
-          .from("order_activities")
-          .insert({
-            order_id: order.id,
-            vendor_id: order.vendor_id,
-            type: "note",
-            description,
-            meta: { item_id: itemId, status: newStatus },
-          })
-          .select("*")
-          .single();
+      const { data: activityInsert, error: activityInsertError } = await supabase
+        .from("order_activities")
+        .insert({
+          order_id: order.id,
+          vendor_id: order.vendor_id,
+          type: "note",
+          description,
+          meta: { item_id: itemId, status: newStatus },
+        })
+        .select("*")
+        .single();
 
       if (!activityInsertError && activityInsert) {
-        setActivityLogs((prev) => [
-          activityInsert as OrderActivity,
-          ...prev,
-        ]);
+        setActivityLogs((prev) => [activityInsert as OrderActivity, ...prev]);
       }
     } finally {
       setSavingItemId(null);
+    }
+  }
+
+  async function bulkUpdateAllItems(newStatus: ItemFulfilmentStatus) {
+    if (!items.length) return;
+    for (const item of items) {
+      await updateItemStatus(item.id, newStatus);
     }
   }
 
@@ -661,34 +730,46 @@ if (!fulfilmentError && fulfilmentData) {
       setEmailFeedback(`Session link sent to ${order.contact_email}.`);
 
       // Log activity
-      const { data: activityInsert, error: activityInsertError } =
-        await supabase
-          .from("order_activities")
-          .insert({
-            order_id: order.id,
-            vendor_id: order.vendor_id,
-            type: "note",
-            description: "Sent online session link email to customer",
-            meta: { session_link: sessionLink.trim() },
-          })
-          .select("*")
-          .single();
+      const { data: activityInsert, error: activityInsertError } = await supabase
+        .from("order_activities")
+        .insert({
+          order_id: order.id,
+          vendor_id: order.vendor_id,
+          type: "note",
+          description: "Sent online session link email to customer",
+          meta: { session_link: sessionLink.trim() },
+        })
+        .select("*")
+        .single();
 
       if (!activityInsertError && activityInsert) {
-        setActivityLogs((prev) => [
-          activityInsert as OrderActivity,
-          ...prev,
-        ]);
+        setActivityLogs((prev) => [activityInsert as OrderActivity, ...prev]);
       }
     } finally {
       setSendingEmail(false);
     }
   }
 
+  function handleEmailButton() {
+    if (!order?.contact_email) return;
+    const code = buildOrderCode(order.id);
+    const subject = encodeURIComponent(`Your order ${code}`);
+    const body = encodeURIComponent("Hi,\n\nHere's an update on your order.\n\n");
+    window.location.href = `mailto:${order.contact_email}?subject=${subject}&body=${body}`;
+  }
+
+  function handleCallWhatsappButton() {
+    if (!order?.contact_phone) return;
+    const phoneNorm = normalisePhone(order.contact_phone);
+    const waPhone = phoneNorm.replace(/^\+/, "");
+    const url = `https://wa.me/${waPhone}`;
+    window.open(url, "_blank");
+  }
+
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
-        Loading order…
+        <ClipLoader color="#7B61FF" size={50} />
       </div>
     );
   }
@@ -733,9 +814,7 @@ if (!fulfilmentError && fulfilmentData) {
       ? [
           order.shipping_address_line1,
           order.shipping_address_line2,
-          [order.shipping_city, order.shipping_postal_code]
-            .filter(Boolean)
-            .join(" "),
+          [order.shipping_city, order.shipping_postal_code].filter(Boolean).join(" "),
           order.shipping_country,
         ].filter(Boolean)
       : null;
@@ -749,6 +828,8 @@ if (!fulfilmentError && fulfilmentData) {
       : order.payment_status.charAt(0).toUpperCase() +
         order.payment_status.slice(1);
 
+  const isDelivered = order.status === "delivered";
+
   // Fallback activities (no explicit logs yet)
   const fallbackActivities: { label: string; at: string }[] = [];
   fallbackActivities.push({
@@ -758,9 +839,7 @@ if (!fulfilmentError && fulfilmentData) {
   if (fulfilment?.shipped_at) {
     fallbackActivities.push({
       label: `Shipped${
-        fulfilment.shipping_provider
-          ? ` with ${fulfilment.shipping_provider}`
-          : ""
+        fulfilment.shipping_provider ? ` with ${fulfilment.shipping_provider}` : ""
       }`,
       at: fulfilment.shipped_at,
     });
@@ -794,11 +873,9 @@ if (!fulfilmentError && fulfilmentData) {
           (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()
         );
 
-  // product-only lines (items already come from product-only API, but we guard anyway)
   const productLines = items.filter((i) => i.line_type === "product");
   const serviceLines = items.filter((i) => i.line_type === "service");
 
-  // detect if there is any ONLINE service (won't be true with product-only API, but kept for future use)
   const hasOnlineService = serviceLines.some((line) => {
     let opts = line.options_snapshot;
     if (opts && typeof opts === "string") {
@@ -815,8 +892,19 @@ if (!fulfilmentError && fulfilmentData) {
 
   const steps = timeline;
   const firstNotDoneIndex = steps.findIndex((s) => !s.done);
-  const currentStepIndex =
-    firstNotDoneIndex === -1 ? steps.length - 1 : firstNotDoneIndex;
+  const currentStepIndex = firstNotDoneIndex === -1 ? steps.length - 1 : firstNotDoneIndex;
+
+  // status select color
+  const statusBgClass =
+    order.status === "delivered"
+      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+      : order.status === "shipped"
+      ? "bg-indigo-100 text-indigo-800 border-indigo-300"
+      : order.status === "fulfilled"
+      ? "bg-violet-100 text-violet-800 border-violet-300"
+      : order.status === "cancelled"
+      ? "bg-rose-100 text-rose-700 border-rose-300"
+      : "bg-slate-100 text-slate-700 border-slate-300";
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
@@ -838,40 +926,43 @@ if (!fulfilmentError && fulfilmentData) {
               {/* Header row */}
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl font-semibold text-slate-900">
-                    Order {code}
-                  </h1>
+                  <h1 className="text-2xl font-semibold text-slate-900">Order {code}</h1>
                   <p className="text-sm text-slate-500">
-                    Placed {formatDateTime(order.created_at)} · {totalItems}{" "}
-                    item{totalItems === 1 ? "" : "s"} ·{" "}
-                    {formatCurrencyFromCents(order.total_cents)}
+                    Placed {formatDateTime(order.created_at)} · {totalItems} item
+                    {totalItems === 1 ? "" : "s"} · {formatCurrencyFromCents(order.total_cents)}
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="rounded-full bg-[#7B61FF] px-3 py-1 text-xs font-medium text-white">
-                    {mainStatus}
-                  </span>
-
-                  {/* status dropdown */}
-                  <select
-                    className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm"
-                    value={order.status}
-                    disabled={updatingStatus}
-                    onChange={(e) =>
-                      handleChangeStatus(e.target.value as OrderStatus)
-                    }
-                  >
-                    <option value="placed">Placed</option>
-                    <option value="fulfilled">Fulfilled</option>
-                    <option value="shipped">Shipped</option>
-                    <option value="delivered">Delivered</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Status
+                    </span>
+                    <select
+                          className={`rounded-full border px-4 py-1.5 text-xs font-medium shadow-sm ${statusBgClass}`}
+                          value={order.status}
+                          disabled={updatingStatus || isDelivered}       // ⬅️ changed
+                          onChange={(e) => handleChangeStatus(e.target.value as OrderStatus)}
+                        >
+                          <option value="placed">Placed</option>
+                          <option value="fulfilled">Fulfilled</option>
+                          <option value="shipped">Shipped</option>
+                          <option value="delivered">Delivered</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                    <span className="text-[11px] text-slate-400">
+                      Current: <span className="font-medium text-slate-700">{mainStatus}</span>
+                    </span>
+                    {isDelivered && (
+  <span className="text-[11px] text-slate-400">
+    This order is delivered and can no longer be updated.
+  </span>
+)}
+                  </div>
 
                   <button
                     className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                    disabled={saving}
+                    disabled={saving || isDelivered}  
                     onClick={handleMarkFinal}
                   >
                     {saving
@@ -881,9 +972,39 @@ if (!fulfilmentError && fulfilmentData) {
                       : "Mark as delivered"}
                   </button>
 
-                  <button className="rounded-full bg-white px-4 py-2 text-sm shadow-sm">
-                    More actions ▾
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setActionsOpen((v) => !v)}
+                      className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+                      type="button"
+                    >
+                      More actions ▾
+                    </button>
+                    {actionsOpen && (
+                      <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white text-xs text-slate-700 shadow-xl">
+                        <button
+                          className="block w-full px-4 py-2 text-left hover:bg-slate-50"
+                          type="button"
+                          onClick={() => {
+                            setActionsOpen(false);
+                            setItemsModalOpen(true);
+                          }}
+                        >
+                          Open items modal
+                        </button>
+                        <button
+                          className="block w-full px-4 py-2 text-left hover:bg-slate-50"
+                          type="button"
+                          onClick={async () => {
+                            setActionsOpen(false);
+                            await bulkUpdateAllItems("packed");
+                          }}
+                        >
+                          Mark all items as packed
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -901,14 +1022,8 @@ if (!fulfilmentError && fulfilmentData) {
                     Fulfilment status
                   </div>
 
-                  {/* CTA to open items modal */}
-                  <button
-                    type="button"
-                    onClick={() => setItemsModalOpen(true)}
-                    className="inline-flex items-center rounded-full bg-[#7B61FF] px-4 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-[#6A4BEF]"
-                  >
-                    View items to pack
-                  </button>
+                  {/* CTA scrolls to What to pack */}
+                  
                 </div>
 
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -927,15 +1042,10 @@ if (!fulfilmentError && fulfilmentData) {
                         : "bg-slate-200 text-slate-500";
 
                       const underlineClass =
-                        isDone || isCurrent
-                          ? "bg-[#7B61FF]"
-                          : "bg-slate-200";
+                        isDone || isCurrent ? "bg-[#7B61FF]" : "bg-slate-200";
 
                       return (
-                        <div
-                          key={step.label}
-                          className="flex flex-1 items-center"
-                        >
+                        <div key={step.label} className="flex flex-1 items-center">
                           <div className="flex flex-col items-center">
                             <div className={`${circleBase} ${circleClass}`}>
                               {isDone ? "✓" : idx + 1}
@@ -946,9 +1056,7 @@ if (!fulfilmentError && fulfilmentData) {
                             <div className="text-[11px] text-slate-400">
                               {step.date}
                             </div>
-                            <div
-                              className={`mt-2 h-0.5 w-12 rounded-full ${underlineClass}`}
-                            />
+                            <div className={`mt-2 h-0.5 w-12 rounded-full ${underlineClass}`} />
                           </div>
                           {idx < arr.length - 1 && (
                             <div className="mx-2 h-px flex-1 bg-slate-200" />
@@ -969,20 +1077,26 @@ if (!fulfilmentError && fulfilmentData) {
                     <h2 className="mb-3 text-sm font-semibold text-slate-900">
                       Customer
                     </h2>
-                    <p className="text-sm font-medium text-slate-900">
-                      {customerName}
-                    </p>
+                    <p className="text-sm font-medium text-slate-900">{customerName}</p>
                     <p className="text-sm text-slate-500">{customerEmail}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {customerPhone}
-                    </p>
+                    <p className="mt-1 text-sm text-slate-500">{customerPhone}</p>
 
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <button className="rounded-full bg-white px-4 py-2 text-xs shadow-sm">
-                        Email
+                      <button
+                        type="button"
+                        onClick={handleEmailButton}
+                        className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#7B61FF] to-[#B54CFF] px-5 py-2 text-xs font-medium text-white shadow-sm hover:opacity-90"
+                      >
+                        <span>✉</span>
+                        <span>Email</span>
                       </button>
-                      <button className="rounded-full bg-purple-600 px-4 py-2 text-xs font-medium text-white">
-                        Call / WhatsApp
+                      <button
+                        type="button"
+                        onClick={handleCallWhatsappButton}
+                        className="inline-flex items-center gap-2 rounded-full bg-[#111827] px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-black"
+                      >
+                        <span>📞</span>
+                        <span>Call / WhatsApp</span>
                       </button>
                     </div>
                   </div>
@@ -991,7 +1105,7 @@ if (!fulfilmentError && fulfilmentData) {
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <h2 className="text-sm font-semibold text-slate-900">
-                        Delivery & fulfilment
+                        Delivery &amp; fulfilment
                       </h2>
 
                       {hasOnlineService && order.contact_email && (
@@ -1013,24 +1127,60 @@ if (!fulfilmentError && fulfilmentData) {
                       {deliveryLabel}
                     </p>
 
-                    <div className="mt-3 space-y-1 text-sm text-slate-600">
+                    <div className="mt-3 space-y-3 text-sm text-slate-700">
                       {!isPickup && (
                         <>
-                          <p>
-                            <span className="font-medium">
-                              Expected delivery:
-                            </span>{" "}
-                            {fulfilment?.estimated_delivery_date
-                              ? formatDate(fulfilment.estimated_delivery_date)
-                              : "Not set"}
-                          </p>
-                          <p>
-                            {fulfilment?.shipping_provider ||
-                              order.shipping_provider ||
-                              "Shipping provider not set"}
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                              Shipping provider
+                            </p>
+                            <input
+                              className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                              placeholder="Eg. Ninja Van"
+                              value={shippingProviderInput}
+                              onChange={(e) => setShippingProviderInput(e.target.value)}
+                            />
+                          </div>
+
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Tracking number
+                              </p>
+                              <input
+                                className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                                value={trackingNumberInput}
+                                onChange={(e) => setTrackingNumberInput(e.target.value)}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Tracking link
+                              </p>
+                              <input
+                                className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                                placeholder="https://tracking…"
+                                value={trackingUrlInput}
+                                onChange={(e) => setTrackingUrlInput(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                              Expected delivery date
+                            </p>
+                            <input
+                              type="date"
+                              className="w-full max-w-xs rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                              value={etaInput ?? ""}
+                              onChange={(e) => setEtaInput(e.target.value)}
+                            />
+                          </div>
                         </>
                       )}
+
                       {isPickup && (
                         <>
                           <p>
@@ -1046,29 +1196,22 @@ if (!fulfilmentError && fulfilmentData) {
                       )}
                     </div>
 
-                    {/* Tracking */}
+                    {/* Tracking quick view */}
                     {!isPickup &&
-                      (fulfilment?.tracking_number ||
-                        fulfilment?.tracking_url ||
-                        order.tracking_number) && (
+                      (trackingNumberInput || trackingUrlInput) && (
                         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
                           <div>
                             <p className="text-xs uppercase tracking-wide text-slate-400">
-                              Tracking
+                              Tracking preview
                             </p>
-                            <p className="text-slate-700">
-                              {fulfilment?.tracking_number ||
-                                order.tracking_number}
-                            </p>
+                            <p className="text-slate-700">{trackingNumberInput}</p>
                           </div>
-                          {fulfilment?.tracking_url && (
+                          {trackingUrlInput && (
                             <button
                               className="text-xs font-medium text-slate-900 underline-offset-4 hover:underline"
-                              onClick={() =>
-                                window.open(fulfilment.tracking_url!, "_blank")
-                              }
+                              onClick={() => window.open(trackingUrlInput, "_blank")}
                             >
-                              View tracking page
+                              Open tracking page
                             </button>
                           )}
                         </div>
@@ -1092,12 +1235,23 @@ if (!fulfilmentError && fulfilmentData) {
                         </p>
                       </div>
                     )}
+
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSaveShipment}
+                        disabled={savingShipment}
+                        className="rounded-full bg-black px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
+                      >
+                        {savingShipment ? "Saving…" : "Save shipping details"}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Payment & totals */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
                     <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                      Payment & totals
+                      Payment &amp; totals
                     </h2>
 
                     <dl className="space-y-2 text-sm text-slate-700">
@@ -1112,12 +1266,9 @@ if (!fulfilmentError && fulfilmentData) {
                       {order.discount_cents > 0 && (
                         <div className="flex justify-between">
                           <dt>
-                            Promo{" "}
-                            {order.promo_code ? `(${order.promo_code})` : ""}
+                            Promo {order.promo_code ? `(${order.promo_code})` : ""}
                           </dt>
-                          <dd>
-                            – {formatCurrencyFromCents(order.discount_cents)}
-                          </dd>
+                          <dd>– {formatCurrencyFromCents(order.discount_cents)}</dd>
                         </div>
                       )}
                       <div className="mt-2 flex justify-between border-t border-slate-100 pt-3 text-base font-semibold">
@@ -1133,116 +1284,127 @@ if (!fulfilmentError && fulfilmentData) {
                 </div>
 
                 {/* Right column cards */}
-                <div className="space-y-5">
-                  {/* What to pack / fulfil */}
-                  <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                      {isPickup ? "What to prepare" : "What to pack"}
-                    </h2>
+               <div className="space-y-5">
+  {/* What to pack / fulfil */}
+  <div
+    ref={whatToPackRef}
+    className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100"
+  >
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <div>
+        <h2 className="text-sm font-semibold text-slate-900">
+          {isPickup ? "What to prepare" : "What to pack"}
+        </h2>
+        <p className="mt-1 text-[11px] text-slate-500">
+          {productLines.length} item
+          {productLines.length === 1 ? "" : "s"} in this order
+        </p>
+      </div>
 
-                    <div className="space-y-3">
-                      {productLines.map((line) => (
-                        <div
-                          key={line.id}
-                          className="flex items-start justify-between gap-3"
-                        >
-                          <div className="flex items-start gap-3">
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 rounded border-slate-300"
-                            />
-                            <div>
-                              <p className="text-sm font-medium text-slate-900">
-                                {line.name_snapshot} × {line.quantity}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {line.options_snapshot &&
-                                Object.keys(line.options_snapshot).length
-                                  ? Object.entries(line.options_snapshot)
-                                      .map(
-                                        ([k, v]) => `${k}: ${String(v)}`
-                                      )
-                                      .join(" · ")
-                                  : "No options"}
-                              </p>
-                              <p className="text-xs text-slate-400">
-                                {formatCurrencyFromCents(
-                                  line.unit_price_cents
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-700">
-                            {lineTypeBadge(line.line_type)}
-                          </span>
-                        </div>
-                      ))}
+      <button
+        type="button"
+        onClick={() => setItemsModalOpen(true)}
+        className="inline-flex items-center rounded-full bg-[#7B61FF] px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#6A4BEF]"
+      >
+        View items to pack
+      </button>
+    </div>
 
-                      {productLines.length === 0 && (
-                        <p className="text-sm text-slate-500">
-                          No items found for this order.
-                        </p>
-                      )}
-                    </div>
-                  </div>
+    <div className="space-y-3">
+      {productLines.map((line) => (
+        <div
+          key={line.id}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-200 hover:bg-slate-50/80"
+        >
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-[#7B61FF] focus:ring-[#7B61FF]"
+            />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-slate-900">
+                {line.name_snapshot} × {line.quantity}
+              </p>
+              <p className="text-xs text-slate-500">
+                {line.options_snapshot &&
+                Object.keys(line.options_snapshot).length
+                  ? Object.entries(line.options_snapshot)
+                      .map(([k, v]) => `${k}: ${String(v)}`)
+                      .join(" · ")
+                  : "No options"}
+              </p>
+              <p className="text-xs font-medium text-slate-400">
+                {formatCurrencyFromCents(line.unit_price_cents)}
+              </p>
+            </div>
+          </div>
 
-                  {/* Customer / fulfilment note */}
-                  <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                      Customer / fulfilment note
-                    </h2>
-                    <p className="text-sm text-slate-600">{noteText}</p>
-                  </div>
+          <span className="inline-flex items-center rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+            {lineTypeBadge(line.line_type)}
+          </span>
+        </div>
+      ))}
 
-                  {/* Activity */}
-                  <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                      Activity
-                    </h2>
-                    {activityToRender.length === 0 ? (
-                      <p className="text-xs text-slate-500">
-                        No activity recorded.
-                      </p>
-                    ) : (
-                      <ul className="space-y-2 text-xs text-slate-600">
-                        {activityToRender.map((a, idx) => (
-                          <li
-                            key={idx}
-                            className="flex items-start justify-between gap-3"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="mt-[3px] h-1.5 w-1.5 rounded-full bg-slate-300" />
-                              <span>{a.label}</span>
-                            </div>
-                            <span className="text-[11px] text-slate-400">
-                              {formatDateTime(a.at)}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+      {productLines.length === 0 && (
+        <p className="rounded-2xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+          No items found for this order.
+        </p>
+      )}
+    </div>
+  </div>
 
-                  {/* Internal notes (local only) */}
-                  <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                      Internal notes
-                    </h2>
-                    <p className="mb-2 text-xs text-slate-500">
-                      Add private notes about this order (visible only to you
-                      and your team).
-                    </p>
-                    <textarea
-                      className="h-24 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                      placeholder="These notes are not shown to the customer. (Wire this up to a table or column when you're ready.)"
-                    />
-                    <div className="mt-3 flex justify-end">
-                      <button className="rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white">
-                        Save note
-                      </button>
-                    </div>
-                  </div>
-                </div>
+  {/* Customer / fulfilment note */}
+  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+    <h2 className="mb-2 text-sm font-semibold text-slate-900">
+      Customer / fulfilment note
+    </h2>
+    <p className="text-sm text-slate-600 whitespace-pre-line">{noteText}</p>
+  </div>
+
+  {/* Activity */}
+  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+    <h2 className="mb-3 text-sm font-semibold text-slate-900">Activity</h2>
+    {activityToRender.length === 0 ? (
+      <p className="text-xs text-slate-500">No activity recorded.</p>
+    ) : (
+      <ul className="space-y-2 text-xs text-slate-600">
+        {activityToRender.map((a, idx) => (
+          <li
+            key={idx}
+            className="flex items-start justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="mt-[3px] h-1.5 w-1.5 rounded-full bg-slate-400" />
+              <span>{a.label}</span>
+            </div>
+            <span className="text-[11px] text-slate-400">
+              {formatDateTime(a.at)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+
+  {/* Internal notes (local only) */}
+  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+    <h2 className="mb-2 text-sm font-semibold text-slate-900">
+      Internal notes
+    </h2>
+    <p className="mb-2 text-xs text-slate-500">
+      Add private notes about this order (visible only to you and your team).
+    </p>
+    <textarea
+      className="h-24 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-slate-400"
+      placeholder="These notes are not shown to the customer. (Wire this up to a table or column when you're ready.)"
+    />
+    <div className="mt-3 flex justify-end">
+      <button className="rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-black">
+        Save note
+      </button>
+    </div>
+  </div>
+</div>
               </div>
               {/* end grid */}
             </div>
@@ -1250,7 +1412,7 @@ if (!fulfilmentError && fulfilmentData) {
         </div>
       </div>
 
-      {/* Items modal */}
+      {/* Items modal (for detailed fulfilment per line) */}
       {itemsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-xl">
@@ -1289,8 +1451,7 @@ if (!fulfilmentError && fulfilmentData) {
                 <tbody>
                   {items.map((item) => {
                     const optionsRaw =
-                      item.options_snapshot &&
-                      typeof item.options_snapshot === "string"
+                      item.options_snapshot && typeof item.options_snapshot === "string"
                         ? (() => {
                             try {
                               return JSON.parse(item.options_snapshot);
@@ -1315,24 +1476,15 @@ if (!fulfilmentError && fulfilmentData) {
                         : "pending";
 
                     return (
-                      <tr
-                        key={item.id}
-                        className="border-b border-slate-100 last:border-0"
-                      >
+                      <tr key={item.id} className="border-b border-slate-100 last:border-0">
                         <td className="px-6 py-3 text-slate-800">
-                          <div className="font-medium">
-                            {item.name_snapshot}
-                          </div>
+                          <div className="font-medium">{item.name_snapshot}</div>
                           <div className="text-xs text-slate-400">
                             {item.line_type.toUpperCase()}
                           </div>
                         </td>
-                        <td className="px-6 py-3 text-slate-600">
-                          {optionsText}
-                        </td>
-                        <td className="px-6 py-3 text-slate-800">
-                          {item.quantity}
-                        </td>
+                        <td className="px-6 py-3 text-slate-600">{optionsText}</td>
+                        <td className="px-6 py-3 text-slate-800">{item.quantity}</td>
                         <td className="px-6 py-3 text-slate-800">
                           {formatCurrencyFromCents(item.unit_price_cents)}
                         </td>
@@ -1342,14 +1494,12 @@ if (!fulfilmentError && fulfilmentData) {
                         <td className="px-6 py-3">
                           <button
                             disabled={savingItemId === item.id}
-                            onClick={() =>
-                              updateItemStatus(item.id, nextStatus)
-                            }
+                            onClick={() => updateItemStatus(item.id, nextStatus)}
                             className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
                               itemStatusClasses[item.item_fulfilment_status]
                             } ${
                               savingItemId === item.id
-                                ? "opacity-70 cursor-wait"
+                                ? "cursor-wait opacity-70"
                                 : "cursor-pointer"
                             }`}
                             title="Click to cycle status"
@@ -1378,8 +1528,8 @@ if (!fulfilmentError && fulfilmentData) {
             {/* Modal footer */}
             <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3 text-xs text-slate-500">
               <span>
-                Tip: click the status pill to move items from Pending →
-                Processing → Packed.
+                Tip: click the status pill to move items from Pending → Processing →
+                Packed.
               </span>
               <button
                 type="button"
@@ -1405,8 +1555,7 @@ if (!fulfilmentError && fulfilmentData) {
               <span className="font-medium">
                 {order.contact_name || "your customer"}
               </span>{" "}
-              at{" "}
-              <span className="font-mono">{order.contact_email || "—"}</span>.
+              at <span className="font-mono">{order.contact_email || "—"}</span>.
             </p>
 
             <label className="mb-1 block text-xs font-medium text-slate-700">
