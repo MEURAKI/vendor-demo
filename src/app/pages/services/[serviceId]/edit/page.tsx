@@ -1308,66 +1308,70 @@ export default function EditServicePage() {
                 <div className="space-y-6">
                   {/* Service Images */}
                   <section className="rounded-3xl border border-[#ECECFB] bg-white p-5">
-                    <h2 className="mb-3 text-sm font-semibold text-gray-900">
-                      Service Images
-                    </h2>
+  <h2 className="mb-3 text-sm font-semibold text-gray-900">
+    Service Images
+  </h2>
 
-                    <div className="overflow-hidden rounded-3xl bg-gray-200">
-                      {coverImageUrl ? (
-                        <img
-                          src={coverImageUrl}
-                          alt="Service cover"
-                          className="h-56 w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-56 items-center justify-center text-xs text-gray-500">
-                          Upload a main service image
-                        </div>
-                      )}
-                    </div>
+  {/* Main (cover) image */}
+  <div className="overflow-hidden rounded-3xl bg-gray-200 relative">
+    {coverImageUrl ? (
+      <img
+        src={coverImageUrl}
+        alt="Service cover"
+        className="h-56 w-full object-cover"
+      />
+    ) : (
+      <div className="flex h-56 items-center justify-center text-xs text-gray-500">
+        Upload a main service image
+      </div>
+    )}
+  </div>
 
-                    <div className="mt-3 flex gap-2">
-                      {images.slice(0, 5).map((url, idx) => (
-                        <button
-                          key={url}
-                          type="button"
-                          onClick={() => {
-                            setImages((prev) => {
-                              const arr = [...prev];
-                              const main = arr[0];
-                              arr[0] = arr[idx];
-                              arr[idx] = main;
-                              return arr;
-                            });
-                          }}
-                          className="relative h-14 w-14 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
-                        >
-                          <img
-                            src={url}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        </button>
-                      ))}
-                      {images.length < 6 && (
-                        <label className="flex h-14 w-14.cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">
-                          +
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="hidden"
-                            onChange={(e) => handleImageUpload(e.target.files)}
-                          />
-                        </label>
-                      )}
-                    </div>
+  {/* Image thumbnails */}
+<div className="mt-3 flex gap-2">
+  {images.slice(0, 5).map((url, idx) => (
+    <div
+      key={url}
+      className="relative h-14 w-14 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
+    >
+      <img
+        src={url}
+        alt=""
+        className="h-full w-full object-cover"
+      />
 
-                    <p className="mt-2 text-[10px] text-gray-500">
-                      Upload a high-resolution cover image and up to 5 gallery
-                      images.
-                    </p>
-                  </section>
+      {/* Delete button */}
+      <button
+        type="button"
+        onClick={() => {
+          setImages((prev) => prev.filter((img) => img !== url));
+        }}
+        className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold leading-none text-white shadow-md hover:bg-red-700"
+        aria-label="Remove image"
+      >
+        ✕
+      </button>
+    </div>
+  ))}
+
+  {images.length < 6 && (
+    <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">
+      +
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleImageUpload(e.target.files)}
+      />
+    </label>
+  )}
+</div>
+
+  <p className="mt-2 text-[10px] text-gray-500">
+    Upload a high-resolution cover image and up to 5 gallery images.
+  </p>
+</section>
 
                   {/* Wellness / Categories / Tags */}
                   {/* <div
