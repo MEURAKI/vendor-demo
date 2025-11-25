@@ -14,15 +14,38 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Orders for this vendor which have at least one PRODUCT line item
   const { data, error } = await supabase
     .from("orders")
-    .select("*")
+    .select(
+      `
+      *,
+      order_items!inner (
+        id,
+        line_type,
+        product_id,
+        product_variant_id,
+        name_snapshot,
+        sku_snapshot,
+        options_snapshot,
+        image_url_snapshot,
+        quantity,
+        unit_price_cents,
+        subtotal_cents,
+        line_subtotal_cents,
+        item_fulfilment_status
+      )
+    `
+    )
     .eq("vendor_id", user.id)
+    .eq("order_items.line_type", "product")
     .order("created_at", { ascending: false });
 
   if (error) {
+    console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  // Wrap in { orders: ... } if your frontend expects that shape
+  return NextResponse.json({ orders: data });
 }

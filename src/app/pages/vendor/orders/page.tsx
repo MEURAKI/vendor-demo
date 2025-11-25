@@ -1,170 +1,179 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import clsx from "clsx";
+import { Calendar, ChevronDown, Search } from "lucide-react";
+import ClipLoader from "react-spinners/ClipLoader";
 
 import Sidebar from "../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 
-type OrderStatus = "placed" | "fulfilled" | "shipped" | "delivered" | "cancelled";
+/* ---------- Types ---------- */
 
-type OrderRow = {
-  id: string;
-  code: string;
-  placedAt: string;
-  customerName: string;
-  itemsLabel: string;
-  deliveryMethod: string;
-  status: OrderStatus;
-  statusLabel: string;
-  total: string;
-  lastUpdate: string;
-};
+type UserStatus = "active" | "inactive" | "pending";
 
 type Profile = {
   id: string;
   email: string | null;
-  full_name: string | null;
-  status: "active" | "inactive" | "pending";
+  status: UserStatus;
   onboarding_completed: boolean;
+  full_name: string | null;
 };
 
-type OrderFromDB = {
+type OrderStatus =
+  | "pending"
+  | "placed"
+  | "processing"
+  | "shipped"
+  | "delivered"
+  | "completed"
+  | "cancelled"
+  | "refunded";
+
+type OrderRow = {
   id: string;
-  customer_id: string;
-  vendor_id: string;
-  status: OrderStatus;
-  fulfilment_method: "standard_delivery" | "express_delivery" | "pickup";
-  subtotal_cents: number;
-  shipping_cents: number;
-  discount_cents: number;
-  total_cents: number;
-  promo_code: string | null;
-  promo_description: string | null;
-  contact_name: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
-  created_at: string;
-  updated_at: string;
+  orderNumber: string;
+  customerName: string;
+  status: OrderStatus | string;
+  totalCents: number;
+  totalCount: number;
+  order_items: any[];
+  createdAt: string;
+  itemsCount: number;
+  fulfilmentMethod: string | null;
 };
 
-const statusColors: Record<OrderStatus, string> = {
-  placed: "bg-slate-100 text-slate-700",
-  fulfilled: "bg-fuchsia-100 text-fuchsia-700",
-  shipped: "bg-indigo-100 text-indigo-700",
-  delivered: "bg-emerald-100 text-emerald-700",
-  cancelled: "bg-rose-100 text-rose-700",
-};
+/* ---------- Helpers ---------- */
 
-function formatCurrencyFromCents(cents: number): string {
-  return `SGD ${(cents / 100).toFixed(2)}`;
+function formatMoneyFromCents(cents: number) {
+  const value = (cents ?? 0) / 100;
+  return `SGD ${value.toFixed(2)}`;
 }
 
-function mapFulfilmentMethod(method: OrderFromDB["fulfilment_method"]): string {
-  switch (method) {
-    case "standard_delivery":
-      return "Standard delivery";
-    case "express_delivery":
-      return "Express delivery";
-    case "pickup":
-      return "Pickup";
-    default:
-      return method;
-  }
+function formatDate(d: string | null | undefined) {
+  if (!d) return "—";
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return d;
+  return date.toLocaleString();
 }
 
-function mapDbOrderToRow(o: OrderFromDB): OrderRow {
-  const created = new Date(o.created_at);
-  const updated = new Date(o.updated_at);
-
-  return {
-    id: o.id,
-    // Simple human-friendly code derived from UUID
-    code: `#${o.id.split("-")[0].toUpperCase()}`,
-    placedAt: `Placed ${created.toLocaleDateString("en-SG", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    })}`,
-    customerName: o.contact_name || "Unknown customer",
-    // You can replace this with a real item summary if you have an order_items table
-    itemsLabel: "Items summary not available",
-    deliveryMethod: mapFulfilmentMethod(o.fulfilment_method),
-    status: o.status,
-    statusLabel: o.status.charAt(0).toUpperCase() + o.status.slice(1),
-    total: formatCurrencyFromCents(o.total_cents),
-    lastUpdate: updated.toLocaleString("en-SG", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-  };
+function prettyStatusLabel(status: string) {
+  return status
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default function OrdersPage() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+/* ---------- Page ---------- */
+
+export default function DeliveryOrdersPage() {
+  const router = useRouter();
+
   const [profile, setProfile] = useState<Profile | null>(null);
-
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Load profile + vendor orders
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+
+  // date filter (yyyy-mm-dd)
+  const [dateFrom, setDateFrom] = useState<string | "">("");
+  const [dateTo, setDateTo] = useState<string | "">("");
+
+  // bulk selection & quick actions
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+  const [isPerformingQuickAction, setIsPerformingQuickAction] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(15);
+
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
+    let isMounted = true;
 
-      const { data: auth, error: authError } = await supabase.auth.getUser();
-      if (authError) {
-        setError("Failed to load user.");
-        setLoading(false);
-        return;
+    async function init() {
+      try {
+        setLoading(true);
+
+        // Profile
+        const { data: auth } = await supabase.auth.getUser();
+        if (auth?.user) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("id,email,status,onboarding_completed,full_name")
+            .eq("id", auth.user.id)
+            .maybeSingle();
+
+          if (isMounted && prof) {
+            setProfile(prof as Profile);
+          }
+        }
+
+        await loadOrders(isMounted);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-      if (!auth.user) {
-        setError("No authenticated user.");
-        setLoading(false);
-        return;
+    }
+
+    async function loadOrders(isStillMounted: boolean) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      // Let the API return all vendor orders; we’ll filter to delivery here
+      const res = await fetch("/api/vendor/orders", {
+        headers: {
+          Authorization: session?.access_token
+            ? `Bearer ${session.access_token}`
+            : "",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch orders");
       }
 
-      const userId = auth.user.id;
+      const data = await res.json();
 
-      // Load profile for sidebar
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("id,email,full_name,status,onboarding_completed")
-        .eq("id", userId)
-        .maybeSingle();
+      const mapped: OrderRow[] = (data.orders ?? data ?? []).map(
+        (o: any): OrderRow => ({
+          id: String(o.id),
+          // you can swap this for a real order number once you have it
+          orderNumber: o.order_number ?? `ORD-${String(o.id).slice(0, 8)}`,
+          customerName:
+            o.contact_name ??
+            o.customer_name ??
+            "Guest",
+          status: o.status ?? "pending",
+          order_items: o.order_items ?? [],
+          totalCount: o.order_items?.length  ?? o.order_items?.length ?? 0,
+          totalCents:
+            o.total_cents ?? (o.subtotal_cents ?? 0) + (o.shipping_cents ?? 0),
+          createdAt: o.created_at ?? o.createdAt ?? "",
+          // if you have items on the order, map their length here instead of 0
+          itemsCount: o.items_count ?? o.itemsCount ?? 0,
+          fulfilmentMethod:
+            o.fulfilment_method ?? o.fulfilmentMethod ?? null,
+        })
+      );
 
-      if (profileData) {
-        setProfile(profileData as Profile);
+      if (isStillMounted) {
+        setOrders(mapped);
       }
+    }
 
-      // Load orders belonging to this vendor
-      const { data: ordersData, error: ordersError } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("vendor_id", userId)
-        .order("created_at", { ascending: false });
-
-      if (ordersError) {
-        console.error(ordersError);
-        setError("Failed to load orders.");
-        setLoading(false);
-        return;
-      }
-
-      const mapped = (ordersData as OrderFromDB[] | null)?.map(mapDbOrderToRow) ?? [];
-      setOrders(mapped);
-      setLoading(false);
-    })();
+    void init();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
+  // Sidebar config
   const sidebarConfig = useMemo(
     () =>
       buildSidebarConfig({
@@ -176,190 +185,471 @@ export default function OrdersPage() {
     [profile]
   );
 
-  const filtered = orders.filter((o) => {
-    const matchesSearch =
-      !search ||
-      o.code.toLowerCase().includes(search.toLowerCase()) ||
-      o.customerName.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || o.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  /* ---------- Filters & pagination ---------- */
+
+  const filteredOrders = orders
+    // Delivery-only: just keep delivery orders on this page
+    .filter(
+      (o) =>
+        !o.fulfilmentMethod ||
+        o.fulfilmentMethod === "standard_delivery"
+    )
+    .filter((o) => {
+      const term = search.toLowerCase().trim();
+      const matchesSearch =
+        !term ||
+        o.orderNumber.toLowerCase().includes(term) ||
+        o.customerName.toLowerCase().includes(term);
+
+      const createdDate = new Date(o.createdAt);
+      let matchesDate = true;
+
+      if (!Number.isNaN(createdDate.getTime())) {
+        if (dateFrom) {
+          const from = new Date(dateFrom);
+          from.setHours(0, 0, 0, 0);
+          if (createdDate < from) matchesDate = false;
+        }
+        if (matchesDate && dateTo) {
+          const to = new Date(dateTo);
+          to.setHours(23, 59, 59, 999);
+          if (createdDate > to) matchesDate = false;
+        }
+      }
+
+      return matchesSearch && matchesDate;
+    });
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredOrders.length / pageSize)
+  );
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const currentRows = filteredOrders.slice(
+    startIndex,
+    startIndex + pageSize
+  );
+  const fromItem = filteredOrders.length === 0 ? 0 : startIndex + 1;
+  const toItem = startIndex + currentRows.length;
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const allCurrentPageSelected =
+    currentRows.length > 0 &&
+    currentRows.every((o) => selectedOrderIds.has(o.id));
+
+  const selectedCount = selectedOrderIds.size;
+
+  /* ---------- Quick actions ---------- */
+
+  async function handleBulkStatusChange(newStatus: OrderStatus) {
+    if (selectedOrderIds.size === 0) return;
+
+    try {
+      setIsPerformingQuickAction(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      await fetch("/api/vendor/orders/bulk-status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: session?.access_token
+            ? `Bearer ${session.access_token}`
+            : "",
+        },
+        body: JSON.stringify({
+          ids: Array.from(selectedOrderIds),
+          status: newStatus,
+        }),
+      });
+
+      // Optimistic local update
+      setOrders((prev) =>
+        prev.map((o) =>
+          selectedOrderIds.has(o.id)
+            ? { ...o, status: newStatus }
+            : o
+        )
+      );
+      setSelectedOrderIds(new Set());
+      setQuickActionsOpen(false);
+    } catch (err) {
+      console.error("Failed to perform quick action", err);
+    } finally {
+      setIsPerformingQuickAction(false);
+    }
+  }
+
+  function toggleSelectAllCurrentPage() {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (allCurrentPageSelected) {
+        currentRows.forEach((o) => next.delete(o.id));
+      } else {
+        currentRows.forEach((o) => next.add(o.id));
+      }
+      return next;
+    });
+  }
+
+  function toggleRowSelected(id: string) {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      {/* Sidebar */}
       <Sidebar config={sidebarConfig} />
 
-      {/* Main shell */}
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-          {/* Inner content */}
-          <div className="flex-1 overflow-auto px-6 py-6">
-            <div className="mx-auto max-w-6xl">
-              {/* Header */}
-              <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                <div>
-                  <h1 className="text-2xl font-semibold text-slate-900">Orders</h1>
-                  <p className="text-sm text-slate-500">
-                    Overview of all product and bundle orders for your shop.
-                  </p>
+      <div className="flex flex-1 items-stretch justify-center px-3 py-4 md:px-6">
+        <div className="flex h-full w-full max-w-7xl flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+          {/* Top bar */}
+          <div className="sticky top-0 z-30 border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 md:px-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col">
+                  <h1 className="text-lg font-semibold text-[#1B1529] md:text-xl">
+                    Delivery Orders
+                  </h1>
+                  <span className="mt-1 inline-flex w-max items-center rounded-full bg-[#16111F] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#E4D9FF]">
+                    Delivery only
+                  </span>
+                </div>
+                <span className="inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
+                  {orders.length}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-3">
+                {/* Date range pill */}
+                <div className="flex items-center gap-2 rounded-[999px] border border-[#E4D7FF] bg-white/80 px-4 py-2 text-[11px] text-gray-700 shadow-sm">
+                  <Calendar className="h-3 w-3 text-gray-400" />
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                      Date
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => {
+                          setDateFrom(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="h-5 rounded-md border border-transparent bg-transparent text-[11px] outline-none focus:border-[#7C3AED]"
+                        placeholder="yyyy-mm-dd"
+                      />
+                      <span className="text-gray-300">–</span>
+                      <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => {
+                          setDateTo(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="h-5 rounded-md border border-transparent bg-transparent text-[11px] outline-none focus:border-[#7C3AED]"
+                        placeholder="yyyy-mm-dd"
+                      />
+                    </div>
+                  </div>
+                  {(dateFrom || dateTo) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFrom("");
+                        setDateTo("");
+                        setCurrentPage(1);
+                      }}
+                      className="ml-1 rounded-full bg-[#F2ECFF] px-2 py-0.5 text-[10px] font-semibold text-[#5A3BC6] hover:bg-[#E5DAFF]"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Search */}
-                  <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm">
-                    <Search className="h-4 w-4 text-slate-400" />
+                {/* Search + Quick actions */}
+                <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+                  <div className="relative flex-1 min-w-[180px] md:w-72">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <input
-                      className="w-52 bg-transparent text-sm outline-none placeholder:text-slate-400"
-                      placeholder="Search by order no., customer, item…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          setSearch(searchInput);
+                          setCurrentPage(1);
+                        }
+                      }}
+                      placeholder="Search by order # or customer…"
+                      className="w-full rounded-full border border-gray-200 bg-white pl-11 pr-4 py-2 text-xs text-gray-700 shadow-sm placeholder:text-gray-400 focus:border-[#7C3AED] focus:ring-2 focus:ring-[#E9D8FD] focus:outline-none transition-all"
                     />
                   </div>
 
-                  {/* Date range pill – static for now */}
-                  <button className="rounded-full bg-white px-4 py-2 text-sm shadow-sm">
-                    1 Jun – 30 Jun
-                  </button>
-
-                  {/* Status filter */}
-                  <select
-                    className="rounded-full bg-white px-4 py-2 text-sm shadow-sm"
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch(searchInput);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded-full bg-black px-4 py-2 text-xs font-semibold text-white hover:bg-[#18171E] transition"
                   >
-                    <option value="all">Status · All</option>
-                    <option value="placed">Placed</option>
-                    <option value="fulfilled">Fulfilled</option>
-                    <option value="shipped">Shipped</option>
-                    <option value="delivered">Delivered</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-
-                  {/* Quick actions – dropdown stub */}
-                  <button className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                    Quick Actions ▾
+                    Search
                   </button>
-                </div>
-              </div>
 
-              {/* Table container */}
-              <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-6 py-4 text-sm font-medium text-slate-700">
-                  All orders
-                </div>
+                  {/* Quick Actions */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      disabled={selectedCount === 0 || isPerformingQuickAction}
+                      onClick={() =>
+                        selectedCount > 0 &&
+                        !isPerformingQuickAction &&
+                        setQuickActionsOpen((o) => !o)
+                      }
+                      className={clsx(
+                        "flex items-center rounded-full px-4 py-2 text-xs font-semibold shadow-sm transition",
+                        selectedCount === 0 || isPerformingQuickAction
+                          ? "cursor-not-allowed bg-[#2A2834] text-gray-300 opacity-60"
+                          : "bg-black text-white hover:bg-[#18171E]"
+                      )}
+                    >
+                      Quick Actions
+                      <ChevronDown className="ml-1 h-3 w-3" />
+                    </button>
 
-                {loading ? (
-                  <div className="px-6 py-10 text-sm text-slate-500">
-                    Loading orders…
-                  </div>
-                ) : error ? (
-                  <div className="px-6 py-10 text-sm text-rose-600">{error}</div>
-                ) : filtered.length === 0 ? (
-                  <div className="px-6 py-10 text-sm text-slate-500">
-                    No orders found for your filters.
-                  </div>
-                ) : (
-                  <>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                            <th className="px-6 py-3">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded border-slate-300"
-                              />
-                            </th>
-                            <th className="px-6 py-3">Order</th>
-                            <th className="px-6 py-3">Customer</th>
-                            <th className="px-6 py-3">Items</th>
-                            <th className="px-6 py-3">Delivery method</th>
-                            <th className="px-6 py-3">Status</th>
-                            <th className="px-6 py-3">Total</th>
-                            <th className="px-6 py-3">Last update</th>
-                            <th className="px-6 py-3 text-right">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filtered.map((order) => (
-                            <tr
-                              key={order.id}
-                              className="border-b border-slate-100 last:border-0"
-                            >
-                              <td className="px-6 py-4">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border-slate-300"
-                                />
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex flex-col">
-                                  <span className="font-medium text-slate-900">
-                                    {order.code}
-                                  </span>
-                                  <span className="text-xs text-slate-500">
-                                    {order.placedAt}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 text-slate-700">
-                                {order.customerName}
-                              </td>
-                              <td className="px-6 py-4 text-slate-700">
-                                {order.itemsLabel}
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
-                                  {order.deliveryMethod}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span
-                                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                                    statusColors[order.status]
-                                  }`}
-                                >
-                                  {order.statusLabel}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-slate-900">
-                                {order.total}
-                              </td>
-                              <td className="px-6 py-4 text-slate-500">
-                                {order.lastUpdate}
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <Link
-                                  href={`/pages/vendor/orders/${order.id}`}
-                                  className="text-sm font-medium text-slate-900 underline-offset-4 hover:underline"
-                                >
-                                  View
-                                </Link>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="flex items-center justify-between px-6 py-4 text-xs text-slate-500">
-                      <span>Showing 1–{filtered.length} orders</span>
-                      <div className="flex items-center gap-2">
-                        <button className="rounded-full border border-slate-200 px-3 py-1">
-                          ‹
+                    {quickActionsOpen && (
+                      <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white text-[11px] shadow-lg z-40">
+                        <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                          Apply to {selectedCount} selected
+                        </div>
+                        <button
+                          type="button"
+                          className="block w-full px-4 py-2 text-left hover:bg-gray-50"
+                          onClick={() => handleBulkStatusChange("shipped")}
+                        >
+                          Mark as shipped
                         </button>
-                        <button className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-medium text-white">
-                          1
+                        <button
+                          type="button"
+                          className="block w-full px-4 py-2 text-left hover:bg-gray-50"
+                          onClick={() => handleBulkStatusChange("delivered")}
+                        >
+                          Mark as delivered
                         </button>
-                        <button className="rounded-full border border-slate-200 px-3 py-1">
-                          ›
+                        <button
+                          type="button"
+                          className="block w-full px-4 py-2 text-left hover:bg-gray-50"
+                          onClick={() => handleBulkStatusChange("cancelled")}
+                        >
+                          Mark as cancelled
                         </button>
                       </div>
-                    </div>
-                  </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-auto p-4 md:p-6">
+            <div className="min-h-0 overflow-auto rounded-2xl border border-[#ECECFB] bg-white">
+              <div className="w-full  overflow-x-auto">
+                <table className="min-w-[880px] w-full text-xs table-fixed">
+                  <thead className="sticky top-0 z-20 bg-[#F6F5FF] text-[11px] font-semibold text-gray-500 shadow-sm">
+                    <tr>
+                      <th className="w-10 px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            allCurrentPageSelected &&
+                            currentRows.length > 0
+                          }
+                          onChange={toggleSelectAllCurrentPage}
+                          className="h-3 w-3 rounded border-gray-300 text-[#7C3AED] focus:ring-[#7C3AED]"
+                        />
+                      </th>
+                      <th className="px-3 py-3 text-left">Order #</th>
+                      <th className="px-3 py-3 text-left">Customer</th>
+                      <th className="px-3 py-3 text-left">Status</th>
+                      <th className="px-3 py-3 text-right">Items</th>
+                      <th className="px-3 py-3 text-right">Total</th>
+                      <th className="px-3 py-3 text-left">Created</th>
+                      <th className="px-3 py-3 text-center">Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {loading ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="px-4 py-10 text-center text-xs text-gray-500"
+                        >
+                          <ClipLoader
+                            size={40}
+                            color="#6B46C1"
+                            cssOverride={{ animationDuration: "3s" }}
+                          />
+                        </td>
+                      </tr>
+                    ) : filteredOrders.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="px-4 py-16 text-center text-xs text-gray-500"
+                        >
+                          No delivery orders found.
+                        </td>
+                      </tr>
+                    ) : (
+                      currentRows.map((o, idx) => {
+                        const isSelected = selectedOrderIds.has(o.id);
+                        const status = String(o.status) as OrderStatus | string;
+
+                        return (
+                          <tr
+                            key={o.id}
+                            className={clsx(
+                              "border-t border-gray-100",
+                              idx % 2 === 1 && "bg-[#FBFBFE]"
+                            )}
+                          >
+                            <td className="px-3 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleRowSelected(o.id)}
+                                className="h-3 w-3 rounded border-gray-300 text-[#7C3AED] focus:ring-[#7C3AED]"
+                              />
+                            </td>
+
+                            <td className="px-3 py-3 font-semibold text-gray-900">
+                              {o.orderNumber}
+                            </td>
+
+                            <td className="px-3 py-3 text-[11px] text-gray-700">
+                              {o.customerName}
+                            </td>
+
+                            <td className="px-3 py-3 text-[11px]">
+                              <span
+                                className={clsx(
+                                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                                  (status === "pending" ||
+                                    status === "placed") &&
+                                    "bg-amber-100 text-amber-800",
+                                  (status === "processing" ||
+                                    status === "shipped") &&
+                                    "bg-indigo-100 text-indigo-800",
+                                  (status === "delivered" ||
+                                    status === "completed") &&
+                                    "bg-emerald-100 text-emerald-800",
+                                  status === "cancelled" &&
+                                    "bg-red-100 text-red-700",
+                                  status === "refunded" &&
+                                    "bg-purple-100 text-purple-700"
+                                )}
+                              >
+                                {prettyStatusLabel(status)}
+                              </span>
+                            </td>
+
+                            <td className="px-3 py-3 text-right text-[11px] text-gray-700">
+                              {o.totalCount}
+                            </td>
+
+                            <td className="px-3 py-3 text-right text-[11px] text-gray-800">
+                              {formatMoneyFromCents(o.totalCents)}
+                            </td>
+
+                            <td className="px-3 py-3 text-[11px] text-gray-600">
+                              {formatDate(o.createdAt)}
+                            </td>
+
+                            <td className="px-3 py-3 text-center">
+                              <button
+                                className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-[#18171E]"
+                                onClick={() =>
+                                  router.push(`/pages/vendor/orders/${o.id}`)
+                                }
+                              >
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+                </div>
+            </div>
+
+            {/* Pagination */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                <span>
+                  Showing {fromItem}-{toItem} of {filteredOrders.length} orders
+                </span>
+                {selectedCount > 0 && (
+                  <span className="rounded-full bg-[#ECECFB] px-3 py-1 text-[10px] font-semibold text-[#4B3F73]">
+                    {selectedCount} selected
+                  </span>
                 )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  className="rounded-full border border-gray-300 px-3 py-1 disabled:opacity-40"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.max(1, p - 1))
+                  }
+                  disabled={safePage === 1}
+                >
+                  &lt; Back
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                  (page) => (
+                    <button
+                      key={page}
+                      className={clsx(
+                        "min-w-[28px] rounded-md border px-2 py-1",
+                        page === safePage
+                          ? "border-black bg-black text-white"
+                          : "border-gray-300 bg-white text-gray-700"
+                      )}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  className="rounded-full border border-gray-300 px-3 py-1 disabled:opacity-40"
+                  onClick={() =>
+                    setCurrentPage((p) =>
+                      Math.min(totalPages, p + 1)
+                    )
+                  }
+                  disabled={safePage === totalPages}
+                >
+                  Next &gt;
+                </button>
               </div>
             </div>
           </div>

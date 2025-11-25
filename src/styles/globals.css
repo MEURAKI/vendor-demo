@@ -117,3 +117,23 @@
   scrollbar-width: none; /* Firefox */
 }
 
+.table-wrapper {
+  overflow: hidden;
+  border-radius: 16px; /* makes top corners rounded */
+  background: white;
+}
+
+.table-header-row {
+  background: #F7F7FB;
+}
+
+.table-header-cell {
+  padding: 14px 20px !important; /* adds breathing space */
+  font-weight: 600;
+  font-size: 13px;
+  color: #6B6B76;
+}
+
+.table-body-cell {
+  padding: 14px 20px !important;
+}

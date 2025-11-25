@@ -204,16 +204,17 @@ function buildTimeline(
 
   const steps: TimelineStep[] = [];
 
+  // 1. Placed: always done
   steps.push({
     label: "Placed",
     date: formatDateTime(order.created_at),
     done: true,
   });
 
-  const fulfilledDone =
-    order.status === "fulfilled" ||
-    order.status === "shipped" ||
-    order.status === "delivered";
+  // 2. Fulfilled: based on order status
+  const fulfilledDone = ["fulfilled", "shipped", "delivered"].includes(
+    order.status
+  );
 
   steps.push({
     label: "Fulfilled",
@@ -221,29 +222,44 @@ function buildTimeline(
     done: fulfilledDone,
   });
 
+  // 3. Shipped / Ready for pickup
   if (isPickup) {
-    const done = !!fulfilment?.pickup_ready_at;
+    const done =
+      !!fulfilment?.pickup_ready_at ||
+      ["fulfilled", "shipped", "delivered"].includes(order.status);
+
     steps.push({
       label: "Ready for pickup",
       date: fulfilment?.pickup_ready_at
         ? formatDateTime(fulfilment.pickup_ready_at)
+        : done
+        ? formatDateTime(order.updated_at)
         : "—",
       done,
     });
   } else {
-    const done = !!fulfilment?.shipped_at;
+    const shippedDone =
+      !!fulfilment?.shipped_at ||
+      order.status === "shipped" ||
+      order.status === "delivered";
+
     steps.push({
       label: "Shipped",
       date: fulfilment?.shipped_at
         ? formatDateTime(fulfilment.shipped_at)
+        : shippedDone
+        ? formatDateTime(order.updated_at)
         : "—",
-      done,
+      done: shippedDone,
     });
   }
 
-  const finalDone = !!(
-    fulfilment?.delivered_at || fulfilment?.pickup_completed_at
-  );
+  // 4. Delivered / Picked up
+  const finalDone =
+    order.status === "delivered" ||
+    !!fulfilment?.delivered_at ||
+    !!fulfilment?.pickup_completed_at;
+
   const eta =
     fulfilment?.estimated_delivery_date &&
     !finalDone &&
@@ -257,11 +273,30 @@ function buildTimeline(
         ? formatDateTime(
             fulfilment.delivered_at || fulfilment.pickup_completed_at!
           )
+        : finalDone
+        ? formatDateTime(order.updated_at)
         : eta || "—",
     done: finalDone,
   });
 
   return steps;
+}
+
+// Fire-and-forget call to your Mandrill-backed API
+async function sendStatusEmail(
+  orderId: string,
+  status: OrderStatus | "picked_up"
+) {
+  try {
+    await fetch("/api/vendor/orders/send-status-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ orderId, status }),
+    });
+  } catch (err) {
+    console.error("Failed to send status email", err);
+  }
 }
 
 export default function OrderDetailPage() {
@@ -340,27 +375,34 @@ export default function OrderDetailPage() {
 
       setOrder(typedOrder);
 
-      // Load order items
-      const { data: itemsData, error: itemsError } = await supabase
-        .from("order_items")
-        .select("*")
-        .eq("order_id", orderId)
-        .order("created_at", { ascending: true });
+      // Load product-only items via API
+      const itemsRes = await fetch(
+        `/api/vendor/orders/${orderId}/product-items`,
+        {
+          credentials: "include",
+        }
+      );
 
-      if (itemsError) {
+      if (!itemsRes.ok) {
         setError("Failed to load order items.");
         setLoading(false);
         return;
       }
 
-      setItems((itemsData as OrderItem[]) || []);
+      const itemsJson = (await itemsRes.json()) as { items: OrderItem[] };
+      setItems(itemsJson.items || []);
 
       // Load fulfilment row
-      const { data: fulfilmentData, error: fulfilmentError } = await supabase
-        .from("order_fulfilments")
-        .select("*")
-        .eq("order_id", orderId)
-        .maybeSingle();
+// Load shipment row (shipping details now live in order_shipments)
+const { data: fulfilmentData, error: fulfilmentError } = await supabase
+  .from("order_shipments")
+  .select("*")
+  .eq("order_id", orderId)
+  .maybeSingle();
+
+if (!fulfilmentError && fulfilmentData) {
+  setFulfilment(fulfilmentData as OrderFulfilment);
+}
 
       if (!fulfilmentError && fulfilmentData) {
         setFulfilment(fulfilmentData as OrderFulfilment);
@@ -430,13 +472,13 @@ export default function OrderDetailPage() {
           payload.delivered_at = nowIso;
         }
 
-        const { data: updatedFulfilmentData, error: fulfilmentUpdateError } =
-          await supabase
-            .from("order_fulfilments")
-            .update(payload)
-            .eq("id", fulfilment.id)
-            .select("*")
-            .maybeSingle();
+          const { data: updatedFulfilmentData, error: fulfilmentUpdateError } =
+    await supabase
+      .from("order_shipments")
+      .update(payload)
+      .eq("id", fulfilment.id)
+      .select("*")
+      .maybeSingle();
 
         if (!fulfilmentUpdateError && updatedFulfilmentData) {
           setFulfilment(updatedFulfilmentData as OrderFulfilment);
@@ -467,6 +509,9 @@ export default function OrderDetailPage() {
           ...prev,
         ]);
       }
+
+      // Fire status email (delivered / picked up)
+      await sendStatusEmail(order.id, isPickup ? "picked_up" : "delivered");
     } catch {
       setError("Something went wrong while updating.");
     } finally {
@@ -524,6 +569,11 @@ export default function OrderDetailPage() {
           activityInsert as OrderActivity,
           ...prev,
         ]);
+      }
+
+      // Send status email for relevant states
+      if (["fulfilled", "shipped", "cancelled"].includes(newStatus)) {
+        await sendStatusEmail(order.id, newStatus);
       }
     } finally {
       setUpdatingStatus(false);
@@ -608,9 +658,7 @@ export default function OrderDetailPage() {
         return;
       }
 
-      setEmailFeedback(
-        `Session link sent to ${order.contact_email}.`
-      );
+      setEmailFeedback(`Session link sent to ${order.contact_email}.`);
 
       // Log activity
       const { data: activityInsert, error: activityInsertError } =
@@ -746,11 +794,11 @@ export default function OrderDetailPage() {
           (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()
         );
 
+  // product-only lines (items already come from product-only API, but we guard anyway)
   const productLines = items.filter((i) => i.line_type === "product");
-  const bundleLines = items.filter((i) => i.line_type === "bundle");
   const serviceLines = items.filter((i) => i.line_type === "service");
 
-  // detect if there is any ONLINE service
+  // detect if there is any ONLINE service (won't be true with product-only API, but kept for future use)
   const hasOnlineService = serviceLines.some((line) => {
     let opts = line.options_snapshot;
     if (opts && typeof opts === "string") {
@@ -794,8 +842,8 @@ export default function OrderDetailPage() {
                     Order {code}
                   </h1>
                   <p className="text-sm text-slate-500">
-                    Placed {formatDateTime(order.created_at)} ·{" "}
-                    {totalItems} item{totalItems === 1 ? "" : "s"} ·{" "}
+                    Placed {formatDateTime(order.created_at)} · {totalItems}{" "}
+                    item{totalItems === 1 ? "" : "s"} ·{" "}
                     {formatCurrencyFromCents(order.total_cents)}
                   </p>
                 </div>
@@ -823,7 +871,7 @@ export default function OrderDetailPage() {
 
                   <button
                     className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                    disabled={saving || order.status === "delivered"}
+                    disabled={saving}
                     onClick={handleMarkFinal}
                   >
                     {saving
@@ -832,6 +880,7 @@ export default function OrderDetailPage() {
                       ? "Mark as picked up"
                       : "Mark as delivered"}
                   </button>
+
                   <button className="rounded-full bg-white px-4 py-2 text-sm shadow-sm">
                     More actions ▾
                   </button>
@@ -883,7 +932,10 @@ export default function OrderDetailPage() {
                           : "bg-slate-200";
 
                       return (
-                        <div key={step.label} className="flex flex-1 items-center">
+                        <div
+                          key={step.label}
+                          className="flex flex-1 items-center"
+                        >
                           <div className="flex flex-col items-center">
                             <div className={`${circleBase} ${circleClass}`}>
                               {isDone ? "✓" : idx + 1}
@@ -1089,34 +1141,6 @@ export default function OrderDetailPage() {
                     </h2>
 
                     <div className="space-y-3">
-                      {bundleLines.map((line) => (
-                        <div
-                          key={line.id}
-                          className="flex items-start justify-between rounded-2xl bg-slate-50 p-3"
-                        >
-                          <div className="flex items-start gap-3">
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 rounded border-slate-300"
-                            />
-                            <div>
-                              <p className="text-sm font-medium text-slate-900">
-                                {line.name_snapshot} × {line.quantity}
-                              </p>
-                              <p className="text-xs text-slate-500">Bundle</p>
-                              <p className="text-xs text-slate-400">
-                                {formatCurrencyFromCents(
-                                  line.unit_price_cents
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-700">
-                            {lineTypeBadge(line.line_type)}
-                          </span>
-                        </div>
-                      ))}
-
                       {productLines.map((line) => (
                         <div
                           key={line.id}
@@ -1154,54 +1178,7 @@ export default function OrderDetailPage() {
                         </div>
                       ))}
 
-                      {serviceLines.map((line) => {
-                        let opts = line.options_snapshot;
-                        if (opts && typeof opts === "string") {
-                          try {
-                            opts = JSON.parse(opts);
-                          } catch {
-                            // ignore
-                          }
-                        }
-                        const details =
-                          opts && typeof opts === "object"
-                            ? Object.entries(opts)
-                                .map(([k, v]) => `${k}: ${String(v)}`)
-                                .join(" · ")
-                            : "Service";
-
-                        return (
-                          <div
-                            key={line.id}
-                            className="flex items-start justify-between gap-3"
-                          >
-                            <div className="flex items-start gap-3">
-                              <input
-                                type="checkbox"
-                                className="mt-1 h-4 w-4 rounded border-slate-300"
-                              />
-                              <div>
-                                <p className="text-sm font-medium text-slate-900">
-                                  {line.name_snapshot} × {line.quantity}
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                  {details}
-                                </p>
-                                <p className="text-xs text-slate-400">
-                                  {formatCurrencyFromCents(
-                                    line.unit_price_cents
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-700">
-                              {lineTypeBadge(line.line_type)}
-                            </span>
-                          </div>
-                        );
-                      })}
-
-                      {items.length === 0 && (
+                      {productLines.length === 0 && (
                         <p className="text-sm text-slate-500">
                           No items found for this order.
                         </p>
@@ -1401,8 +1378,8 @@ export default function OrderDetailPage() {
             {/* Modal footer */}
             <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3 text-xs text-slate-500">
               <span>
-                Tip: click the status pill to move items from Pending → Processing
-                → Packed.
+                Tip: click the status pill to move items from Pending →
+                Processing → Packed.
               </span>
               <button
                 type="button"
