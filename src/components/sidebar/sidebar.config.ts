@@ -142,9 +142,9 @@ export function buildSidebarConfig({
             items: [
               // make these paths match your actual routes
               { id: "o-all", label: "All Orders", href: "/pages/vendor/orders" },
-              { id: "o-pending", label: "Pending", href: "/pages/vendor/orders/pending" },
-              { id: "o-delivery", label: "Delivery Orders", href: "/pages/vendor/orders/delivery" },
-              { id: "o-pickup", label: "Pickup Orders", href: "/pages/vendor/orders/pickup" },
+              // { id: "o-pending", label: "Pending", href: "/pages/vendor/orders/pending" },
+              // { id: "o-delivery", label: "Delivery Orders", href: "/pages/vendor/orders/delivery" },
+              // { id: "o-pickup", label: "Pickup Orders", href: "/pages/vendor/orders/pickup" },
             ],
           },
           {
@@ -152,10 +152,10 @@ export function buildSidebarConfig({
             label: "Bookings",
             icon: "CalendarDays",
             items: [
-              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" },
-              { id: "b-upcoming", label: "Upcoming", href: "/pages/vendor/bookings/upcoming" },
-              { id: "b-reschedules", label: "Reschedules", href: "/pages/vendor/bookings/reschedules" },
-              { id: "b-cancelled", label: "Cancelled", href: "/pages/vendor/bookings/cancelled" },
+              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" }
+            //   { id: "b-upcoming", label: "Upcoming", href: "/pages/vendor/bookings/upcoming" },
+            //   { id: "b-reschedules", label: "Reschedules", href: "/pages/vendor/bookings/reschedules" },
+            //   { id: "b-cancelled", label: "Cancelled", href: "/pages/vendor/bookings/cancelled" },
             ],
           },
           {

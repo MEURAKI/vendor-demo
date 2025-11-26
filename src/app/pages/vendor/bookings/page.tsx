@@ -105,7 +105,7 @@ function formatDateTime(value: string): string {
 }
 
 function deriveLocationLabel(
-  order: OrderForBooking | null,
+  _order: OrderForBooking | null,
   optionsSnapshot: any
 ): string {
   if (optionsSnapshot && typeof optionsSnapshot === "string") {
@@ -205,6 +205,7 @@ export default function BookingsPage() {
         .order("created_at", { ascending: false });
 
       if (itemsError) {
+        console.error(itemsError);
         setError("Failed to load bookings.");
         setLoading(false);
         return;
@@ -274,6 +275,10 @@ export default function BookingsPage() {
     const booking = rows.find((r) => r.id === bookingId);
     if (!booking) return;
 
+    // lock once completed/cancelled
+    if (booking.status === "completed" || booking.status === "cancelled") return;
+    if (booking.status === newStatus) return;
+
     setStatusSavingId(bookingId);
     setError(null);
 
@@ -286,7 +291,6 @@ export default function BookingsPage() {
       } else if (newStatus === "cancelled") {
         orderUpdates.status = "cancelled";
       } else if (newStatus === "confirmed") {
-        // treat as fulfilled; tweak this mapping if you want
         orderUpdates.status = "fulfilled";
       }
 
@@ -357,27 +361,27 @@ export default function BookingsPage() {
       <Sidebar config={sidebarConfig} />
 
       {/* Main shell */}
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-          <div className="flex-1 overflow-auto px-6 py-6">
+      <div className="flex flex-1 items-stretch justify-center px-3 py-3 md:px-6 md:py-4">
+        <div className="flex h-full w-full flex-col overflow-hidden rounded-3xl border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)] md:rounded-[32px]">
+          <div className="flex-1 overflow-auto px-4 py-4 md:px-6 md:py-6">
             <div className="mx-auto max-w-6xl">
               {/* Header */}
-              <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3 md:mb-6">
                 <div>
-                  <h1 className="text-2xl font-semibold text-slate-900">
+                  <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">
                     Bookings
                   </h1>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-xs text-slate-500 md:text-sm">
                     Manage upcoming and past service sessions. (Service lines only)
                   </p>
                 </div>
-                <div className="rounded-full bg-black px-4 py-1.5 text-xs font-medium text-white shadow-sm">
+                <div className="rounded-full bg-black px-3 py-1.5 text-[11px] font-medium text-white shadow-sm md:px-4">
                   {rows.length} booking{rows.length === 1 ? "" : "s"}
                 </div>
               </div>
 
               {/* Filters row */}
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 md:gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                   {(["all", "upcoming", "completed", "cancelled"] as FilterTab[]).map(
                     (key) => {
@@ -392,7 +396,7 @@ export default function BookingsPage() {
                         <button
                           key={key}
                           onClick={() => setTab(key)}
-                          className={`rounded-full px-4 py-1.5 text-xs font-medium ${
+                          className={`rounded-full px-3 py-1.5 text-xs font-medium md:px-4 ${
                             isActive
                               ? "bg-[#7B61FF] text-white shadow-sm"
                               : "bg-white text-slate-700"
@@ -404,26 +408,26 @@ export default function BookingsPage() {
                     }
                   )}
                   {/* Time filter stub */}
-                  <button className="rounded-full bg-white px-4 py-1.5 text-xs text-slate-700">
+                  <button className="rounded-full bg-white px-3 py-1.5 text-xs text-slate-700 md:px-4">
                     This month ▾
                   </button>
                 </div>
 
                 {/* View toggle stub */}
-                <div className="flex rounded-full bg-white p-1 text-xs">
-                  <button className="rounded-full bg-[#7B61FF] px-4 py-1 font-medium text-white">
+                <div className="flex rounded-full bg-white p-1 text-[11px] md:text-xs">
+                  <button className="rounded-full bg-[#7B61FF] px-3 py-1 font-medium text-white md:px-4">
                     List
                   </button>
-                  <button className="rounded-full px-4 py-1 text-slate-600">
+                  <button className="rounded-full px-3 py-1 text-slate-600 md:px-4">
                     Calendar
                   </button>
                 </div>
               </div>
 
               {/* Search */}
-              <div className="mb-4 rounded-full bg-white px-4 py-2 shadow-sm">
+              <div className="mb-4 rounded-full bg-white px-3 py-2 shadow-sm md:px-4">
                 <input
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                  className="w-full bg-transparent text-xs outline-none placeholder:text-slate-400 md:text-sm"
                   placeholder="Search by customer, service, booking ID, or order ID"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -437,8 +441,92 @@ export default function BookingsPage() {
                 </div>
               )}
 
-              {/* Table container */}
-              <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
+              {/* MOBILE CARDS -------------------------------------------------- */}
+              <div className="space-y-3 md:hidden">
+                {filtered.map((b) => {
+                  const statusLocked =
+                    b.status === "completed" || b.status === "cancelled";
+
+                  return (
+                    <div
+                      key={b.id}
+                      className="rounded-2xl bg-white p-4 shadow-sm"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-mono text-[11px] font-semibold text-slate-800">
+                            {b.bookingCode}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Order {b.orderCode}
+                          </p>
+                        </div>
+                        <Link
+                          href={`/pages/vendor/bookings/${b.id}`}
+                          className="rounded-full bg-[#EFE6FF] px-3 py-1 text-[11px] font-medium text-slate-800 hover:bg-[#E2D3FF]"
+                        >
+                          View
+                        </Link>
+                      </div>
+
+                      <p className="mb-1 text-[13px] font-medium text-slate-900">
+                        {b.serviceName}
+                      </p>
+                      <p className="text-[12px] text-slate-600">
+                        {b.dateTimeLabel}
+                      </p>
+
+                      <div className="mt-2 flex items-center justify-between text-[12px] text-slate-600">
+                        <span>{b.customerName}</span>
+                        <span>{b.locationLabel}</span>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between">
+                        <div
+                          className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${bookingStatusClasses[b.status]}`}
+                        >
+                          <select
+                            value={b.status}
+                            disabled={statusSavingId === b.id || statusLocked}
+                            onChange={(e) =>
+                              handleBookingStatusChange(
+                                b.id,
+                                e.target.value as BookingStatus
+                              )
+                            }
+                            className="cursor-pointer bg-transparent pr-4 text-[11px] font-medium outline-none"
+                          >
+                            <option value="confirmed">
+                              {bookingStatusLabel.confirmed}
+                            </option>
+                            <option value="awaiting_payment">
+                              {bookingStatusLabel.awaiting_payment}
+                            </option>
+                            <option value="completed">
+                              {bookingStatusLabel.completed}
+                            </option>
+                            <option value="cancelled">
+                              {bookingStatusLabel.cancelled}
+                            </option>
+                          </select>
+                        </div>
+                        <p className="text-[12px] font-semibold text-slate-900">
+                          {b.totalLabel}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {filtered.length === 0 && (
+                  <div className="rounded-2xl bg-white px-4 py-6 text-center text-sm text-slate-500">
+                    No bookings found for this filter/search.
+                  </div>
+                )}
+              </div>
+
+              {/* DESKTOP / TABLET TABLE -------------------------------------- */}
+              <div className="hidden overflow-hidden rounded-3xl bg-white shadow-sm md:block">
                 <div className="border-b border-slate-100 px-6 py-4 text-sm font-medium text-slate-700">
                   All bookings
                 </div>
@@ -459,87 +547,92 @@ export default function BookingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.map((b) => (
-                        <tr
-                          key={b.id}
-                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
-                        >
-                          <td className="px-6 py-3 text-slate-800">
-                            <span className="font-mono text-xs font-semibold">
-                              {b.bookingCode}
-                            </span>
-                          </td>
+                      {filtered.map((b) => {
+                        const statusLocked =
+                          b.status === "completed" || b.status === "cancelled";
 
-                          <td className="px-6 py-3 text-slate-700">
-                            <Link
-                              href={`/pages/vendor/orders/${b.orderId}`}
-                              className="text-xs font-medium text-[#7B61FF] underline-offset-2 hover:underline"
-                            >
-                              {b.orderCode}
-                            </Link>
-                          </td>
+                        return (
+                          <tr
+                            key={b.id}
+                            className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
+                          >
+                            <td className="px-6 py-3 text-slate-800">
+                              <span className="font-mono text-xs font-semibold">
+                                {b.bookingCode}
+                              </span>
+                            </td>
 
-                          <td className="px-6 py-3 text-slate-700">
-                            {b.dateTimeLabel}
-                          </td>
-
-                          <td className="px-6 py-3 text-slate-800">
-                            {b.serviceName}
-                          </td>
-
-                          <td className="px-6 py-3 text-slate-700">
-                            {b.customerName}
-                          </td>
-
-                          <td className="px-6 py-3 text-slate-700">
-                            {b.locationLabel}
-                          </td>
-
-                          <td className="px-6 py-3">
-                            <div
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${bookingStatusClasses[b.status]}`}
-                            >
-                              <select
-                                value={b.status}
-                                disabled={statusSavingId === b.id}
-                                onChange={(e) =>
-                                  handleBookingStatusChange(
-                                    b.id,
-                                    e.target.value as BookingStatus
-                                  )
-                                }
-                                className="cursor-pointer bg-transparent pr-4 text-xs font-medium outline-none"
+                            <td className="px-6 py-3 text-slate-700">
+                              <Link
+                                href={`/pages/vendor/bookings/${b.id}`}
+                                className="text-xs font-medium text-[#7B61FF] underline-offset-2 hover:underline"
                               >
-                                <option value="confirmed">
-                                  {bookingStatusLabel.confirmed}
-                                </option>
-                                <option value="awaiting_payment">
-                                  {bookingStatusLabel.awaiting_payment}
-                                </option>
-                                <option value="completed">
-                                  {bookingStatusLabel.completed}
-                                </option>
-                                <option value="cancelled">
-                                  {bookingStatusLabel.cancelled}
-                                </option>
-                              </select>
-                            </div>
-                          </td>
+                                {b.orderCode}
+                              </Link>
+                            </td>
 
-                          <td className="px-6 py-3 text-slate-800">
-                            {b.totalLabel}
-                          </td>
+                            <td className="px-6 py-3 text-slate-700">
+                              {b.dateTimeLabel}
+                            </td>
 
-                          <td className="px-6 py-3 text-right">
-                         <Link
-  href={`/pages/vendor/bookings/${b.id}`}
-  className="inline-flex items-center rounded-full bg-[#EFE6FF] px-4 py-1.5 text-xs font-medium text-slate-800 hover:bg-[#E2D3FF]"
->
-  View booking
-</Link>
-                          </td>
-                        </tr>
-                      ))}
+                            <td className="px-6 py-3 text-slate-800">
+                              {b.serviceName}
+                            </td>
+
+                            <td className="px-6 py-3 text-slate-700">
+                              {b.customerName}
+                            </td>
+
+                            <td className="px-6 py-3 text-slate-700">
+                              {b.locationLabel}
+                            </td>
+
+                            <td className="px-6 py-3">
+                              <div
+                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${bookingStatusClasses[b.status]}`}
+                              >
+                                <select
+                                  value={b.status}
+                                  disabled={statusSavingId === b.id || statusLocked}
+                                  onChange={(e) =>
+                                    handleBookingStatusChange(
+                                      b.id,
+                                      e.target.value as BookingStatus
+                                    )
+                                  }
+                                  className="cursor-pointer bg-transparent pr-4 text-xs font-medium outline-none"
+                                >
+                                  <option value="confirmed">
+                                    {bookingStatusLabel.confirmed}
+                                  </option>
+                                  <option value="awaiting_payment">
+                                    {bookingStatusLabel.awaiting_payment}
+                                  </option>
+                                  <option value="completed">
+                                    {bookingStatusLabel.completed}
+                                  </option>
+                                  <option value="cancelled">
+                                    {bookingStatusLabel.cancelled}
+                                  </option>
+                                </select>
+                              </div>
+                            </td>
+
+                            <td className="px-6 py-3 text-slate-800">
+                              {b.totalLabel}
+                            </td>
+
+                            <td className="px-6 py-3 text-right">
+                              <Link
+                                href={`/pages/vendor/bookings/${b.id}`}
+                                className="inline-flex items-center rounded-full bg-[#EFE6FF] px-4 py-1.5 text-xs font-medium text-slate-800 hover:bg-[#E2D3FF]"
+                              >
+                                View booking
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
 
                       {filtered.length === 0 && (
                         <tr>

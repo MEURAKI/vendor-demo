@@ -69,6 +69,9 @@ type BookingView = {
   totalLabel: string;
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
+  // NEW: package meta
+  packageLabel: string | null;
+  sessionsCount: number | null;
 };
 
 const bookingStatusLabel: Record<BookingStatus, string> = {
@@ -86,7 +89,7 @@ const bookingStatusClasses: Record<BookingStatus, string> = {
 };
 
 /* Multiple session inputs in the UI */
-type SessionInput = { id: number; label: string; url: string };
+type SessionInput = { id: number; label: string; url: string; time: string };
 
 /* ---------- Helpers ---------- */
 
@@ -161,6 +164,49 @@ function normalisePhone(phone: string) {
   return phone.replace(/[^+\d]/g, "");
 }
 
+/** Extract sessions_count + package label from options_snapshot */
+function extractPackageMeta(optionsSnapshot: any): {
+  sessionsCount: number | null;
+  packageLabel: string | null;
+} {
+  let obj = optionsSnapshot;
+
+  if (obj && typeof obj === "string") {
+    try {
+      obj = JSON.parse(obj);
+    } catch {
+      obj = null;
+    }
+  }
+
+  if (!obj || typeof obj !== "object") {
+    return { sessionsCount: null, packageLabel: null };
+  }
+
+  const rawCount =
+    (obj as any).sessions_count ??
+    (obj as any).session_count ??
+    (obj as any).total_sessions ??
+    null;
+
+  let sessionsCount: number | null = null;
+  if (rawCount != null) {
+    const n = Number(rawCount);
+    sessionsCount = Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  }
+
+  const packageLabel =
+    (obj as any).package_label ??
+    (obj as any).package ??
+    (obj as any).plan_label ??
+    null;
+
+  return {
+    sessionsCount,
+    packageLabel: packageLabel ? String(packageLabel) : null,
+  };
+}
+
 /* ---------- Main page ---------- */
 
 export default function BookingDetailPage() {
@@ -177,7 +223,7 @@ export default function BookingDetailPage() {
 
   // online meeting – support multiple sessions
   const [sessionInputs, setSessionInputs] = useState<SessionInput[]>([
-    { id: 1, label: "", url: "" },
+    { id: 1, label: "", url: "", time: "" },
   ]);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState<string | null>(null);
@@ -264,6 +310,7 @@ export default function BookingDetailPage() {
       const order = row.orders;
       const bookingStatus = deriveBookingStatus(order);
       const loc = deriveLocationMeta(row.options_snapshot);
+      const pkgMeta = extractPackageMeta(row.options_snapshot);
 
       const mapped: BookingView = {
         id: row.id,
@@ -281,9 +328,28 @@ export default function BookingDetailPage() {
         totalLabel: formatCurrencyFromCents(row.line_subtotal_cents),
         orderStatus: order.status,
         paymentStatus: order.payment_status,
+        packageLabel: pkgMeta.packageLabel,
+        sessionsCount: pkgMeta.sessionsCount,
       };
 
       setBooking(mapped);
+
+      // initialise session inputs based on package sessions_count
+      const count = pkgMeta.sessionsCount && pkgMeta.sessionsCount > 0
+        ? pkgMeta.sessionsCount
+        : 1;
+
+      const initial: SessionInput[] = Array.from({ length: count }, (_, idx) => ({
+        id: idx + 1,
+        label:
+          count > 1
+            ? `Session ${idx + 1}`
+            : mapped.dateTimeLabel || "Session",
+        url: "",
+        time: "", // datetime-local value
+      }));
+      setSessionInputs(initial);
+
       setLoading(false);
     })();
   }, [bookingId]);
@@ -363,9 +429,13 @@ export default function BookingDetailPage() {
   async function handleSendMeetingEmail() {
     if (!booking || !booking.customerEmail) return;
 
-    // Clean + validate sessions (drop empty)
+    // Clean + validate sessions (drop empty links)
     const cleaned = sessionInputs
-      .map((s) => ({ label: s.label.trim(), url: s.url.trim() }))
+      .map((s) => ({
+        label: s.label.trim(),
+        url: s.url.trim(),
+        time: s.time.trim(),
+      }))
       .filter((s) => s.url.length > 0);
 
     if (cleaned.length === 0) {
@@ -385,7 +455,7 @@ export default function BookingDetailPage() {
           orderId: booking.orderId,
           customer_email: booking.customerEmail,
           customer_name: booking.customerName,
-          sessions: cleaned,
+          sessions: cleaned, // label + time + url
         }),
       });
 
@@ -452,13 +522,25 @@ export default function BookingDetailPage() {
     booking?.status === "completed" || booking?.status === "cancelled";
 
   function addSessionRow() {
+    // package-level max
+    if (booking?.sessionsCount && sessionInputs.length >= booking.sessionsCount) return;
+
     setSessionInputs((prev) => [
       ...prev,
-      { id: prev.length ? prev[prev.length - 1].id + 1 : 1, label: "", url: "" },
+      {
+        id: prev.length ? prev[prev.length - 1].id + 1 : 1,
+        label: `Session ${prev.length + 1}`,
+        url: "",
+        time: "",
+      },
     ]);
   }
 
-  function updateSessionRow(id: number, field: "label" | "url", value: string) {
+  function updateSessionRow(
+    id: number,
+    field: "label" | "url" | "time",
+    value: string
+  ) {
     setSessionInputs((prev) =>
       prev.map((s) => (s.id === id ? { ...s, [field]: value } : s))
     );
@@ -503,16 +585,18 @@ export default function BookingDetailPage() {
       ? "bg-rose-100 text-rose-700 border-rose-300"
       : "bg-slate-100 text-slate-700 border-slate-300";
 
+  const maxSessions = booking.sessionsCount ?? null;
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
 
       <div className="flex flex-1 items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-          <div className="flex-1 overflow-auto px-6 py-6">
+          <div className="flex-1 overflow-auto px-7 py-7">
             <div className="mx-auto max-w-5xl">
               {/* Back link */}
-              <div className="mb-4 flex items-center justify-between text-sm text-slate-500">
+              <div className="mb-5 flex items-center justify-between text-[13px] text-slate-500">
                 <Link href="/pages/vendor/bookings" className="hover:underline">
                   ← Back to bookings
                 </Link>
@@ -525,17 +609,31 @@ export default function BookingDetailPage() {
               </div>
 
               {/* Header */}
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl font-semibold text-slate-900">
+                  <h1 className="text-[26px] font-semibold text-slate-900">
                     Booking {booking.bookingCode}
                   </h1>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {booking.serviceName}
+                  </p>
                   <p className="text-sm text-slate-500">
-                    {booking.serviceName} · {booking.dateTimeLabel}
+                    {booking.dateTimeLabel} · Order {booking.orderCode} ·{" "}
+                    {booking.totalLabel}
                   </p>
-                  <p className="text-xs text-slate-400">
-                    Order {booking.orderCode} · Total {booking.totalLabel}
-                  </p>
+                  {booking.packageLabel && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Package:{" "}
+                      <span className="font-medium text-slate-700">
+                        {booking.packageLabel}
+                      </span>{" "}
+                      {booking.sessionsCount
+                        ? `· ${booking.sessionsCount} session${
+                            booking.sessionsCount > 1 ? "s" : ""
+                          }`
+                        : null}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -543,37 +641,26 @@ export default function BookingDetailPage() {
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                       Booking status
                     </span>
-                   <div
-  className={`inline-flex items-center rounded-full border px-4 py-1.5 ${statusBgClass}`}
->
-  <select
-    className="
-      appearance-none 
-      bg-transparent 
-      border-none 
-      text-xs 
-      font-medium 
-      text-slate-800
-      focus:outline-none 
-      focus:ring-0 
-      pr-6
-      cursor-pointer
-    "
-    value={booking.status}
-    disabled={statusSaving || statusLocked}
-    onChange={(e) => updateBookingStatus(e.target.value as BookingStatus)}
-  >
-    <option value="confirmed">Confirmed</option>
-    <option value="awaiting_payment">Awaiting payment</option>
-    <option value="completed">Completed</option>
-    <option value="cancelled">Cancelled</option>
-  </select>
-
-  {/* Custom dropdown arrow */}
-  <span className="pointer-events-none -ml-4 text-[10px] text-slate-700">
-    ▼
-  </span>
-</div>
+                    <div
+                      className={`inline-flex items-center rounded-full border px-4 py-1.5 ${statusBgClass}`}
+                    >
+                      <select
+                        className="appearance-none bg-transparent border-none text-xs font-medium text-slate-800 focus:outline-none focus:ring-0 pr-6 cursor-pointer"
+                        value={booking.status}
+                        disabled={statusSaving || statusLocked}
+                        onChange={(e) =>
+                          updateBookingStatus(e.target.value as BookingStatus)
+                        }
+                      >
+                        <option value="confirmed">Confirmed</option>
+                        <option value="awaiting_payment">Awaiting payment</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                      <span className="pointer-events-none -ml-4 text-[10px] text-slate-700">
+                        ▼
+                      </span>
+                    </div>
                     {statusLocked && (
                       <span className="text-[11px] text-slate-400">
                         Status locked because booking is{" "}
@@ -595,15 +682,15 @@ export default function BookingDetailPage() {
               )}
 
               {/* 2-column layout */}
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)]">
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.15fr)]">
                 {/* LEFT COLUMN */}
                 <div className="space-y-5">
                   {/* Customer card */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
+                    <h2 className="mb-3 text-base font-semibold text-slate-900">
                       Customer
                     </h2>
-                    <p className="text-sm font-medium text-slate-900">
+                    <p className="text-[15px] font-medium text-slate-900">
                       {booking.customerName}
                     </p>
                     <p className="text-sm text-slate-500">
@@ -617,7 +704,7 @@ export default function BookingDetailPage() {
                       <button
                         type="button"
                         onClick={handleEmailButton}
-                        className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#7B61FF] to-[#B54CFF] px-5 py-2 text-xs font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-40"
+                        className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#7B61FF] to-[#B54CFF] px-5 py-2.5 text-xs font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-40"
                         disabled={!booking.customerEmail}
                       >
                         <span>✉</span>
@@ -626,7 +713,7 @@ export default function BookingDetailPage() {
                       <button
                         type="button"
                         onClick={handleWhatsappButton}
-                        className="inline-flex items-center gap-2 rounded-full bg-[#111827] px-5 py-2 text-xs font-medium text-white shadow-sm hover:bg-black disabled:opacity-40"
+                        className="inline-flex items-center gap-2 rounded-full bg-[#111827] px-5 py-2.5 text-xs font-medium text-white shadow-sm hover:bg-black disabled:opacity-40"
                         disabled={!booking.customerPhone}
                       >
                         <span>📞</span>
@@ -637,11 +724,11 @@ export default function BookingDetailPage() {
 
                   {/* Session details: online vs physical */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
+                    <h2 className="mb-3 text-base font-semibold text-slate-900">
                       Session details
                     </h2>
 
-                    <p className="mb-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                    <p className="mb-3 inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
                       {booking.isOnline ? "Online session" : "In-person / physical session"}
                     </p>
 
@@ -655,21 +742,40 @@ export default function BookingDetailPage() {
                       <div className="space-y-4">
                         {/* Multiple session link rows */}
                         <div className="space-y-3">
-                          {sessionInputs.map((row) => (
+                          {sessionInputs.map((row, idx) => (
                             <div
                               key={row.id}
-                              className="grid gap-2 rounded-2xl bg-slate-50 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto]"
+                              className="grid gap-3 rounded-2xl bg-slate-50 p-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_auto]"
                             >
                               <div>
                                 <label className="mb-1 block text-xs font-medium text-slate-700">
-                                  Session label (optional)
+                                  Session label
+                                  {maxSessions && (
+                                    <span className="text-[10px] text-slate-400">
+                                      {" "}
+                                      · {idx + 1}/{maxSessions}
+                                    </span>
+                                  )}
                                 </label>
                                 <input
                                   className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
-                                  placeholder="e.g. Session 1 – 12 Mar, 3:00pm"
+                                  placeholder="Session 1 – 12 Mar, 3:00pm"
                                   value={row.label}
                                   onChange={(e) =>
                                     updateSessionRow(row.id, "label", e.target.value)
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-slate-700">
+                                  Date &amp; time
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                                  value={row.time}
+                                  onChange={(e) =>
+                                    updateSessionRow(row.id, "time", e.target.value)
                                   }
                                 />
                               </div>
@@ -689,7 +795,7 @@ export default function BookingDetailPage() {
                               <div className="flex items-end justify-end">
                                 <button
                                   type="button"
-                                  className="rounded-full bg-slate-200 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-40"
+                                  className="rounded-full bg-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-40"
                                   onClick={() => removeSessionRow(row.id)}
                                   disabled={sessionInputs.length === 1}
                                 >
@@ -700,29 +806,37 @@ export default function BookingDetailPage() {
                           ))}
                         </div>
 
-                        <button
-                          type="button"
-                          className="text-[11px] font-medium text-[#7B61FF] underline-offset-4 hover:underline"
-                          onClick={addSessionRow}
-                        >
-                          + Add another session
-                        </button>
+                        {/* Add session button (respect package max) */}
+                        {(!maxSessions || sessionInputs.length < maxSessions) && (
+                          <button
+                            type="button"
+                            className="text-[11px] font-medium text-[#7B61FF] underline-offset-4 hover:underline"
+                            onClick={addSessionRow}
+                          >
+                            + Add another session
+                          </button>
+                        )}
+                        {maxSessions && sessionInputs.length >= maxSessions && (
+                          <p className="text-[11px] text-slate-400">
+                            Max {maxSessions} sessions for this package.
+                          </p>
+                        )}
 
-                        <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                           <button
                             type="button"
                             disabled={sendingEmail || !booking.customerEmail || statusLocked}
                             onClick={handleSendMeetingEmail}
-                            className="rounded-full bg-[#7B61FF] px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
+                            className="rounded-full bg-[#7B61FF] px-5 py-2.5 text-xs font-medium text-white disabled:opacity-60"
                           >
-                            {sendingEmail ? "Sending…" : "Send link(s) via email"}
+                            {sendingEmail ? "Sending…" : "Send link(s) to customer"}
                           </button>
 
                           <button
                             type="button"
                             disabled={statusLocked}
                             onClick={() => updateBookingStatus("completed")}
-                            className="rounded-full bg-black px-4 py-2 text-xs font-medium text-white disabled:opacity-40"
+                            className="rounded-full bg-black px-5 py-2.5 text-xs font-medium text-white disabled:opacity-40"
                           >
                             Mark as completed
                           </button>
@@ -740,7 +854,7 @@ export default function BookingDetailPage() {
                           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Booking code to scan / enter
                           </p>
-                          <p className="inline-flex rounded-full bg-slate-900 px-3 py-1 text-xs font-mono font-semibold text-white">
+                          <p className="inline-flex rounded-full bg-slate-900 px-4 py-1.5 text-xs font-mono font-semibold text-white">
                             {booking.bookingCode}
                           </p>
                         </div>
@@ -765,7 +879,7 @@ export default function BookingDetailPage() {
                           type="button"
                           disabled={checkingIn || statusLocked}
                           onClick={handleCheckinWithCode}
-                          className="rounded-full bg-black px-4 py-2 text-xs font-medium text-white disabled:opacity-40"
+                          className="rounded-full bg-black px-5 py-2.5 text-xs font-medium text-white disabled:opacity-40"
                         >
                           {checkingIn ? "Checking…" : "Confirm check-in & complete"}
                         </button>
@@ -778,27 +892,40 @@ export default function BookingDetailPage() {
                 <div className="space-y-5">
                   {/* Summary card */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
+                    <h2 className="mb-3 text-base font-semibold text-slate-900">
                       Booking summary
                     </h2>
-                    <dl className="space-y-2 text-sm text-slate-700">
-                      <div className="flex justify-between">
+                    <dl className="space-y-2 text-[15px] text-slate-700">
+                      <div className="flex justify-between gap-4">
                         <dt>Service</dt>
                         <dd className="text-right">{booking.serviceName}</dd>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-4">
                         <dt>Date &amp; time</dt>
                         <dd className="text-right">{booking.dateTimeLabel}</dd>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-4">
                         <dt>Location</dt>
                         <dd className="text-right">{booking.locationLabel}</dd>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-4">
                         <dt>Order</dt>
                         <dd className="text-right">{booking.orderCode}</dd>
                       </div>
-                      <div className="mt-2 flex justify-between border-t border-slate-100 pt-3 text-base font-semibold">
+                      {booking.packageLabel && (
+                        <div className="flex justify-between gap-4">
+                          <dt>Package</dt>
+                          <dd className="text-right">
+                            {booking.packageLabel}
+                            {booking.sessionsCount
+                              ? ` · ${booking.sessionsCount} session${
+                                  booking.sessionsCount > 1 ? "s" : ""
+                                }`
+                              : ""}
+                          </dd>
+                        </div>
+                      )}
+                      <div className="mt-2 flex justify-between gap-4 border-t border-slate-100 pt-3 text-base font-semibold">
                         <dt>Total</dt>
                         <dd>{booking.totalLabel}</dd>
                       </div>
@@ -812,7 +939,7 @@ export default function BookingDetailPage() {
 
                   {/* Notes stub */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-2 text-sm font-semibold text-slate-900">
+                    <h2 className="mb-2 text-base font-semibold text-slate-900">
                       Internal notes
                     </h2>
                     <p className="mb-2 text-xs text-slate-500">
@@ -824,7 +951,7 @@ export default function BookingDetailPage() {
                       placeholder="Wire this up to an order_notes table or column when you're ready."
                     />
                     <div className="mt-3 flex justify-end">
-                      <button className="rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-black">
+                      <button className="rounded-full bg-slate-900 px-5 py-2.5 text-xs font-medium text-white hover:bg-black">
                         Save note
                       </button>
                     </div>
