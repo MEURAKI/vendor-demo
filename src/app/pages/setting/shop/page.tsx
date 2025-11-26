@@ -77,7 +77,40 @@ type VendorBusiness = {
   delivery_days_note: string | null;
 };
 
-type TabKey = "general" | "fulfilment";
+type TabKey = "general" | "fulfilment" | "promo";
+
+/* ------ Promo code types (matches public.promo_codes table) ------ */
+
+type DiscountType = "percent" | "fixed";
+type AppliesTo = "products" | "services" | "all";
+
+type PromoCodeRow = {
+  id: string;
+  code: string;
+  scope: "platform" | "vendor";
+  vendor_id: string | null;
+  name: string | null;
+  description: string | null;
+  discount_type: DiscountType;
+  discount_value: number;
+  applies_to: AppliesTo;
+  active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+};
+
+type PromoFormState = {
+  id: string | null;
+  code: string;
+  name: string;
+  description: string;
+  discountType: DiscountType;
+  discountValue: string;
+  appliesTo: AppliesTo;
+  active: boolean;
+  startsAt: string; // YYYY-MM-DD
+  endsAt: string; // YYYY-MM-DD
+};
 
 /* ---------------------- Simple Pill component ---------------------- */
 
@@ -144,6 +177,22 @@ function ShopSettingsPageInner() {
   // Google Places
   const [placesLoaded, setPlacesLoaded] = useState(false);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Promo codes
+  const [promoForm, setPromoForm] = useState<PromoFormState>({
+    id: null,
+    code: "",
+    name: "",
+    description: "",
+    discountType: "percent",
+    discountValue: "",
+    appliesTo: "products",
+    active: true,
+    startsAt: "",
+    endsAt: "",
+  });
+  const [promoSaving, setPromoSaving] = useState(false);
+  const [promoList, setPromoList] = useState<PromoCodeRow[]>([]);
 
   const DIMENSIONS = [
     "Physical",
@@ -235,7 +284,7 @@ function ShopSettingsPageInner() {
     }
   }
 
-  // Initial load: profile + vendor_business
+  // Initial load: profile + vendor_business + vendor promo codes
   useEffect(() => {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
@@ -245,16 +294,17 @@ function ShopSettingsPageInner() {
         return;
       }
 
-      const [{ data: prof }, { data: vbRow }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id,email,full_name,status")
-          .eq("id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("vendor_business")
-          .select(
-            `
+      const [{ data: prof }, { data: vbRow }, { data: promoRows }] =
+        await Promise.all([
+          supabase
+            .from("profiles")
+            .select("id,email,full_name,status")
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("vendor_business")
+            .select(
+              `
               id,
               shop_status,
               shop_name,
@@ -283,10 +333,31 @@ function ShopSettingsPageInner() {
               delivery_days_note,
               dimensions
             `
-          )
-          .eq("id", user.id)
-          .maybeSingle(),
-      ]);
+            )
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("promo_codes")
+            .select(
+              `
+              id,
+              code,
+              scope,
+              vendor_id,
+              name,
+              description,
+              discount_type,
+              discount_value,
+              applies_to,
+              active,
+              starts_at,
+              ends_at
+            `
+            )
+            .eq("scope", "vendor")
+            .eq("vendor_id", user.id)
+            .order("created_at", { ascending: false }),
+        ]);
 
       const profTyped: ProfileLite = {
         id: user.id,
@@ -333,8 +404,27 @@ function ShopSettingsPageInner() {
       setProfile(profTyped);
       setVb(merged);
       setBioCount(merged.shop_bio?.length || 0);
-      // hydrate local dimensions state from DB
       setDimensions(merged.dimensions ?? []);
+
+      const promoRowsTyped = (promoRows || []) as PromoCodeRow[];
+      setPromoList(promoRowsTyped);
+
+      if (promoRowsTyped.length > 0) {
+        const first = promoRowsTyped[0];
+        setPromoForm({
+          id: first.id,
+          code: first.code || "",
+          name: first.name || "",
+          description: first.description || "",
+          discountType: first.discount_type || "percent",
+          discountValue: String(first.discount_value ?? ""),
+          appliesTo: first.applies_to || "products",
+          active: first.active ?? true,
+          startsAt: first.starts_at ? first.starts_at.slice(0, 10) : "",
+          endsAt: first.ends_at ? first.ends_at.slice(0, 10) : "",
+        });
+      }
+
       setLoading(false);
     })();
   }, []);
@@ -456,7 +546,7 @@ function ShopSettingsPageInner() {
 
   const sidebarConfig = useMemo(() => {
     const statusLabel =
-      profile?.status === "active" ? "Active" : "Incomplete Registration";
+      profile?.status === "active" ? "active" : "Incomplete Registration";
 
     return buildSidebarConfig({
       fullName: profile?.full_name ?? profile?.email ?? "User",
@@ -508,7 +598,7 @@ function ShopSettingsPageInner() {
     };
   }
 
-  async function save(tab: TabKey) {
+  async function save(tab: "general" | "fulfilment") {
     if (!vb) return;
 
     if (tab === "general") {
@@ -561,6 +651,111 @@ function ShopSettingsPageInner() {
             ? "Shop settings saved."
             : "Fulfilment details saved successfully.",
       });
+    }
+  }
+
+  /* ---------------------- Promo save helper ---------------------- */
+
+  async function savePromo() {
+    if (!profile) return;
+
+    const code = promoForm.code.trim().toUpperCase();
+    if (!code) {
+      errorToast({
+        title: "Promo code is required",
+        description: "Please enter a promo code before saving.",
+      });
+      return;
+    }
+
+    const discountValueInt = parseInt(promoForm.discountValue || "0", 10);
+    if (!discountValueInt || discountValueInt <= 0) {
+      errorToast({
+        title: "Discount value is invalid",
+        description: "Please enter a positive discount value.",
+      });
+      return;
+    }
+
+    setPromoSaving(true);
+
+    try {
+      const startsAt =
+        promoForm.startsAt.trim() !== ""
+          ? new Date(`${promoForm.startsAt}T00:00:00.000Z`).toISOString()
+          : null;
+      const endsAt =
+        promoForm.endsAt.trim() !== ""
+          ? new Date(`${promoForm.endsAt}T23:59:59.999Z`).toISOString()
+          : null;
+
+      const payload = {
+        ...(promoForm.id ? { id: promoForm.id } : {}),
+        code,
+        scope: "vendor" as const,
+        vendor_id: profile.id,
+        name: promoForm.name.trim() || null,
+        description: promoForm.description.trim() || null,
+        discount_type: promoForm.discountType,
+        discount_value: discountValueInt,
+        applies_to: promoForm.appliesTo,
+        active: promoForm.active,
+        starts_at: startsAt,
+        ends_at: endsAt,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .upsert(payload, { onConflict: "code,scope,vendor_id" })
+        .select(
+          `
+          id,
+          code,
+          scope,
+          vendor_id,
+          name,
+          description,
+          discount_type,
+          discount_value,
+          applies_to,
+          active,
+          starts_at,
+          ends_at
+        `
+        )
+        .eq("code", code)
+        .eq("scope", "vendor")
+        .eq("vendor_id", profile.id)
+        .limit(1)
+        .single();
+
+      if (error) {
+        console.error(error);
+        errorToast({
+          title: "Error saving promo code",
+          description: error.message || "Please try again.",
+        });
+      } else {
+        const saved = data as PromoCodeRow;
+
+        setPromoForm((prev) => ({
+          ...prev,
+          id: saved.id,
+        }));
+
+        setPromoList((prev) => {
+          const without = prev.filter((p) => p.id !== saved.id);
+          return [saved, ...without];
+        });
+
+        successToast({
+          title: "Promo code saved",
+          description: "Your promo code has been saved successfully.",
+        });
+      }
+    } finally {
+      setPromoSaving(false);
     }
   }
 
@@ -627,6 +822,18 @@ function ShopSettingsPageInner() {
                 ].join(" ")}
               >
                 Fulfilment &amp; Delivery
+              </button>
+              <button
+                type="button"
+                onClick={() => switchTab("promo")}
+                className={[
+                  "pb-3",
+                  activeTab === "promo"
+                    ? "border-b-2 border-gray-900 font-semibold text-gray-900"
+                    : "text-gray-600 hover:text-gray-900",
+                ].join(" ")}
+              >
+                Promo Codes
               </button>
             </div>
 
@@ -1301,6 +1508,371 @@ function ShopSettingsPageInner() {
                         className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
                       >
                         {saving ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* PROMO TAB -------------------------------------------------- */}
+            {activeTab === "promo" && (
+              <form
+                className="mt-8 space-y-10 pb-28"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  savePromo();
+                }}
+              >
+                {/* Promo code basics */}
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Promo Code
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Create discount codes your customers can apply at checkout.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <input
+                      className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-900 uppercase tracking-[0.15em] focus:border-purple-500 focus:ring-purple-500"
+                      placeholder="WELCOME10"
+                      value={promoForm.code}
+                      onChange={(e) =>
+                        setPromoForm((prev) => ({
+                          ...prev,
+                          code: e.target.value.toUpperCase(),
+                        }))
+                      }
+                    />
+                    <input
+                      className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                      placeholder="Internal name (e.g. Welcome offer)"
+                      value={promoForm.name}
+                      onChange={(e) =>
+                        setPromoForm((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                    />
+                    <textarea
+                      rows={3}
+                      className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                      placeholder="Short description (optional)"
+                      value={promoForm.description}
+                      onChange={(e) =>
+                        setPromoForm((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </section>
+
+                <div className="border-t border-gray-200" />
+
+                {/* Discount type + value (SGD / %) */}
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Discount
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Choose between a fixed SGD amount or a percentage off.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex rounded-full bg-gray-100 p-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            discountType: "fixed",
+                          }))
+                        }
+                        className={clsx(
+                          "rounded-full px-3 py-1",
+                          promoForm.discountType === "fixed"
+                            ? "bg-white shadow-sm text-gray-900"
+                            : "text-gray-500"
+                        )}
+                      >
+                        SGD
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            discountType: "percent",
+                          }))
+                        }
+                        className={clsx(
+                          "rounded-full px-3 py-1",
+                          promoForm.discountType === "percent"
+                            ? "bg-white shadow-sm text-gray-900"
+                            : "text-gray-500"
+                        )}
+                      >
+                        %
+                      </button>
+                    </div>
+                    <input
+                      className="h-11 w-32 rounded-xl border border-gray-200 bg-white px-3 text-right text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                      type="number"
+                      min={1}
+                      placeholder="10"
+                      value={promoForm.discountValue}
+                      onChange={(e) =>
+                        setPromoForm((prev) => ({
+                          ...prev,
+                          discountValue: e.target.value,
+                        }))
+                      }
+                    />
+                    <span className="text-xs text-gray-500">
+                      {promoForm.discountType === "fixed"
+                        ? "off order total (SGD)"
+                        : "% off order total"}
+                    </span>
+                  </div>
+                </section>
+
+                <div className="border-t border-gray-200" />
+
+                {/* Validity period */}
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Validity Period
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      When this promo code can be redeemed.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-gray-500">
+                        Starts on
+                      </label>
+                      <input
+                        type="date"
+                        className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                        value={promoForm.startsAt}
+                        onChange={(e) =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            startsAt: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-gray-500">
+                        Ends on
+                      </label>
+                      <input
+                        type="date"
+                        className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                        value={promoForm.endsAt}
+                        onChange={(e) =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            endsAt: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <div className="border-t border-gray-200" />
+
+                {/* Applies to: All / Products / Services */}
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Applies To
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Choose whether this promo applies to all items, only products, or
+                      only services.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-800">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="appliesTo"
+                        className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                        checked={promoForm.appliesTo === "all"}
+                        onChange={() =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            appliesTo: "all",
+                          }))
+                        }
+                      />
+                      All
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="appliesTo"
+                        className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                        checked={promoForm.appliesTo === "products"}
+                        onChange={() =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            appliesTo: "products",
+                          }))
+                        }
+                      />
+                      Products only
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="appliesTo"
+                        className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                        checked={promoForm.appliesTo === "services"}
+                        onChange={() =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            appliesTo: "services",
+                          }))
+                        }
+                      />
+                      Services only
+                    </label>
+                  </div>
+                </section>
+
+                <div className="border-t border-gray-200" />
+
+                {/* Active toggle */}
+                <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Promo Status
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Toggle OFF to pause this promo code.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3">
+                    <div className="text-sm text-gray-700">
+                      {promoForm.active ? "Active" : "Paused"}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPromoForm((prev) => ({
+                          ...prev,
+                          active: !prev.active,
+                        }))
+                      }
+                      className={clsx(
+                        "relative h-6 w-11 rounded-full transition",
+                        promoForm.active ? "bg-purple-600" : "bg-gray-300"
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          "absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow transition",
+                          promoForm.active ? "right-1" : "left-1"
+                        )}
+                      />
+                    </button>
+                  </div>
+                </section>
+
+                {/* Existing promo list */}
+                {promoList.length > 0 && (
+                  <>
+                    <div className="border-t border-gray-200" />
+                    <section className="space-y-4">
+                      <div className="text-sm font-semibold text-gray-900">
+                        Existing Promo Codes
+                      </div>
+                      <div className="space-y-2 text-xs text-gray-700">
+                        {promoList.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() =>
+                              setPromoForm({
+                                id: p.id,
+                                code: p.code,
+                                name: p.name || "",
+                                description: p.description || "",
+                                discountType: p.discount_type,
+                                discountValue: String(p.discount_value),
+                                appliesTo: p.applies_to,
+                                active: p.active,
+                                startsAt: p.starts_at
+                                  ? p.starts_at.slice(0, 10)
+                                  : "",
+                                endsAt: p.ends_at ? p.ends_at.slice(0, 10) : "",
+                              })
+                            }
+                            className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-left hover:bg-gray-50"
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold tracking-[0.14em]">
+                                {p.code}
+                              </span>
+                              <span className="text-[11px] text-gray-500">
+                                {p.discount_type === "fixed"
+                                  ? `SGD ${p.discount_value} off`
+                                  : `${p.discount_value}% off`}{" "}
+                                · {p.applies_to}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-gray-500">
+                              {p.active ? "Active" : "Paused"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </>
+                )}
+
+                {/* Sticky save bar */}
+                <div className="fixed bottom-0 left-0 right-0 z-10 ml-[calc(300px+280px)] bg-transparent">
+                  <div className="mx-auto max-w-5xl px-8 pb-6">
+                    <div className="flex items-center justify-end gap-3 rounded-full border border-gray-200 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPromoForm({
+                            id: null,
+                            code: "",
+                            name: "",
+                            description: "",
+                            discountType: "percent",
+                            discountValue: "",
+                            appliesTo: "products",
+                            active: true,
+                            startsAt: "",
+                            endsAt: "",
+                          })
+                        }
+                        className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Clear form
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={promoSaving}
+                        className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
+                      >
+                        {promoSaving ? "Saving…" : "Save promo code"}
                       </button>
                     </div>
                   </div>
