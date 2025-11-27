@@ -96,10 +96,9 @@ export async function GET(req: NextRequest) {
       agg.count += 1;
       agg.stock += v.inventory_qty ?? 0;
 
-      // Choose how you want to aggregate price:
-      // here we take the *lowest* non-null variant price for the product
+      // ✅ Use the HIGHEST non-null variant price for the product
       if (v.price_cents !== null && v.price_cents !== undefined) {
-        if (agg.priceCents === null || v.price_cents < agg.priceCents) {
+        if (agg.priceCents === null || v.price_cents > agg.priceCents) {
           agg.priceCents = v.price_cents;
         }
       }
@@ -113,17 +112,19 @@ export async function GET(req: NextRequest) {
     const categories =
       p.product_categories?.map((c: any) => c.category) ?? [];
 
+    const variantPriceCents = agg.priceCents;
+
+
     return {
       id: p.id,
       name: p.name,
       type: p.is_variant ? "Variant" : "Single",
       baseSku: p.base_sku,
       status: p.status,
-      // If product price_cents is null and variants exist, use variant price
-      priceCents:
-        p.price_cents !== null && p.price_cents !== undefined
-          ? p.price_cents
-          : agg.priceCents,
+      // If product price_cents is null and variants exist, use highest variant price
+      priceCents: p.is_variant
+      ? (variantPriceCents ?? p.price_cents)
+      : p.price_cents,
       stock: p.is_variant ? agg.stock : p.inventory_qty,
       variantCount: agg.count,
       imageUrl: p.image_url ?? null,
@@ -133,6 +134,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ products: payload });
 }
+
 /**
  * POST /api/products
  * Create a new product (matches NewProductPage body shape)
@@ -147,7 +149,6 @@ export async function POST(req: NextRequest) {
     name,
     description,
     baseSku,
-    customSku,
     isVariant,
     priceCents,
     inventoryQty,
@@ -170,7 +171,6 @@ export async function POST(req: NextRequest) {
       name,
       description,
       base_sku: baseSku,
-      custom_sku: customSku ?? null,
       is_variant: isVariant,
       price_cents: isVariant ? priceCents : priceCents,
       discount_type: discount?.type ?? null,
