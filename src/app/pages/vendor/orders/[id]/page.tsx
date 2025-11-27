@@ -1,3 +1,4 @@
+// app/pages/vendor/orders/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -318,6 +319,7 @@ export default function OrderDetailPage() {
   const [trackingUrlInput, setTrackingUrlInput] = useState("");
   const [etaInput, setEtaInput] = useState<string>("");
   const [savingShipment, setSavingShipment] = useState(false);
+  const [editingShipment, setEditingShipment] = useState(false);
 
   // ref for "What to pack" scrolling
   const whatToPackRef = useRef<HTMLDivElement | null>(null);
@@ -439,7 +441,7 @@ export default function OrderDetailPage() {
   );
 
   async function handleSaveShipment() {
-    if (!order) return;
+    if (!order || order.status === "delivered") return; // no edits when delivered
     setSavingShipment(true);
     setError(null);
 
@@ -502,6 +504,7 @@ export default function OrderDetailPage() {
               }
             : prev
         );
+        setEditingShipment(false); // exit edit mode after save
       }
     } finally {
       setSavingShipment(false);
@@ -509,13 +512,26 @@ export default function OrderDetailPage() {
   }
 
   async function handleMarkFinal() {
-     if (!order || order.status === "delivered") return;
-    if (!order) return;
+    if (!order || order.status === "delivered") return;
     setSaving(true);
     setError(null);
 
-    const nowIso = new Date().toISOString();
     const isPickup = order.fulfilment_method === "pickup";
+
+    // cannot mark final if any product line isn't packed
+    const hasUnpacked = items.some(
+      (i) => i.line_type === "product" && i.item_fulfilment_status !== "packed"
+    );
+
+    if (hasUnpacked) {
+      setError(
+        "You still have items that are not packed. Please mark all items as packed before marking the order as delivered / picked up."
+      );
+      setSaving(false);
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
 
     try {
       // ensure latest shipping details are in DB before email
@@ -535,7 +551,8 @@ export default function OrderDetailPage() {
         return;
       }
 
-      setOrder(updatedOrderData as Order);
+      const updatedOrder = updatedOrderData as Order;
+      setOrder(updatedOrder);
 
       // Update shipment if exists
       if (fulfilment) {
@@ -592,7 +609,7 @@ export default function OrderDetailPage() {
   }
 
   async function handleChangeStatus(newStatus: OrderStatus) {
-    if (!order || order.status === "delivered" || newStatus === order.status) return; // ⬅️ guard
+    if (!order || order.status === "delivered" || newStatus === order.status) return;
 
     // If they chose "delivered", reuse the dedicated flow so shipment & activity stay consistent
     if (newStatus === "delivered") {
@@ -652,7 +669,7 @@ export default function OrderDetailPage() {
   }
 
   async function updateItemStatus(itemId: string, newStatus: ItemFulfilmentStatus) {
-    if (!order) return;
+    if (!order || order.status === "delivered") return;
     setSavingItemId(itemId);
     setError(null);
     try {
@@ -695,7 +712,7 @@ export default function OrderDetailPage() {
   }
 
   async function bulkUpdateAllItems(newStatus: ItemFulfilmentStatus) {
-    if (!items.length) return;
+    if (!items.length || order?.status === "delivered") return;
     for (const item of items) {
       await updateItemStatus(item.id, newStatus);
     }
@@ -939,30 +956,30 @@ export default function OrderDetailPage() {
                       Status
                     </span>
                     <select
-                          className={`rounded-full border px-4 py-1.5 text-xs font-medium shadow-sm ${statusBgClass}`}
-                          value={order.status}
-                          disabled={updatingStatus || isDelivered}       // ⬅️ changed
-                          onChange={(e) => handleChangeStatus(e.target.value as OrderStatus)}
-                        >
-                          <option value="placed">Placed</option>
-                          <option value="fulfilled">Fulfilled</option>
-                          <option value="shipped">Shipped</option>
-                          <option value="delivered">Delivered</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
+                      className={`rounded-full border px-4 py-1.5 text-xs font-medium shadow-sm ${statusBgClass}`}
+                      value={order.status}
+                      disabled={updatingStatus || isDelivered}
+                      onChange={(e) => handleChangeStatus(e.target.value as OrderStatus)}
+                    >
+                      <option value="placed">Placed</option>
+                      <option value="fulfilled">Fulfilled</option>
+                      <option value="shipped">Shipped</option>
+                      <option value="delivered">Delivered</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
                     <span className="text-[11px] text-slate-400">
                       Current: <span className="font-medium text-slate-700">{mainStatus}</span>
                     </span>
                     {isDelivered && (
-  <span className="text-[11px] text-slate-400">
-    This order is delivered and can no longer be updated.
-  </span>
-)}
+                      <span className="text-[11px] text-slate-400">
+                        This order is delivered and can no longer be updated.
+                      </span>
+                    )}
                   </div>
 
                   <button
                     className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                    disabled={saving || isDelivered}  
+                    disabled={saving || isDelivered}
                     onClick={handleMarkFinal}
                   >
                     {saving
@@ -1021,9 +1038,6 @@ export default function OrderDetailPage() {
                   <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
                     Fulfilment status
                   </div>
-
-                  {/* CTA scrolls to What to pack */}
-                  
                 </div>
 
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -1108,19 +1122,30 @@ export default function OrderDetailPage() {
                         Delivery &amp; fulfilment
                       </h2>
 
-                      {hasOnlineService && order.contact_email && (
+                      <div className="flex items-center gap-2">
+                        {hasOnlineService && order.contact_email && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmailFeedback(null);
+                              setSessionLink("");
+                              setEmailModalOpen(true);
+                            }}
+                            className="rounded-full bg-[#7B61FF] px-4 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-[#6A4BEF]"
+                          >
+                            Send online session link
+                          </button>
+                        )}
+
                         <button
                           type="button"
-                          onClick={() => {
-                            setEmailFeedback(null);
-                            setSessionLink("");
-                            setEmailModalOpen(true);
-                          }}
-                          className="rounded-full bg-[#7B61FF] px-4 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-[#6A4BEF]"
+                          disabled={isDelivered}
+                          onClick={() => setEditingShipment((v) => !v)}
+                          className="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-800 shadow-sm disabled:opacity-50"
                         >
-                          Send online session link
+                          {editingShipment ? "Done editing" : "Edit"}
                         </button>
-                      )}
+                      </div>
                     </div>
 
                     <p className="mb-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -1135,10 +1160,11 @@ export default function OrderDetailPage() {
                               Shipping provider
                             </p>
                             <input
-                              className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                              className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
                               placeholder="Eg. Ninja Van"
                               value={shippingProviderInput}
                               onChange={(e) => setShippingProviderInput(e.target.value)}
+                              disabled={!editingShipment || isDelivered}
                             />
                           </div>
 
@@ -1148,9 +1174,10 @@ export default function OrderDetailPage() {
                                 Tracking number
                               </p>
                               <input
-                                className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                                className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
                                 value={trackingNumberInput}
                                 onChange={(e) => setTrackingNumberInput(e.target.value)}
+                                disabled={!editingShipment || isDelivered}
                               />
                             </div>
 
@@ -1159,10 +1186,11 @@ export default function OrderDetailPage() {
                                 Tracking link
                               </p>
                               <input
-                                className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                                className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
                                 placeholder="https://tracking…"
                                 value={trackingUrlInput}
                                 onChange={(e) => setTrackingUrlInput(e.target.value)}
+                                disabled={!editingShipment || isDelivered}
                               />
                             </div>
                           </div>
@@ -1173,9 +1201,10 @@ export default function OrderDetailPage() {
                             </p>
                             <input
                               type="date"
-                              className="w-full max-w-xs rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                              className="w-full max-w-xs rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
                               value={etaInput ?? ""}
                               onChange={(e) => setEtaInput(e.target.value)}
+                              disabled={!editingShipment || isDelivered}
                             />
                           </div>
                         </>
@@ -1240,7 +1269,7 @@ export default function OrderDetailPage() {
                       <button
                         type="button"
                         onClick={handleSaveShipment}
-                        disabled={savingShipment}
+                        disabled={savingShipment || !editingShipment || isDelivered}
                         className="rounded-full bg-black px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
                       >
                         {savingShipment ? "Saving…" : "Save shipping details"}
@@ -1284,127 +1313,139 @@ export default function OrderDetailPage() {
                 </div>
 
                 {/* Right column cards */}
-               <div className="space-y-5">
-  {/* What to pack / fulfil */}
-  <div
-    ref={whatToPackRef}
-    className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100"
-  >
-    <div className="mb-4 flex items-center justify-between gap-3">
-      <div>
-        <h2 className="text-sm font-semibold text-slate-900">
-          {isPickup ? "What to prepare" : "What to pack"}
-        </h2>
-        <p className="mt-1 text-[11px] text-slate-500">
-          {productLines.length} item
-          {productLines.length === 1 ? "" : "s"} in this order
-        </p>
-      </div>
+                <div className="space-y-5">
+                  {/* What to pack / fulfil */}
+                  <div
+                    ref={whatToPackRef}
+                    className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-sm font-semibold text-slate-900">
+                          {isPickup ? "What to prepare" : "What to pack"}
+                        </h2>
+                        <p className="mt-1 text.[11px] text-slate-500">
+                          {productLines.length} item
+                          {productLines.length === 1 ? "" : "s"} in this order
+                        </p>
+                      </div>
 
-      <button
-        type="button"
-        onClick={() => setItemsModalOpen(true)}
-        className="inline-flex items-center rounded-full bg-[#7B61FF] px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#6A4BEF]"
-      >
-        View items to pack
-      </button>
-    </div>
+                      <button
+                        type="button"
+                        onClick={() => setItemsModalOpen(true)}
+                        className="inline-flex items-center rounded-full bg-[#7B61FF] px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#6A4BEF]"
+                      >
+                        View items to pack
+                      </button>
+                    </div>
 
-    <div className="space-y-3">
-      {productLines.map((line) => (
-        <div
-          key={line.id}
-          className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-200 hover:bg-slate-50/80"
-        >
-          <div className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-slate-300 text-[#7B61FF] focus:ring-[#7B61FF]"
-            />
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
-                {line.name_snapshot} × {line.quantity}
-              </p>
-              <p className="text-xs text-slate-500">
-                {line.options_snapshot &&
-                Object.keys(line.options_snapshot).length
-                  ? Object.entries(line.options_snapshot)
-                      .map(([k, v]) => `${k}: ${String(v)}`)
-                      .join(" · ")
-                  : "No options"}
-              </p>
-              <p className="text-xs font-medium text-slate-400">
-                {formatCurrencyFromCents(line.unit_price_cents)}
-              </p>
-            </div>
-          </div>
+                    <div className="space-y-3">
+                      {productLines.map((line) => {
+                        const isPacked = line.item_fulfilment_status === "packed";
 
-          <span className="inline-flex items-center rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-            {lineTypeBadge(line.line_type)}
-          </span>
-        </div>
-      ))}
+                        return (
+                          <div
+                            key={line.id}
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-200 hover:bg-slate-50/80"
+                          >
+                            <div className="flex items-start gap-3">
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 rounded border-slate-300 text-[#7B61FF] focus:ring-[#7B61FF]"
+                                checked={isPacked}
+                                disabled={isDelivered || savingItemId === line.id}
+                                onChange={(e) => {
+                                  const next: ItemFulfilmentStatus = e.target.checked
+                                    ? "packed"
+                                    : "pending";
+                                  updateItemStatus(line.id, next);
+                                }}
+                              />
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {line.name_snapshot} × {line.quantity}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {line.options_snapshot &&
+                                  Object.keys(line.options_snapshot).length
+                                    ? Object.entries(line.options_snapshot)
+                                        .map(([k, v]) => `${k}: ${String(v)}`)
+                                        .join(" · ")
+                                    : "No options"}
+                                </p>
+                                <p className="text-xs font-medium text-slate-400">
+                                  {formatCurrencyFromCents(line.unit_price_cents)}
+                                </p>
+                              </div>
+                            </div>
 
-      {productLines.length === 0 && (
-        <p className="rounded-2xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
-          No items found for this order.
-        </p>
-      )}
-    </div>
-  </div>
+                            <span className="inline-flex items-center rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                              {lineTypeBadge(line.line_type)}
+                            </span>
+                          </div>
+                        );
+                      })}
 
-  {/* Customer / fulfilment note */}
-  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-    <h2 className="mb-2 text-sm font-semibold text-slate-900">
-      Customer / fulfilment note
-    </h2>
-    <p className="text-sm text-slate-600 whitespace-pre-line">{noteText}</p>
-  </div>
+                      {productLines.length === 0 && (
+                        <p className="rounded-2xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+                          No items found for this order.
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
-  {/* Activity */}
-  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-    <h2 className="mb-3 text-sm font-semibold text-slate-900">Activity</h2>
-    {activityToRender.length === 0 ? (
-      <p className="text-xs text-slate-500">No activity recorded.</p>
-    ) : (
-      <ul className="space-y-2 text-xs text-slate-600">
-        {activityToRender.map((a, idx) => (
-          <li
-            key={idx}
-            className="flex items-start justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2"
-          >
-            <div className="flex items-center gap-2">
-              <span className="mt-[3px] h-1.5 w-1.5 rounded-full bg-slate-400" />
-              <span>{a.label}</span>
-            </div>
-            <span className="text-[11px] text-slate-400">
-              {formatDateTime(a.at)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
+                  {/* Customer / fulfilment note */}
+                  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                    <h2 className="mb-2 text-sm font-semibold text-slate-900">
+                      Customer / fulfilment note
+                    </h2>
+                    <p className="text-sm text-slate-600 whitespace-pre-line">{noteText}</p>
+                  </div>
 
-  {/* Internal notes (local only) */}
-  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-    <h2 className="mb-2 text-sm font-semibold text-slate-900">
-      Internal notes
-    </h2>
-    <p className="mb-2 text-xs text-slate-500">
-      Add private notes about this order (visible only to you and your team).
-    </p>
-    <textarea
-      className="h-24 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-slate-400"
-      placeholder="These notes are not shown to the customer. (Wire this up to a table or column when you're ready.)"
-    />
-    <div className="mt-3 flex justify-end">
-      <button className="rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-black">
-        Save note
-      </button>
-    </div>
-  </div>
-</div>
+                  {/* Activity */}
+                  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                    <h2 className="mb-3 text-sm font-semibold text-slate-900">Activity</h2>
+                    {activityToRender.length === 0 ? (
+                      <p className="text-xs text-slate-500">No activity recorded.</p>
+                    ) : (
+                      <ul className="space-y-2 text-xs text-slate-600">
+                        {activityToRender.map((a, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-start justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="mt-[3px] h-1.5 w-1.5 rounded-full bg-slate-400" />
+                              <span>{a.label}</span>
+                            </div>
+                            <span className="text-[11px] text-slate-400">
+                              {formatDateTime(a.at)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Internal notes (local only) */}
+                  <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+                    <h2 className="mb-2 text-sm font-semibold text-slate-900">
+                      Internal notes
+                    </h2>
+                    <p className="mb-2 text-xs text-slate-500">
+                      Add private notes about this order (visible only to you and your team).
+                    </p>
+                    <textarea
+                      className="h-24 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                      placeholder="These notes are not shown to the customer. (Wire this up to a table or column when you're ready.)"
+                    />
+                    <div className="mt-3 flex justify-end">
+                      <button className="rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-black">
+                        Save note
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
               {/* end grid */}
             </div>
@@ -1468,13 +1509,6 @@ export default function OrderDetailPage() {
                             .join(" · ")
                         : "—";
 
-                    const nextStatus: ItemFulfilmentStatus =
-                      item.item_fulfilment_status === "pending"
-                        ? "processing"
-                        : item.item_fulfilment_status === "processing"
-                        ? "packed"
-                        : "pending";
-
                     return (
                       <tr key={item.id} className="border-b border-slate-100 last:border-0">
                         <td className="px-6 py-3 text-slate-800">
@@ -1492,20 +1526,20 @@ export default function OrderDetailPage() {
                           {formatCurrencyFromCents(item.line_subtotal_cents)}
                         </td>
                         <td className="px-6 py-3">
-                          <button
-                            disabled={savingItemId === item.id}
-                            onClick={() => updateItemStatus(item.id, nextStatus)}
-                            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
+                          <select
+                            disabled={savingItemId === item.id || isDelivered}
+                            value={item.item_fulfilment_status}
+                            onChange={(e) =>
+                              updateItemStatus(item.id, e.target.value as ItemFulfilmentStatus)
+                            }
+                            className={`rounded-full px-3 py-1 text-xs font-medium border border-slate-200 ${
                               itemStatusClasses[item.item_fulfilment_status]
-                            } ${
-                              savingItemId === item.id
-                                ? "cursor-wait opacity-70"
-                                : "cursor-pointer"
-                            }`}
-                            title="Click to cycle status"
+                            } disabled:opacity-60`}
                           >
-                            {itemStatusLabel[item.item_fulfilment_status]}
-                          </button>
+                            <option value="pending">Pending</option>
+                            <option value="processing">Processing</option>
+                            <option value="packed">Packed</option>
+                          </select>
                         </td>
                       </tr>
                     );
@@ -1528,8 +1562,8 @@ export default function OrderDetailPage() {
             {/* Modal footer */}
             <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3 text-xs text-slate-500">
               <span>
-                Tip: click the status pill to move items from Pending → Processing →
-                Packed.
+                Choose fulfilment status per line, or use “Mark all items as packed” from
+                More actions.
               </span>
               <button
                 type="button"

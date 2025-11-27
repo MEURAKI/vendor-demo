@@ -140,13 +140,13 @@ export default function VendorCustomersPage() {
           id: String(o.id),
           orderNumber: o.order_number ?? o.orderNo ?? `ORD-${o.id}`,
           customerName:
-            (o.customer_name ??
-            `${o.customer_first_name ?? ""} ${
-              o.customer_last_name ?? ""
+            (o.contact_name ??
+            `${o.contact_name ?? ""} ${
+              o.contact_name ?? ""
             }`.trim()) ||
             "Guest",
           customerId: o.customer_id ?? null,
-          customerEmail: o.customer_email ?? null,
+          customerEmail: o.contact_email ?? null,
           status: (o.status ?? "pending") as OrderStatus,
           totalCents: o.total_cents ?? o.totalCents ?? 0,
           createdAt: o.created_at ?? o.createdAt ?? "",

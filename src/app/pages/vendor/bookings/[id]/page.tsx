@@ -1,3 +1,4 @@
+// app/pages/vendor/bookings/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -187,27 +188,38 @@ function extractPackageMeta(optionsSnapshot: any): {
     }
   }
 
-  if (!obj || typeof obj !== "object") {
-    return { sessionsCount: null, packageLabel: null };
-  }
-
-  const rawCount =
-    (obj as any).sessions_count ??
-    (obj as any).session_count ??
-    (obj as any).total_sessions ??
-    null;
-
   let sessionsCount: number | null = null;
-  if (rawCount != null) {
-    const n = Number(rawCount);
-    sessionsCount = Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  let packageLabel: string | null = null;
+
+  if (obj && typeof obj === "object") {
+    const rawCount =
+      (obj as any).sessions_count ??
+      (obj as any).session_count ??
+      (obj as any).total_sessions ??
+      null;
+
+    if (rawCount != null) {
+      const n = Number(rawCount);
+      sessionsCount = Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+    }
+
+    packageLabel =
+      (obj as any).package_label ??
+      (obj as any).package ??
+      (obj as any).plan_label ??
+      null;
   }
 
-  const packageLabel =
-    (obj as any).package_label ??
-    (obj as any).package ??
-    (obj as any).plan_label ??
-    null;
+  // Fallback: infer sessions from text like "5 Sessions In-person"
+  if (!sessionsCount && packageLabel) {
+    const match = packageLabel.match(/(\d+)/);
+    if (match) {
+      const n = Number(match[1]);
+      if (Number.isFinite(n) && n > 0) {
+        sessionsCount = n;
+      }
+    }
+  }
 
   return {
     sessionsCount,
@@ -396,11 +408,32 @@ export default function BookingDetailPage() {
     [profile]
   );
 
-  async function updateBookingStatus(newStatus: BookingStatus) {
+  async function updateBookingStatus(
+    newStatus: BookingStatus,
+    opts?: { bypassChecks?: boolean }
+  ) {
     if (!booking) return;
     if (booking.status === newStatus) return;
     // if already completed / cancelled, don't allow any more edits
     if (booking.status === "completed" || booking.status === "cancelled") return;
+
+    // Guard: you can't mark as completed unless requirements are met
+    if (!opts?.bypassChecks && newStatus === "completed") {
+      if (booking.isOnline) {
+        const hasAnyLink = sessionInputs.some((s) => s.url.trim().length > 0);
+        if (!hasAnyLink) {
+          setError(
+            "Please add at least one meeting link before marking this booking as completed."
+          );
+          return;
+        }
+      } else {
+        setError(
+          "For in-person sessions, use “Confirm check-in & complete” to complete the booking."
+        );
+        return;
+      }
+    }
 
     setStatusSaving(true);
     setError(null);
@@ -456,7 +489,7 @@ export default function BookingDetailPage() {
     }
   }
 
-  // Online meeting email via your own API route (multi-session support)
+  // Online meeting email – send one email per session link
   async function handleSendMeetingEmail() {
     if (!booking || !booking.customerEmail) return;
 
@@ -479,28 +512,31 @@ export default function BookingDetailPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/vendor/bookings/send-session-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: booking.orderId,
-          customer_email: booking.customerEmail,
-          customer_name: booking.customerName,
-          sessions: cleaned, // label + time + url
-        }),
-      });
+      // One API call per session → separate emails
+      for (const session of cleaned) {
+        const res = await fetch("/api/vendor/bookings/send-session-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: booking.orderId,
+            customer_email: booking.customerEmail,
+            customer_name: booking.customerName,
+            session, // { label, time, url }
+          }),
+        });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.error("send-session-email failed", data);
-        setError(data?.error || "Failed to send session email.");
-        return;
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          console.error("send-session-email failed", data);
+          setError(data?.error || "Failed to send one or more session emails.");
+          return;
+        }
       }
 
       setEmailFeedback(
         cleaned.length === 1
           ? `Session link sent to ${booking.customerEmail}.`
-          : `Session links sent to ${booking.customerEmail}.`
+          : `${cleaned.length} session links sent to ${booking.customerEmail}.`
       );
     } finally {
       setSendingEmail(false);
@@ -510,6 +546,7 @@ export default function BookingDetailPage() {
   async function handleCheckinWithCode() {
     if (!booking) return;
     setCheckinError(null);
+    setError(null);
 
     const expected = booking.bookingCode.replace(/[^A-Z0-9]/g, "").toUpperCase();
     const entered = codeInput.replace(/[^A-Z0-9]/g, "").toUpperCase();
@@ -523,10 +560,10 @@ export default function BookingDetailPage() {
       return;
     }
 
-    // Valid → mark as completed
+    // Valid → mark as completed (bypass guards since we validated here)
     setCheckingIn(true);
     try {
-      await updateBookingStatus("completed");
+      await updateBookingStatus("completed", { bypassChecks: true });
     } finally {
       setCheckingIn(false);
     }
@@ -619,6 +656,24 @@ export default function BookingDetailPage() {
 
   const maxSessions = booking.sessionsCount ?? null;
 
+  // derive simple per-session statuses for physical multi-session packages
+  const sessionStatusList =
+    booking.sessionsCount && booking.sessionsCount > 0
+      ? (() => {
+          const total = booking.sessionsCount!;
+          const remaining =
+            booking.remainingSessions != null
+              ? Math.min(Math.max(booking.remainingSessions, 0), total)
+              : total;
+          const completed = Math.max(total - remaining, 0);
+
+          return Array.from({ length: total }, (_, idx) => ({
+            label: `Session ${idx + 1}`,
+            isCompleted: idx < completed,
+          }));
+        })()
+      : null;
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
@@ -687,7 +742,7 @@ export default function BookingDetailPage() {
                       className={`inline-flex items-center rounded-full border px-4 py-1.5 ${statusBgClass}`}
                     >
                       <select
-                        className="appearance-none bg-transparent border-none text-xs font-medium text-slate-800 focus:outline-none focus:ring-0 pr-6 cursor-pointer"
+                        className="appearance-none bg-transparent border-none text-xs font-medium text-slate-800 focus:outline-none focus:ring-0 pr-1 cursor-pointer"
                         value={booking.status}
                         disabled={statusSaving || statusLocked}
                         onChange={(e) =>
@@ -699,9 +754,6 @@ export default function BookingDetailPage() {
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
                       </select>
-                      <span className="pointer-events-none -ml-4 text-[10px] text-slate-700">
-                        ▼
-                      </span>
                     </div>
                     {statusLocked && (
                       <span className="text-[11px] text-slate-400">
@@ -782,67 +834,70 @@ export default function BookingDetailPage() {
 
                     {booking.isOnline ? (
                       <div className="space-y-4">
-                        {/* Multiple session link rows */}
-                        <div className="space-y-3">
+                        {/* Multiple session blocks */}
+                        <div className="space-y-5">
                           {sessionInputs.map((row, idx) => (
-                            <div
-                              key={row.id}
-                              className="grid gap-3 rounded-2xl bg-slate-50 p-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_auto]"
-                            >
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-slate-700">
-                                  Session label
-                                  {maxSessions && (
-                                    <span className="text-[10px] text-slate-400">
-                                      {" "}
-                                      · {idx + 1}/{maxSessions}
-                                    </span>
-                                  )}
-                                </label>
-                                <input
-                                  className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
-                                  placeholder="Session 1 – 12 Mar, 3:00pm"
-                                  value={row.label}
-                                  onChange={(e) =>
-                                    updateSessionRow(row.id, "label", e.target.value)
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-slate-700">
-                                  Date &amp; time
-                                </label>
-                                <input
-                                  type="datetime-local"
-                                  className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
-                                  value={row.time}
-                                  onChange={(e) =>
-                                    updateSessionRow(row.id, "time", e.target.value)
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-slate-700">
-                                  Meeting link
-                                </label>
-                                <input
-                                  className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
-                                  placeholder="https://… (Zoom, Google Meet, etc)"
-                                  value={row.url}
-                                  onChange={(e) =>
-                                    updateSessionRow(row.id, "url", e.target.value)
-                                  }
-                                />
-                              </div>
-                              <div className="flex items-end justify-end">
-                                <button
-                                  type="button"
-                                  className="rounded-full bg-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-40"
-                                  onClick={() => removeSessionRow(row.id)}
-                                  disabled={sessionInputs.length === 1}
-                                >
-                                  Remove
-                                </button>
+                            <div key={row.id} className="space-y-3 rounded-3xl bg-slate-50 p-4">
+                              <p className="border-b border-indigo-100 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                SESSION {idx + 1} DETAILS
+                              </p>
+
+                              <div className="grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,1.4fr)_auto]">
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                                    Session label
+                                    {maxSessions && (
+                                      <span className="text-[10px] text-slate-400">
+                                        {" "}
+                                        · {idx + 1}/{maxSessions}
+                                      </span>
+                                    )}
+                                  </label>
+                                  <input
+                                    className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                                    placeholder="Session 1 – 12 Mar, 3:00pm"
+                                    value={row.label}
+                                    onChange={(e) =>
+                                      updateSessionRow(row.id, "label", e.target.value)
+                                    }
+                                  />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                                    Date &amp; time
+                                  </label>
+                                  <input
+                                    type="datetime-local"
+                                    className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                                    value={row.time}
+                                    onChange={(e) =>
+                                      updateSessionRow(row.id, "time", e.target.value)
+                                    }
+                                  />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                                    Meeting link
+                                  </label>
+                                  <input
+                                    className="w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400"
+                                    placeholder="https://… (Zoom, Google Meet, etc)"
+                                    value={row.url}
+                                    onChange={(e) =>
+                                      updateSessionRow(row.id, "url", e.target.value)
+                                    }
+                                  />
+                                </div>
+                                <div className="flex items-end justify-end">
+                                  <button
+                                    type="button"
+                                    className="rounded-full bg-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-40"
+                                    onClick={() => removeSessionRow(row.id)}
+                                    disabled={sessionInputs.length === 1}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -901,6 +956,34 @@ export default function BookingDetailPage() {
                               <>· {booking.remainingSessions} remaining</>
                             )}
                           </p>
+                        )}
+
+                        {/* Per-session status list for physical packages */}
+                        {sessionStatusList && (
+                          <div className="mt-2 space-y-2 rounded-2xl bg-slate-50 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Session status
+                            </p>
+                            <div className="space-y-1">
+                              {sessionStatusList.map((s) => (
+                                <div
+                                  key={s.label}
+                                  className="flex items-center justify-between text-[11px] text-slate-600"
+                                >
+                                  <span>{s.label}</span>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                      s.isCompleted
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-slate-100 text-slate-600"
+                                    }`}
+                                  >
+                                    {s.isCompleted ? "Completed" : "Upcoming"}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
 
                         <div>
