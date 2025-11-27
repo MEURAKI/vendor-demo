@@ -80,14 +80,20 @@ type TabKey = "general" | "fulfilment" | "promos";
 
 /* ---- Promo code types ---- */
 
-type PromoScope = "all" | "product" | "service";
+// DB-level scope: who owns the promo
+type PromoScope = "platform" | "vendor";
+
+// DB-level applies_to: what the promo applies to
+type PromoAppliesTo = "all" | "products" | "services";
+
+type DiscountType = "percent" | "fixed";
 
 type PromoCode = {
   id: string;
-  vendor_id: string;
+  vendor_id: string | null;
   code: string;
   description: string | null;
-  discount_type: "percentage" | "fixed";
+  discount_type: DiscountType;
   discount_value: number;
   active: boolean;
   starts_at: string | null;
@@ -95,22 +101,23 @@ type PromoCode = {
   max_redemptions: number | null;
   times_redeemed: number;
   scope: PromoScope;
+  applies_to: PromoAppliesTo;
   created_at: string;
 };
 
 type PromoFormState = {
   code: string;
   description: string;
-  discount_type: "percentage" | "fixed";
+  discount_type: DiscountType;
   discount_value: string; // keep as string in the form, cast on save
   active: boolean;
   starts_at: string;
   ends_at: string;
   max_redemptions: string;
-  scope: PromoScope;
+  applies_to: PromoAppliesTo;
 };
 
-const DEFAULT_PROMO_SCOPE: PromoScope = "all";
+const DEFAULT_APPLIES_TO: PromoAppliesTo = "all";
 
 /* ---------------------- Simple Pill component ---------------------- */
 
@@ -179,20 +186,20 @@ function ShopSettingsPageInner() {
 
   // Promo codes
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
-  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoLoading] = useState(false);
   const [promoSaving, setPromoSaving] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
   const [promoForm, setPromoForm] = useState<PromoFormState>({
     code: "",
     description: "",
-    discount_type: "percentage",
+    discount_type: "percent",
     discount_value: "",
     active: true,
     starts_at: "",
     ends_at: "",
     max_redemptions: "",
-    scope: DEFAULT_PROMO_SCOPE,
+    applies_to: DEFAULT_APPLIES_TO,
   });
 
   const DIMENSIONS = [
@@ -296,17 +303,20 @@ function ShopSettingsPageInner() {
         return;
       }
 
-      const [{ data: prof }, { data: vbRow }, { data: promoRows, error: promoErr }] =
-        await Promise.all([
-          supabase
-            .from("profiles")
-            .select("id,email,full_name,status")
-            .eq("id", user.id)
-            .maybeSingle(),
-          supabase
-            .from("vendor_business")
-            .select(
-              `
+      const [
+        { data: prof },
+        { data: vbRow },
+        { data: promoRows, error: promoErr },
+      ] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id,email,full_name,status")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("vendor_business")
+          .select(
+            `
               id,
               shop_status,
               shop_name,
@@ -335,13 +345,13 @@ function ShopSettingsPageInner() {
               delivery_days_note,
               dimensions
             `
-            )
-            .eq("id", user.id)
-            .maybeSingle(),
-          supabase
-            .from("promo_codes")
-            .select(
-              `
+          )
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("promo_codes")
+          .select(
+            `
               id,
               vendor_id,
               code,
@@ -354,12 +364,14 @@ function ShopSettingsPageInner() {
               max_redemptions,
               times_redeemed,
               scope,
+              applies_to,
               created_at
             `
-            )
-            .eq("vendor_id", user.id)
-            .order("created_at", { ascending: false }),
-        ]);
+          )
+          .eq("vendor_id", user.id)
+          .eq("scope", "vendor")
+          .order("created_at", { ascending: false }),
+      ]);
 
       const profTyped: ProfileLite = {
         id: user.id,
@@ -529,7 +541,7 @@ function ShopSettingsPageInner() {
 
   const sidebarConfig = useMemo(() => {
     const statusLabel =
-      profile?.status === "active" ? "Active" : "Incomplete Registration";
+      profile?.status === "active" ? "active" : "Incomplete Registration";
 
     return buildSidebarConfig({
       fullName: profile?.full_name ?? profile?.email ?? "User",
@@ -644,13 +656,13 @@ function ShopSettingsPageInner() {
     setPromoForm({
       code: "",
       description: "",
-      discount_type: "percentage",
+      discount_type: "percent",
       discount_value: "",
       active: true,
       starts_at: "",
       ends_at: "",
       max_redemptions: "",
-      scope: DEFAULT_PROMO_SCOPE,
+      applies_to: DEFAULT_APPLIES_TO,
     });
     setPromoError(null);
   }
@@ -666,7 +678,7 @@ function ShopSettingsPageInner() {
       starts_at: p.starts_at ? p.starts_at.slice(0, 16) : "",
       ends_at: p.ends_at ? p.ends_at.slice(0, 16) : "",
       max_redemptions: p.max_redemptions?.toString() ?? "",
-      scope: p.scope ?? DEFAULT_PROMO_SCOPE,
+      applies_to: p.applies_to ?? DEFAULT_APPLIES_TO,
     });
     setPromoError(null);
   }
@@ -689,6 +701,15 @@ function ShopSettingsPageInner() {
       return;
     }
 
+    // For percent discounts, enforce 0–100
+    if (
+      promoForm.discount_type === "percent" &&
+      (discountNum <= 0 || discountNum > 100)
+    ) {
+      setPromoError("Percentage discounts must be between 0 and 100.");
+      return;
+    }
+
     const maxRedemptionsNum = promoForm.max_redemptions
       ? parseInt(promoForm.max_redemptions, 10)
       : null;
@@ -703,9 +724,12 @@ function ShopSettingsPageInner() {
       starts_at: promoForm.starts_at
         ? new Date(promoForm.starts_at).toISOString()
         : null,
-      ends_at: promoForm.ends_at ? new Date(promoForm.ends_at).toISOString() : null,
+      ends_at: promoForm.ends_at
+        ? new Date(promoForm.ends_at).toISOString()
+        : null,
       max_redemptions: maxRedemptionsNum,
-      scope: promoForm.scope || DEFAULT_PROMO_SCOPE,
+      scope: "vendor" as PromoScope, // always vendor promos in this portal
+      applies_to: promoForm.applies_to,
     };
 
     setPromoSaving(true);
@@ -726,7 +750,7 @@ function ShopSettingsPageInner() {
 
         setPromoCodes((prev) =>
           prev.map((p) =>
-            p.id === editingPromoId ? { ...p, ...payload } as PromoCode : p
+            p.id === editingPromoId ? ({ ...p, ...payload } as PromoCode) : p
           )
         );
         successToast({
@@ -736,7 +760,7 @@ function ShopSettingsPageInner() {
       } else {
         const { data, error } = await supabase
           .from("promo_codes")
-          .insert({ ...payload, scope: payload.scope })
+          .insert(payload)
           .select(
             `
             id,
@@ -751,6 +775,7 @@ function ShopSettingsPageInner() {
             max_redemptions,
             times_redeemed,
             scope,
+            applies_to,
             created_at
           `
           )
@@ -1570,13 +1595,13 @@ function ShopSettingsPageInner() {
                             {p.description || "No description"}
                           </p>
                           <p className="mt-1 text-[11px] text-gray-500">
-                            {p.discount_type === "percentage"
+                            {p.discount_type === "percent"
                               ? `${p.discount_value}% off`
                               : `SGD ${p.discount_value.toFixed(2)} off`}{" "}
-                            · Scope:{" "}
-                            {p.scope === "all"
+                            · Applies to:{" "}
+                            {p.applies_to === "all"
                               ? "All orders"
-                              : p.scope === "product"
+                              : p.applies_to === "products"
                               ? "Products"
                               : "Services"}
                           </p>
@@ -1648,12 +1673,11 @@ function ShopSettingsPageInner() {
                           onChange={(e) =>
                             setPromoForm((prev) => ({
                               ...prev,
-                              discount_type: e.target
-                                .value as PromoFormState["discount_type"],
+                              discount_type: e.target.value as DiscountType,
                             }))
                           }
                         >
-                          <option value="percentage">Percentage (%)</option>
+                          <option value="percent">Percentage (%)</option>
                           <option value="fixed">Fixed amount (SGD)</option>
                         </select>
                       </div>
@@ -1670,28 +1694,32 @@ function ShopSettingsPageInner() {
                               discount_value: e.target.value,
                             }))
                           }
-                          placeholder="e.g. 10"
+                          placeholder={
+                            promoForm.discount_type === "percent"
+                              ? "e.g. 10 (for 10%)"
+                              : "e.g. 10 (for $10 off)"
+                          }
                         />
                       </div>
                     </div>
 
                     <div>
                       <label className="mb-1 block text-xs font-medium text-gray-800">
-                        Scope
+                        Applies to
                       </label>
                       <select
                         className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                        value={promoForm.scope}
+                        value={promoForm.applies_to}
                         onChange={(e) =>
                           setPromoForm((prev) => ({
                             ...prev,
-                            scope: e.target.value as PromoScope,
+                            applies_to: e.target.value as PromoAppliesTo,
                           }))
                         }
                       >
                         <option value="all">All products &amp; services</option>
-                        <option value="product">Products only</option>
-                        <option value="service">Services only</option>
+                        <option value="products">Products only</option>
+                        <option value="services">Services only</option>
                       </select>
                     </div>
 
