@@ -60,8 +60,8 @@ type BookingRow = {
   bookingCode: string;
   orderId: string;
   orderCode: string;
-  dateTime: string;        // raw ISO for grouping
-  dateTimeLabel: string;   // pretty
+  dateTime: string; // raw ISO for grouping
+  dateTimeLabel: string; // pretty
   serviceName: string;
   customerName: string;
   locationLabel: string;
@@ -76,6 +76,7 @@ type BookingRow = {
 };
 
 type FilterTab = "all" | "upcoming" | "completed" | "cancelled";
+type TimeFilter = "all" | "thisMonth";
 
 const bookingStatusLabel: Record<BookingStatus, string> = {
   confirmed: "Confirmed",
@@ -160,6 +161,7 @@ export default function BookingsPage() {
   const [tab, setTab] = useState<FilterTab>("all");
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
 
   useEffect(() => {
     (async () => {
@@ -252,9 +254,7 @@ export default function BookingsPage() {
           const sessionInfo = sessionsByOrderItem.get(row.id);
           const hasSessionTracking = !!sessionInfo;
           const totalSessions = sessionInfo?.total_sessions ?? 1;
-          const remainingSessions = sessionInfo
-            ? sessionInfo.remaining_sessions
-            : 0; // if no tracking row, treat as fully used so you can complete
+          const remainingSessions = sessionInfo ? sessionInfo.remaining_sessions : 0; // if no tracking row, treat as fully used so you can complete
 
           return {
             id: row.id,
@@ -293,8 +293,11 @@ export default function BookingsPage() {
     [profile]
   );
 
+  const now = new Date();
+
   const filtered = rows.filter((row) => {
     const term = search.trim().toLowerCase();
+
     const matchesSearch =
       !term ||
       row.customerName.toLowerCase().includes(term) ||
@@ -304,11 +307,28 @@ export default function BookingsPage() {
 
     if (!matchesSearch) return false;
 
-    if (tab === "all") return true;
-    if (tab === "upcoming")
-      return row.status === "confirmed" || row.status === "awaiting_payment";
-    if (tab === "completed") return row.status === "completed";
-    if (tab === "cancelled") return row.status === "cancelled";
+    // tab filter
+    if (tab === "upcoming") {
+      if (!(row.status === "confirmed" || row.status === "awaiting_payment")) {
+        return false;
+      }
+    } else if (tab === "completed") {
+      if (row.status !== "completed") return false;
+    } else if (tab === "cancelled") {
+      if (row.status !== "cancelled") return false;
+    }
+
+    // time filter: only keep bookings from the current month
+    if (timeFilter === "thisMonth") {
+      const d = new Date(row.dateTime);
+      if (
+        d.getFullYear() !== now.getFullYear() ||
+        d.getMonth() !== now.getMonth()
+      ) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -485,9 +505,19 @@ export default function BookingsPage() {
                       );
                     }
                   )}
-                  {/* Time filter stub */}
-                  <button className="rounded-full bg-white px-3 py-1.5 text-xs text-slate-700 md:px-4">
-                    This month ▾
+                  {/* Time filter */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTimeFilter((prev) => (prev === "all" ? "thisMonth" : "all"))
+                    }
+                    className={`rounded-full px-3 py-1.5 text-xs md:px-4 ${
+                      timeFilter === "thisMonth"
+                        ? "bg-[#7B61FF] text-white shadow-sm"
+                        : "bg-white text-slate-700"
+                    }`}
+                  >
+                    {timeFilter === "thisMonth" ? "This month ▾" : "All time ▾"}
                   </button>
                 </div>
 
@@ -655,8 +685,6 @@ export default function BookingsPage() {
                                 key={b.id}
                                 className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
                               >
-                          
-
                                 <td className="px-6 py-3 text-slate-700">
                                   <Link
                                     href={`/pages/vendor/bookings/${b.id}`}
@@ -729,7 +757,7 @@ export default function BookingsPage() {
                                       <option value="cancelled">
                                         {bookingStatusLabel.cancelled}
                                       </option>
-                                    </select>                                  
+                                    </select>
                                   </div>
                                 </td>
 
@@ -818,7 +846,8 @@ export default function BookingsPage() {
                                       {b.bookingCode}
                                     </p>
                                     <p className="text-[11px] text-slate-500">
-                                      {b.dateTimeLabel.split(", ")[1] ?? b.dateTimeLabel}
+                                      {b.dateTimeLabel.split(", ")[1] ??
+                                        b.dateTimeLabel}
                                     </p>
                                   </div>
                                   <Link
