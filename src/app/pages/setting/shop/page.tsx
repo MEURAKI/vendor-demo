@@ -20,7 +20,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import ClipLoader from "react-spinners/ClipLoader";
 
-declare const google: any; // for TS, Google Maps is loaded via <Script>
+declare const google: any;
 
 /* ----------------------------- Types ----------------------------- */
 
@@ -53,7 +53,6 @@ type VendorBusiness = {
   commission_type: string | null;
   commission_rate: number | null;
 
-  // dimensions
   dimensions: string[] | null;
 
   // address / google / tags
@@ -81,6 +80,8 @@ type TabKey = "general" | "fulfilment" | "promos";
 
 /* ---- Promo code types ---- */
 
+type PromoScope = "all" | "product" | "service";
+
 type PromoCode = {
   id: string;
   vendor_id: string;
@@ -93,6 +94,7 @@ type PromoCode = {
   ends_at: string | null;
   max_redemptions: number | null;
   times_redeemed: number;
+  scope: PromoScope;
   created_at: string;
 };
 
@@ -100,12 +102,15 @@ type PromoFormState = {
   code: string;
   description: string;
   discount_type: "percentage" | "fixed";
-  discount_value: string; // keep as string in form
+  discount_value: string; // keep as string in the form, cast on save
   active: boolean;
   starts_at: string;
   ends_at: string;
   max_redemptions: string;
+  scope: PromoScope;
 };
+
+const DEFAULT_PROMO_SCOPE: PromoScope = "all";
 
 /* ---------------------- Simple Pill component ---------------------- */
 
@@ -156,7 +161,6 @@ function ShopSettingsPageInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { successToast, errorToast } = useToast();
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [dimensions, setDimensions] = useState<string[]>([]);
 
   const urlTab = (searchParams.get("tab") as TabKey) || "general";
@@ -169,10 +173,15 @@ function ShopSettingsPageInner() {
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerError, setBannerError] = useState<string | null>(null);
 
+  // Google Places
+  const [placesLoaded, setPlacesLoaded] = useState(false);
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
+
   // Promo codes
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
-  const [promoLoading, setPromoLoading] = useState(true);
+  const [promoLoading, setPromoLoading] = useState(false);
   const [promoSaving, setPromoSaving] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
   const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
   const [promoForm, setPromoForm] = useState<PromoFormState>({
     code: "",
@@ -183,11 +192,8 @@ function ShopSettingsPageInner() {
     starts_at: "",
     ends_at: "",
     max_redemptions: "",
+    scope: DEFAULT_PROMO_SCOPE,
   });
-
-  // Google Places
-  const [placesLoaded, setPlacesLoaded] = useState(false);
-  const addressInputRef = useRef<HTMLInputElement | null>(null);
 
   const DIMENSIONS = [
     "Physical",
@@ -279,16 +285,14 @@ function ShopSettingsPageInner() {
     }
   }
 
-  // Initial load: profile + vendor_business + promo_codes
+  /* ---------------- Initial load: profile + vendor_business + promos ---------------- */
+
   useEffect(() => {
     (async () => {
-      setPromoLoading(true);
-
       const { data: auth } = await supabase.auth.getUser();
       const user = auth.user;
       if (!user) {
         setLoading(false);
-        setPromoLoading(false);
         return;
       }
 
@@ -349,16 +353,13 @@ function ShopSettingsPageInner() {
               ends_at,
               max_redemptions,
               times_redeemed,
+              scope,
               created_at
             `
             )
             .eq("vendor_id", user.id)
             .order("created_at", { ascending: false }),
         ]);
-
-      if (promoErr) {
-        console.error(promoErr);
-      }
 
       const profTyped: ProfileLite = {
         id: user.id,
@@ -406,176 +407,18 @@ function ShopSettingsPageInner() {
       setBioCount(merged.shop_bio?.length || 0);
       setDimensions(merged.dimensions ?? []);
 
-      setPromoCodes((promoRows || []) as PromoCode[]);
+      if (promoErr) {
+        console.error(promoErr);
+      } else if (promoRows) {
+        setPromoCodes(promoRows as PromoCode[]);
+      }
+
       setLoading(false);
-      setPromoLoading(false);
     })();
   }, []);
 
-  /* --------------------- Promo helpers --------------------- */
-
-  function resetPromoForm() {
-    setEditingPromoId(null);
-    setPromoForm({
-      code: "",
-      description: "",
-      discount_type: "percentage",
-      discount_value: "",
-      active: true,
-      starts_at: "",
-      ends_at: "",
-      max_redemptions: "",
-    });
-  }
-
-  function startEditPromo(promo: PromoCode) {
-    setEditingPromoId(promo.id);
-    setPromoForm({
-      code: promo.code,
-      description: promo.description ?? "",
-      discount_type: promo.discount_type,
-      discount_value: promo.discount_value.toString(),
-      active: promo.active,
-      starts_at: promo.starts_at ? promo.starts_at.slice(0, 16) : "",
-      ends_at: promo.ends_at ? promo.ends_at.slice(0, 16) : "",
-      max_redemptions: promo.max_redemptions?.toString() ?? "",
-    });
-  }
-
-  async function savePromo() {
-    if (!vb) return;
-
-    const trimmedCode = promoForm.code.trim().toUpperCase();
-    if (!trimmedCode) {
-      errorToast({
-        title: "Promo code required",
-        description: "Please enter a promo code.",
-      });
-      return;
-    }
-
-    const valueNum = Number(promoForm.discount_value);
-    if (!Number.isFinite(valueNum) || valueNum <= 0) {
-      errorToast({
-        title: "Invalid discount",
-        description: "Discount value must be a positive number.",
-      });
-      return;
-    }
-
-    setPromoSaving(true);
-
-    const payload = {
-      vendor_id: vb.id,
-      code: trimmedCode,
-      description: promoForm.description.trim() || null,
-      discount_type: promoForm.discount_type,
-      discount_value: valueNum,
-      active: promoForm.active,
-      starts_at: promoForm.starts_at
-        ? new Date(promoForm.starts_at).toISOString()
-        : null,
-      ends_at: promoForm.ends_at
-        ? new Date(promoForm.ends_at).toISOString()
-        : null,
-      max_redemptions: promoForm.max_redemptions
-        ? Number(promoForm.max_redemptions)
-        : null,
-    };
-
-    try {
-      if (editingPromoId) {
-        // Update existing
-        const { error } = await supabase
-          .from("promo_codes")
-          .update(payload)
-          .eq("id", editingPromoId)
-          .eq("vendor_id", vb.id);
-
-        if (error) throw error;
-
-        setPromoCodes((prev) =>
-          prev.map((p) =>
-            p.id === editingPromoId ? ({ ...p, ...payload } as PromoCode) : p
-          )
-        );
-
-        successToast({
-          title: "Promo updated",
-          description: `Promo code ${trimmedCode} has been updated.`,
-        });
-      } else {
-        // Create new
-        const { data, error } = await supabase
-          .from("promo_codes")
-          .insert([{ ...payload }])
-          .select(
-            `
-            id,
-            vendor_id,
-            code,
-            description,
-            discount_type,
-            discount_value,
-            active,
-            starts_at,
-            ends_at,
-            max_redemptions,
-            times_redeemed,
-            created_at
-          `
-          )
-          .single();
-
-        if (error) throw error;
-
-        setPromoCodes((prev) => [data as PromoCode, ...prev]);
-
-        successToast({
-          title: "Promo created",
-          description: `Promo code ${trimmedCode} has been added.`,
-        });
-      }
-
-      resetPromoForm();
-    } catch (err) {
-      console.error(err);
-      errorToast({
-        title: "Error",
-        description: "Could not save promo code. Please try again.",
-      });
-    } finally {
-      setPromoSaving(false);
-    }
-  }
-
-  async function togglePromoActive(promo: PromoCode) {
-    try {
-      const { error } = await supabase
-        .from("promo_codes")
-        .update({ active: !promo.active })
-        .eq("id", promo.id)
-        .eq("vendor_id", promo.vendor_id);
-
-      if (error) throw error;
-
-      setPromoCodes((prev) =>
-        prev.map((p) =>
-          p.id === promo.id ? { ...p, active: !p.active } : p
-        )
-      );
-    } catch (err) {
-      console.error(err);
-      errorToast({
-        title: "Error",
-        description: "Could not update promo status.",
-      });
-    }
-  }
-
   /* --------------------- Google Places setup --------------------- */
 
-  // Resolve a pasted / typed address into a specific business place using PlacesService
   function resolveAddressToPlace(address: string) {
     if (!placesLoaded || !address) return;
     if (typeof window === "undefined") return;
@@ -731,7 +574,7 @@ function ShopSettingsPageInner() {
       pickup_postal_code: src.pickup_postal_code,
       delivery_days_note: src.delivery_days_note,
 
-      // dimensions
+      // dimensions as array
       dimensions: dimensions.length ? dimensions : null,
 
       updated_at: new Date().toISOString(),
@@ -794,6 +637,146 @@ function ShopSettingsPageInner() {
     }
   }
 
+  /* ---------------------- Promo helpers ---------------------- */
+
+  function resetPromoForm() {
+    setEditingPromoId(null);
+    setPromoForm({
+      code: "",
+      description: "",
+      discount_type: "percentage",
+      discount_value: "",
+      active: true,
+      starts_at: "",
+      ends_at: "",
+      max_redemptions: "",
+      scope: DEFAULT_PROMO_SCOPE,
+    });
+    setPromoError(null);
+  }
+
+  function handleEditPromo(p: PromoCode) {
+    setEditingPromoId(p.id);
+    setPromoForm({
+      code: p.code,
+      description: p.description ?? "",
+      discount_type: p.discount_type,
+      discount_value: p.discount_value.toString(),
+      active: p.active,
+      starts_at: p.starts_at ? p.starts_at.slice(0, 16) : "",
+      ends_at: p.ends_at ? p.ends_at.slice(0, 16) : "",
+      max_redemptions: p.max_redemptions?.toString() ?? "",
+      scope: p.scope ?? DEFAULT_PROMO_SCOPE,
+    });
+    setPromoError(null);
+  }
+
+  async function handleSavePromo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!vb) return;
+
+    setPromoError(null);
+
+    const trimmedCode = promoForm.code.trim().toUpperCase();
+    if (!trimmedCode) {
+      setPromoError("Promo code cannot be empty.");
+      return;
+    }
+
+    const discountNum = parseFloat(promoForm.discount_value || "0");
+    if (!Number.isFinite(discountNum) || discountNum <= 0) {
+      setPromoError("Enter a valid discount value.");
+      return;
+    }
+
+    const maxRedemptionsNum = promoForm.max_redemptions
+      ? parseInt(promoForm.max_redemptions, 10)
+      : null;
+
+    const payload = {
+      vendor_id: vb.id,
+      code: trimmedCode,
+      description: promoForm.description.trim() || null,
+      discount_type: promoForm.discount_type,
+      discount_value: discountNum,
+      active: promoForm.active,
+      starts_at: promoForm.starts_at
+        ? new Date(promoForm.starts_at).toISOString()
+        : null,
+      ends_at: promoForm.ends_at ? new Date(promoForm.ends_at).toISOString() : null,
+      max_redemptions: maxRedemptionsNum,
+      scope: promoForm.scope || DEFAULT_PROMO_SCOPE,
+    };
+
+    setPromoSaving(true);
+
+    try {
+      if (editingPromoId) {
+        const { error } = await supabase
+          .from("promo_codes")
+          .update(payload)
+          .eq("id", editingPromoId)
+          .eq("vendor_id", vb.id);
+
+        if (error) {
+          console.error(error);
+          setPromoError("Failed to update promo code.");
+          return;
+        }
+
+        setPromoCodes((prev) =>
+          prev.map((p) =>
+            p.id === editingPromoId ? { ...p, ...payload } as PromoCode : p
+          )
+        );
+        successToast({
+          title: "Promo updated",
+          description: "Your promo code has been updated.",
+        });
+      } else {
+        const { data, error } = await supabase
+          .from("promo_codes")
+          .insert({ ...payload, scope: payload.scope })
+          .select(
+            `
+            id,
+            vendor_id,
+            code,
+            description,
+            discount_type,
+            discount_value,
+            active,
+            starts_at,
+            ends_at,
+            max_redemptions,
+            times_redeemed,
+            scope,
+            created_at
+          `
+          )
+          .maybeSingle();
+
+        if (error) {
+          console.error(error);
+          setPromoError("Failed to create promo code.");
+          return;
+        }
+
+        if (data) {
+          setPromoCodes((prev) => [data as PromoCode, ...prev]);
+        }
+        successToast({
+          title: "Promo created",
+          description: "Your promo code has been created.",
+        });
+      }
+
+      resetPromoForm();
+    } finally {
+      setPromoSaving(false);
+    }
+  }
+
   /* ------------------------- Loading state -------------------------- */
 
   if (loading || !vb || !profile) {
@@ -829,7 +812,7 @@ function ShopSettingsPageInner() {
         <SettingsNav />
 
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-5xl px-8 py-10">
+          <div className="mx-auto max-w-5xl px-8 py-10 pb-32">
             <h1 className="text-[28px] font-semibold text-gray-900">Shop Settings</h1>
 
             {/* Tabs (URL-driven) */}
@@ -884,7 +867,7 @@ function ShopSettingsPageInner() {
             {/* GENERAL TAB ------------------------------------------------ */}
             {activeTab === "general" && (
               <form
-                className="mt-8 space-y-12 pb-28"
+                className="mt-8 space-y-12"
                 onSubmit={(e) => {
                   e.preventDefault();
                   save("general");
@@ -946,19 +929,15 @@ function ShopSettingsPageInner() {
                   />
                 </section>
 
-                {/* Shop Address + Google Business Page ID */}
+                {/* Shop Address */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
                       Shop Address
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Paste the exact address from Google (e.g.{" "}
-                      <span className="font-mono text-[11px]">
-                        1 Kim Seng Promenade #02-102/103 Great World City, Singapore
-                        237994
-                      </span>
-                      ) or search and select from suggestions.
+                      Paste the exact address from Google or search and select from
+                      suggestions.
                     </p>
                   </div>
                   <div className="space-y-4">
@@ -980,18 +959,6 @@ function ShopSettingsPageInner() {
                       onBlur={handleAddressBlur}
                       placeholder="Paste or type your full address"
                     />
-
-                    <div className="hidden">
-                      <label className="mb-1 block text-xs text-gray-500">
-                        Google Business Page ID (Filled automatically)
-                      </label>
-                      <input
-                        disabled
-                        className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-gray-900"
-                        value={vb.google_business_page_id ?? ""}
-                        placeholder="Automatically set after selecting / resolving address"
-                      />
-                    </div>
                   </div>
                 </section>
 
@@ -1156,6 +1123,7 @@ function ShopSettingsPageInner() {
                 </section>
                 <div className="border-t border-gray-200" />
 
+                {/* Shop Description / Bio */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
@@ -1186,7 +1154,7 @@ function ShopSettingsPageInner() {
 
                 <div className="border-t border-gray-200" />
 
-                {/* Business #Tags */}
+                {/* Business Tags */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
@@ -1265,7 +1233,7 @@ function ShopSettingsPageInner() {
                 </section>
                 <div className="border-t border-gray-200" />
 
-                {/* Frame & Commission (read-only display) */}
+                {/* Frame & Commission */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">Frame</div>
@@ -1298,23 +1266,21 @@ function ShopSettingsPageInner() {
                 </section>
 
                 {/* Sticky save bar */}
-                <div className="fixed bottom-0 left-0 right-0 z-10 ml-[calc(300px+280px)] bg-transparent">
-                  <div className="mx-auto max-w-5xl px-8 pb-6">
-                    <div className="flex items-center justify-end gap-3 rounded-full border border-gray-200 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur">
-                      <a
-                        href="/pages/setting/business"
-                        className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        Go back without saving
-                      </a>
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
-                      >
-                        {saving ? "Saving…" : "Save"}
-                      </button>
-                    </div>
+                <div className="mt-10 flex justify-end">
+                  <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
+                    <a
+                      href="/pages/setting/business"
+                      className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Go back without saving
+                    </a>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
+                    >
+                      {saving ? "Saving…" : "Save"}
+                    </button>
                   </div>
                 </div>
               </form>
@@ -1323,7 +1289,7 @@ function ShopSettingsPageInner() {
             {/* FULFILMENT TAB -------------------------------------------- */}
             {activeTab === "fulfilment" && (
               <form
-                className="mt-8 space-y-12 pb-28"
+                className="mt-8 space-y-12"
                 onSubmit={(e) => {
                   e.preventDefault();
                   save("fulfilment");
@@ -1527,23 +1493,21 @@ function ShopSettingsPageInner() {
                 </section>
 
                 {/* Sticky save bar */}
-                <div className="fixed bottom-0 left-0 right-0 z-10 ml-[calc(300px+280px)] bg-transparent">
-                  <div className="mx-auto max-w-5xl px-8 pb-6">
-                    <div className="pointer-events-auto flex items-center justify-end gap-3 rounded-full border border-gray-200 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur">
-                      <a
-                        href="/pages/setting/shop"
-                        className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        Go back without saving
-                      </a>
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
-                      >
-                        {saving ? "Saving…" : "Save"}
-                      </button>
-                    </div>
+                <div className="mt-10 flex justify-end">
+                  <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
+                    <a
+                      href="/pages/setting/shop"
+                      className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Go back without saving
+                    </a>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
+                    >
+                      {saving ? "Saving…" : "Save"}
+                    </button>
                   </div>
                 </div>
               </form>
@@ -1551,242 +1515,228 @@ function ShopSettingsPageInner() {
 
             {/* PROMO CODES TAB -------------------------------------------- */}
             {activeTab === "promos" && (
-              <div className="mt-8 pb-20">
-                <div className="grid gap-8 md:grid-cols-[1.4fr_1fr]">
-                  {/* Promo list */}
-                  <section>
-                    <div className="mb-3 flex items-center justify-between">
-                      <h2 className="text-sm font-semibold text-gray-900">
-                        Existing promo codes
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={resetPromoForm}
-                        className="text-xs text-gray-600 hover:text-gray-900"
-                      >
-                        + Add new
-                      </button>
-                    </div>
-
-                    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                      {promoLoading ? (
-                        <div className="flex items-center justify-center py-10 text-sm text-gray-500">
-                          Loading promos…
-                        </div>
-                      ) : promoCodes.length === 0 ? (
-                        <div className="px-4 py-6 text-sm text-gray-500">
-                          No promo codes yet. Click <strong>Add new</strong> to create one.
-                        </div>
-                      ) : (
-                        <table className="min-w-full text-left text-xs">
-                          <thead className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
-                            <tr>
-                              <th className="px-4 py-2">Code</th>
-                              <th className="px-4 py-2">Type</th>
-                              <th className="px-4 py-2">Value</th>
-                              <th className="px-4 py-2">Status</th>
-                              <th className="px-4 py-2">Usage</th>
-                              <th className="px-4 py-2"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {promoCodes.map((p) => (
-                              <tr
-                                key={p.id}
-                                className="border-t border-gray-100 text-[11px] hover:bg-gray-50"
-                              >
-                                <td className="px-4 py-2 font-mono text-xs font-semibold text-gray-900">
-                                  {p.code}
-                                </td>
-                                <td className="px-4 py-2 text-gray-700">
-                                  {p.discount_type === "percentage"
-                                    ? "Percent"
-                                    : "Fixed"}
-                                </td>
-                                <td className="px-4 py-2 text-gray-700">
-                                  {p.discount_type === "percentage"
-                                    ? `${p.discount_value}%`
-                                    : `SGD ${p.discount_value.toFixed(2)}`}
-                                </td>
-                                <td className="px-4 py-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => togglePromoActive(p)}
-                                    className={clsx(
-                                      "rounded-full px-3 py-1 text-[11px] font-medium",
-                                      p.active
-                                        ? "bg-emerald-100 text-emerald-800"
-                                        : "bg-gray-100 text-gray-600"
-                                    )}
-                                  >
-                                    {p.active ? "Active" : "Inactive"}
-                                  </button>
-                                </td>
-                                <td className="px-4 py-2 text-gray-700">
-                                  {p.times_redeemed}
-                                  {p.max_redemptions
-                                    ? ` / ${p.max_redemptions}`
-                                    : ""}
-                                </td>
-                                <td className="px-4 py-2 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditPromo(p)}
-                                    className="rounded-full bg-gray-900 px-3 py-1 text-[11px] font-medium text-white hover:bg-black"
-                                  >
-                                    Edit
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </section>
-
-                  {/* Promo form */}
-                  <section className="rounded-2xl border border-gray-200 bg-white p-5">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h2 className="text-sm font-semibold text-gray-900">
-                        {editingPromoId
-                          ? `Edit promo – ${promoForm.code || ""}`
-                          : "Add new promo code"}
-                      </h2>
-                      {editingPromoId && (
-                        <button
-                          type="button"
-                          className="text-[11px] text-gray-500 hover:text-gray-800"
-                          onClick={resetPromoForm}
-                        >
-                          Cancel edit
-                        </button>
-                      )}
-                    </div>
-                    <p className="mb-4 text-xs text-gray-500">
-                      Create discount codes for campaigns or VIP customers.
-                    </p>
-
-                    <form
-                      className="space-y-4"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        savePromo();
-                      }}
+              <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[1.4fr_minmax(0,1fr)]">
+                {/* Left: list */}
+                <section>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-gray-900">
+                      Existing promo codes
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={resetPromoForm}
+                      className="text-xs text-purple-600 hover:underline"
                     >
+                      + New promo
+                    </button>
+                  </div>
+
+                  {promoCodes.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-xs text-gray-500">
+                      No promo codes yet. Create your first promo on the right.
+                    </div>
+                  )}
+
+                  {promoCodes.length > 0 && (
+                    <div className="space-y-2">
+                      {promoCodes.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleEditPromo(p)}
+                          className={clsx(
+                            "w-full rounded-xl border px-4 py-3 text-left text-xs transition hover:bg-gray-50",
+                            editingPromoId === p.id
+                              ? "border-purple-500 bg-purple-50"
+                              : "border-gray-200 bg-white"
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-[11px] font-semibold text-gray-900">
+                              {p.code}
+                            </span>
+                            <span
+                              className={clsx(
+                                "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                p.active
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-gray-200 text-gray-700"
+                              )}
+                            >
+                              {p.active ? "Active" : "Inactive"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-gray-600">
+                            {p.description || "No description"}
+                          </p>
+                          <p className="mt-1 text-[11px] text-gray-500">
+                            {p.discount_type === "percentage"
+                              ? `${p.discount_value}% off`
+                              : `SGD ${p.discount_value.toFixed(2)} off`}{" "}
+                            · Scope:{" "}
+                            {p.scope === "all"
+                              ? "All orders"
+                              : p.scope === "product"
+                              ? "Products"
+                              : "Services"}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* Right: form */}
+                <section className="rounded-2xl border border-gray-200 bg-white p-5">
+                  <h2 className="text-sm font-semibold text-gray-900">
+                    {editingPromoId ? "Edit promo code" : "Create promo code"}
+                  </h2>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Define discount, scope, validity dates and redemption limits.
+                  </p>
+
+                  {promoError && (
+                    <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                      {promoError}
+                    </div>
+                  )}
+
+                  <form className="mt-4 space-y-4" onSubmit={handleSavePromo}>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-800">
+                        Code
+                      </label>
+                      <input
+                        className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                        value={promoForm.code}
+                        onChange={(e) =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            code: e.target.value.toUpperCase(),
+                          }))
+                        }
+                        placeholder="WELCOME10"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-800">
+                        Description
+                      </label>
+                      <textarea
+                        rows={2}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                        value={promoForm.description}
+                        onChange={(e) =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            description: e.target.value,
+                          }))
+                        }
+                        placeholder="Short internal note / customer-facing description"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-gray-800">
-                          Promo code
+                          Discount type
                         </label>
-                        <input
-                          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                          value={promoForm.code}
+                        <select
+                          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                          value={promoForm.discount_type}
                           onChange={(e) =>
                             setPromoForm((prev) => ({
                               ...prev,
-                              code: e.target.value.toUpperCase(),
+                              discount_type: e.target
+                                .value as PromoFormState["discount_type"],
                             }))
                           }
-                          placeholder="WELCOME10"
-                        />
+                        >
+                          <option value="percentage">Percentage (%)</option>
+                          <option value="fixed">Fixed amount (SGD)</option>
+                        </select>
                       </div>
-
                       <div>
                         <label className="mb-1 block text-xs font-medium text-gray-800">
-                          Description (internal)
+                          Discount value
                         </label>
                         <input
-                          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                          value={promoForm.description}
+                          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                          value={promoForm.discount_value}
                           onChange={(e) =>
                             setPromoForm((prev) => ({
                               ...prev,
-                              description: e.target.value,
+                              discount_value: e.target.value,
                             }))
                           }
-                          placeholder="10% off first order"
+                          placeholder="e.g. 10"
                         />
                       </div>
+                    </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-800">
-                            Discount type
-                          </label>
-                          <select
-                            className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                            value={promoForm.discount_type}
-                            onChange={(e) =>
-                              setPromoForm((prev) => ({
-                                ...prev,
-                                discount_type: e.target
-                                  .value as PromoFormState["discount_type"],
-                              }))
-                            }
-                          >
-                            <option value="percentage">Percentage (%)</option>
-                            <option value="fixed">Fixed amount (SGD)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-800">
-                            Discount value
-                          </label>
-                          <input
-                            className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                            value={promoForm.discount_value}
-                            onChange={(e) =>
-                              setPromoForm((prev) => ({
-                                ...prev,
-                                discount_value: e.target.value,
-                              }))
-                            }
-                            placeholder={promoForm.discount_type === "percentage" ? "10" : "15.00"}
-                          />
-                        </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-800">
+                        Scope
+                      </label>
+                      <select
+                        className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                        value={promoForm.scope}
+                        onChange={(e) =>
+                          setPromoForm((prev) => ({
+                            ...prev,
+                            scope: e.target.value as PromoScope,
+                          }))
+                        }
+                      >
+                        <option value="all">All products &amp; services</option>
+                        <option value="product">Products only</option>
+                        <option value="service">Services only</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-800">
+                          Starts at
+                        </label>
+                        <input
+                          type="datetime-local"
+                          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                          value={promoForm.starts_at}
+                          onChange={(e) =>
+                            setPromoForm((prev) => ({
+                              ...prev,
+                              starts_at: e.target.value,
+                            }))
+                          }
+                        />
                       </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-800">
-                            Starts at
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                            value={promoForm.starts_at}
-                            onChange={(e) =>
-                              setPromoForm((prev) => ({
-                                ...prev,
-                                starts_at: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-800">
-                            Ends at
-                          </label>
-                          <input
-                            type="datetime-local"
-                            className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                            value={promoForm.ends_at}
-                            onChange={(e) =>
-                              setPromoForm((prev) => ({
-                                ...prev,
-                                ends_at: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-800">
+                          Ends at
+                        </label>
+                        <input
+                          type="datetime-local"
+                          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                          value={promoForm.ends_at}
+                          onChange={(e) =>
+                            setPromoForm((prev) => ({
+                              ...prev,
+                              ends_at: e.target.value,
+                            }))
+                          }
+                        />
                       </div>
+                    </div>
 
+                    <div className="grid grid-cols-2 gap-3 items-center">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-gray-800">
                           Max redemptions (optional)
                         </label>
                         <input
-                          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                          className="h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-900 focus:border-purple-500 focus:ring-purple-500"
                           value={promoForm.max_redemptions}
                           onChange={(e) =>
                             setPromoForm((prev) => ({
@@ -1794,50 +1744,49 @@ function ShopSettingsPageInner() {
                               max_redemptions: e.target.value,
                             }))
                           }
-                          placeholder="e.g. 100"
+                          placeholder="e.g. 50"
                         />
                       </div>
+                      <label className="mt-4 flex items-center gap-2 text-xs text-gray-800">
+                        <input
+                          type="checkbox"
+                          checked={promoForm.active}
+                          onChange={(e) =>
+                            setPromoForm((prev) => ({
+                              ...prev,
+                              active: e.target.checked,
+                            }))
+                          }
+                          className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        />
+                        Active
+                      </label>
+                    </div>
 
-                      <div className="flex items-center justify-between pt-2">
-                        <label className="flex items-center gap-2 text-xs text-gray-800">
-                          <input
-                            type="checkbox"
-                            checked={promoForm.active}
-                            onChange={(e) =>
-                              setPromoForm((prev) => ({
-                                ...prev,
-                                active: e.target.checked,
-                              }))
-                            }
-                            className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                          />
-                          Active
-                        </label>
-
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={resetPromoForm}
-                            className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                          >
-                            Clear
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={promoSaving}
-                            className="rounded-full bg-black px-5 py-1.5 text-xs font-medium text-white hover:bg-gray-900 disabled:opacity-60"
-                          >
-                            {promoSaving
-                              ? "Saving…"
-                              : editingPromoId
-                              ? "Save changes"
-                              : "Create promo"}
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  </section>
-                </div>
+                    <div className="mt-4 flex items-center justify-end gap-3">
+                      {editingPromoId && (
+                        <button
+                          type="button"
+                          onClick={resetPromoForm}
+                          className="rounded-full border border-gray-200 bg-white px-4 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Cancel edit
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={promoSaving}
+                        className="rounded-full bg-black px-6 py-2 text-xs font-medium text-white hover:bg-gray-900 disabled:opacity-60"
+                      >
+                        {promoSaving
+                          ? "Saving…"
+                          : editingPromoId
+                          ? "Save changes"
+                          : "Create promo"}
+                      </button>
+                    </div>
+                  </form>
+                </section>
               </div>
             )}
           </div>
