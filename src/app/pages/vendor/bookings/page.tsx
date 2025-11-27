@@ -766,7 +766,7 @@ export default function BookingsPage() {
                                     href={`/pages/vendor/bookings/${b.id}`}
                                     className="inline-flex items-center rounded-full bg-[#EFE6FF] px-4 py-1.5 text-xs font-medium text-slate-800 hover:bg-[#E2D3FF]"
                                   >
-                                    View booking
+                                    View
                                   </Link>
                                 </td>
                               </tr>
