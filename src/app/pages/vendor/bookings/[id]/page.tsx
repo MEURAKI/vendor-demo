@@ -53,6 +53,13 @@ type OrderItemWithOrder = {
 
 type BookingStatus = "confirmed" | "awaiting_payment" | "completed" | "cancelled";
 
+type ServiceBookingRow = {
+  order_item_id: string;
+  total_sessions: number | null;
+  remaining_sessions: number | null;
+  package_label: string | null;
+};
+
 type BookingView = {
   id: string; // order_item id
   bookingCode: string;
@@ -69,9 +76,10 @@ type BookingView = {
   totalLabel: string;
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
-  // NEW: package meta
+  // package meta
   packageLabel: string | null;
   sessionsCount: number | null;
+  remainingSessions: number | null;
 };
 
 const bookingStatusLabel: Record<BookingStatus, string> = {
@@ -312,6 +320,30 @@ export default function BookingDetailPage() {
       const loc = deriveLocationMeta(row.options_snapshot);
       const pkgMeta = extractPackageMeta(row.options_snapshot);
 
+      // try to load service_bookings row for this order_item
+      const { data: sbData } = await supabase
+        .from("service_bookings")
+        .select("order_item_id,total_sessions,remaining_sessions,package_label")
+        .eq("order_item_id", bookingId)
+        .maybeSingle();
+
+      let sessionsCount = pkgMeta.sessionsCount;
+      let packageLabel = pkgMeta.packageLabel;
+      let remainingSessions: number | null = null;
+
+      if (sbData) {
+        const sb = sbData as ServiceBookingRow;
+        if (sb.total_sessions != null && sb.total_sessions > 0) {
+          sessionsCount = sb.total_sessions;
+        }
+        if (sb.remaining_sessions != null && sb.remaining_sessions >= 0) {
+          remainingSessions = sb.remaining_sessions;
+        }
+        if (sb.package_label) {
+          packageLabel = sb.package_label;
+        }
+      }
+
       const mapped: BookingView = {
         id: row.id,
         bookingCode: buildBookingCode(row.id),
@@ -328,16 +360,15 @@ export default function BookingDetailPage() {
         totalLabel: formatCurrencyFromCents(row.line_subtotal_cents),
         orderStatus: order.status,
         paymentStatus: order.payment_status,
-        packageLabel: pkgMeta.packageLabel,
-        sessionsCount: pkgMeta.sessionsCount,
+        packageLabel,
+        sessionsCount,
+        remainingSessions,
       };
 
       setBooking(mapped);
 
-      // initialise session inputs based on package sessions_count
-      const count = pkgMeta.sessionsCount && pkgMeta.sessionsCount > 0
-        ? pkgMeta.sessionsCount
-        : 1;
+      // initialise session inputs based on sessionsCount
+      const count = sessionsCount && sessionsCount > 0 ? sessionsCount : 1;
 
       const initial: SessionInput[] = Array.from({ length: count }, (_, idx) => ({
         id: idx + 1,
@@ -523,7 +554,8 @@ export default function BookingDetailPage() {
 
   function addSessionRow() {
     // package-level max
-    if (booking?.sessionsCount && sessionInputs.length >= booking.sessionsCount) return;
+    if (booking?.sessionsCount && sessionInputs.length >= booking.sessionsCount)
+      return;
 
     setSessionInputs((prev) => [
       ...prev,
@@ -627,11 +659,21 @@ export default function BookingDetailPage() {
                       <span className="font-medium text-slate-700">
                         {booking.packageLabel}
                       </span>{" "}
-                      {booking.sessionsCount
-                        ? `· ${booking.sessionsCount} session${
-                            booking.sessionsCount > 1 ? "s" : ""
-                          }`
-                        : null}
+                      {booking.sessionsCount && (
+                        <>
+                          · {booking.sessionsCount} session
+                          {booking.sessionsCount > 1 ? "s" : ""}
+                          {booking.remainingSessions != null && (
+                            <>
+                              {" "}
+                              ·{" "}
+                              <span className="font-medium">
+                                {booking.remainingSessions} remaining
+                              </span>
+                            </>
+                          )}
+                        </>
+                      )}
                     </p>
                   )}
                 </div>
@@ -850,8 +892,19 @@ export default function BookingDetailPage() {
                       </div>
                     ) : (
                       <div className="space-y-3">
+                        {/* Sessions chip for physical session */}
+                        {booking.sessionsCount && (
+                          <p className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-700">
+                            {booking.sessionsCount} session
+                            {booking.sessionsCount > 1 ? "s" : ""}{" "}
+                            {booking.remainingSessions != null && (
+                              <>· {booking.remainingSessions} remaining</>
+                            )}
+                          </p>
+                        )}
+
                         <div>
-                          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <p className="mb-1 mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Booking code to scan / enter
                           </p>
                           <p className="inline-flex rounded-full bg-slate-900 px-4 py-1.5 text-xs font-mono font-semibold text-white">
@@ -917,11 +970,16 @@ export default function BookingDetailPage() {
                           <dt>Package</dt>
                           <dd className="text-right">
                             {booking.packageLabel}
-                            {booking.sessionsCount
-                              ? ` · ${booking.sessionsCount} session${
-                                  booking.sessionsCount > 1 ? "s" : ""
-                                }`
-                              : ""}
+                            {booking.sessionsCount && (
+                              <>
+                                {" "}
+                                · {booking.sessionsCount} session
+                                {booking.sessionsCount > 1 ? "s" : ""}
+                                {booking.remainingSessions != null && (
+                                  <> · {booking.remainingSessions} remaining</>
+                                )}
+                              </>
+                            )}
                           </dd>
                         </div>
                       )}

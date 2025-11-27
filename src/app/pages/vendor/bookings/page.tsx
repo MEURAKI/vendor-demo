@@ -16,6 +16,12 @@ type Profile = {
   onboarding_completed: boolean;
 };
 
+type ServiceBookingForItem = {
+  order_item_id: string;
+  total_sessions: number;
+  remaining_sessions: number;
+};
+
 type OrderStatus = "placed" | "fulfilled" | "shipped" | "delivered" | "cancelled";
 
 type PaymentStatus = "pending" | "paid" | "refunded" | "failed";
@@ -63,6 +69,8 @@ type BookingRow = {
   totalLabel: string;
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
+  totalSessions: number;
+  remainingSessions: number;
 };
 
 type FilterTab = "all" | "upcoming" | "completed" | "cancelled";
@@ -213,11 +221,34 @@ export default function BookingsPage() {
 
       const typedItems = (itemsData || []) as unknown as OrderItemWithOrder[];
 
+      const orderItemIds = typedItems.map((i) => i.id);
+
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from("service_bookings")
+        .select("order_item_id,total_sessions,remaining_sessions")
+        .in("order_item_id", orderItemIds);
+
+      if (sessionsError) {
+        console.error(sessionsError);
+        // optional: surface error, but don't block the page
+      }
+
+      const sessionsByOrderItem = new Map<string, ServiceBookingForItem>();
+      (sessionsData || []).forEach((sb) => {
+        sessionsByOrderItem.set(sb.order_item_id, sb as ServiceBookingForItem);
+      });
+
+
       const mapped: BookingRow[] = typedItems
         .filter((row) => row.orders && row.orders.vendor_id === userId)
         .map((row) => {
           const order = row.orders!;
           const status = deriveBookingStatus(order);
+
+          const sessionInfo = sessionsByOrderItem.get(row.id);
+          const totalSessions = sessionInfo?.total_sessions ?? 1;
+          const remainingSessions =
+            sessionInfo?.remaining_sessions ?? totalSessions;
 
           return {
             id: row.id,
@@ -233,6 +264,8 @@ export default function BookingsPage() {
             totalLabel: formatCurrencyFromCents(row.line_subtotal_cents),
             orderStatus: order.status,
             paymentStatus: order.payment_status,
+            totalSessions,
+            remainingSessions,
           };
         });
 
@@ -543,6 +576,7 @@ export default function BookingsPage() {
                         <th className="px-6 py-3">Location</th>
                         <th className="px-6 py-3">Status</th>
                         <th className="px-6 py-3">Total</th>
+                        <th className="px-6 py-3">Sessions</th>
                         <th className="px-6 py-3 text-right">Action</th>
                       </tr>
                     </thead>
@@ -587,40 +621,69 @@ export default function BookingsPage() {
                               {b.locationLabel}
                             </td>
 
-                            <td className="px-6 py-3">
-                              <div
-                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${bookingStatusClasses[b.status]}`}
-                              >
-                                <select
-                                  value={b.status}
-                                  disabled={statusSavingId === b.id || statusLocked}
-                                  onChange={(e) =>
-                                    handleBookingStatusChange(
-                                      b.id,
-                                      e.target.value as BookingStatus
-                                    )
-                                  }
-                                  className="cursor-pointer bg-transparent pr-4 text-xs font-medium outline-none"
-                                >
-                                  <option value="confirmed">
-                                    {bookingStatusLabel.confirmed}
-                                  </option>
-                                  <option value="awaiting_payment">
-                                    {bookingStatusLabel.awaiting_payment}
-                                  </option>
-                                  <option value="completed">
-                                    {bookingStatusLabel.completed}
-                                  </option>
-                                  <option value="cancelled">
-                                    {bookingStatusLabel.cancelled}
-                                  </option>
-                                </select>
-                              </div>
-                            </td>
+<td className="px-6 py-3">
+  <div
+    className={`relative inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium ${bookingStatusClasses[b.status]}`}
+  >
+    <select
+      value={b.status}
+      disabled={statusSavingId === b.id || statusLocked}
+      onChange={(e) =>
+        handleBookingStatusChange(b.id, e.target.value as BookingStatus)
+      }
+      className="
+        bg-transparent
+        border-0
+        outline-none
+        pl-0
+        pr-6
+        appearance-none
+        text-xs font-medium
+        cursor-pointer
+        focus:ring-0
+        focus:outline-none
+        text-inherit   /* inherit status color */
+
+        [&::-ms-expand]:hidden  /* hide native arrow (IE/Edge) */
+      "
+      style={{
+        WebkitAppearance: "none",
+        MozAppearance: "none",
+        appearance: "none",
+        color: "inherit",              // inherit text color
+        backgroundColor: "transparent" // no white box
+      }}
+    >
+      <option value="confirmed">{bookingStatusLabel.confirmed}</option>
+      <option value="awaiting_payment">{bookingStatusLabel.awaiting_payment}</option>
+      <option value="completed">{bookingStatusLabel.completed}</option>
+      <option value="cancelled">{bookingStatusLabel.cancelled}</option>
+    </select>
+
+    {/* Custom single arrow */}
+    <svg
+      className="pointer-events-none absolute right-2 h-3 w-3 opacity-60 text-inherit"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  </div>
+</td>
+
+
+
 
                             <td className="px-6 py-3 text-slate-800">
                               {b.totalLabel}
                             </td>
+
+                            <td className="px-6 py-3 text-slate-700">
+  {b.remainingSessions}/{b.totalSessions}
+</td>
+
 
                             <td className="px-6 py-3 text-right">
                               <Link
