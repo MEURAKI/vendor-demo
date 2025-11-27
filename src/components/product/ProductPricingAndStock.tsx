@@ -10,10 +10,10 @@ interface ProductPricingProps {
 
   baseSku: string;
   customSkuEnabled: boolean;
-  customSkuSuffix: string;
+  customSku: string;
   onBaseSkuChange: (v: string) => void;
   onToggleCustomSku: (v: boolean) => void;
-  onCustomSkuSuffixChange: (v: string) => void;
+  onCustomSkuChange: (v: string) => void;
 
   inventory: number | undefined;
   price: number | undefined;
@@ -86,10 +86,10 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
 
     baseSku,
     customSkuEnabled,
-    customSkuSuffix,
+    customSku,
     onBaseSkuChange,
     onToggleCustomSku,
-    onCustomSkuSuffixChange,
+    onCustomSkuChange,
 
     inventory,
     price,
@@ -133,6 +133,8 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
     [discountStart, discountEnd]
   );
 
+  console.log({ customSku });
+
   return (
     <>
       <section className="rounded-2xl border border-[#ECECFB] bg-[#FBFBFE] p-6 md:p-7">
@@ -163,21 +165,22 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
           </div>
 
           <div className="mt-2 grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)]">
+            {/* Auto base SKU (read-only, generated from name on the parent) */}
             <input
               type="text"
               readOnly
               value={baseSku}
               onChange={(e) => onBaseSkuChange(e.target.value.toUpperCase())}
               placeholder="INNERDRIVETM–GRUNGE-TEE"
-              className="rounded-Choose one or more dimensions that best represent your brand focus.2xl border border-gray-200 bg-white px-4 py-2.5 text-sm uppercase tracking-wide text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none"
+              className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm uppercase tracking-wide text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none"
             />
+
+            {/* Full custom SKU (stored as product.custom_sku) */}
             <input
               type="text"
               disabled={!customSkuEnabled}
-              value={customSkuSuffix}
-              onChange={(e) =>
-                onCustomSkuSuffixChange(e.target.value.toUpperCase())
-              }
+              value={customSku}
+              onChange={(e) => onCustomSkuChange(e.target.value.toUpperCase())}
               placeholder="SV-0021-SS"
               className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm uppercase tracking-wide text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none disabled:bg-gray-100"
             />
@@ -237,7 +240,6 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
               <div className="inline-flex rounded-2xl bg-white p-1 shadow-sm">
                 <button
                   type="button"
-                  // disabled={isVariant}
                   onClick={() => toggleDiscountType("fixed")}
                   className={
                     "h-7 w-16 rounded-xl text-xs font-semibold transition " +
@@ -250,7 +252,6 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
                 </button>
                 <button
                   type="button"
-                  // disabled={isVariant}
                   onClick={() => toggleDiscountType("percent")}
                   className={
                     "h-7 w-10 rounded-xl text-xs font-semibold transition " +
@@ -267,7 +268,6 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
                 type="number"
                 step="0.01"
                 min={0}
-                // disabled={discountDisabled}
                 value={discountValue ?? ""}
                 onChange={(e) =>
                   onDiscountValueChange(safeNumber(e.target.value))
@@ -280,12 +280,14 @@ export function ProductPricingAndStock(props: ProductPricingProps) {
             <div className="mt-3 space-y-2">
               <button
                 type="button"
-                // disabled={discountDisabled}
                 onClick={() => setDiscountModalOpen(true)}
                 className={
-                  "flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-[11px] sm:text-xs cursor-not-allowed border-dashed border-gray-200 bg-gray-50 text-gray-400"
-                    
+                  "flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-[11px] sm:text-xs " +
+                  (discountDisabled
+                    ? "cursor-not-allowed border-dashed border-gray-200 bg-gray-50 text-gray-400"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-purple-400")
                 }
+                disabled={discountDisabled}
               >
                 <span>{rangeLabel}</span>
                 <span className="text-lg leading-none text-gray-400">▾</span>

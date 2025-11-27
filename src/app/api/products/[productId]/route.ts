@@ -28,6 +28,7 @@ export async function GET(
         "name",
         "description",
         "base_sku",
+        "custom_sku",
         "is_variant",
         "price_cents",
         "inventory_qty",
@@ -198,6 +199,7 @@ export async function GET(
     name: (product as any).name,
     description: (product as any).description ?? "",
     baseSku: (product as any).base_sku ?? "",
+    customSku: (product as any).custom_sku ?? "",
     isVariant: (product as any).is_variant,
     status: (product as any).status,
     priceCents: (product as any).price_cents,
@@ -241,9 +243,10 @@ export async function PUT(
     .update({
       name: body.name,
       description: body.description,
-      base_sku: body.baseSku,
+      base_sku: body.baseSku,           // 👈 auto / system SKU
+      custom_sku: body.customSku ?? null, // 👈 user-entered SKU (or null)
       is_variant: body.isVariant,
-      price_cents: body.isVariant ? body.priceCents : body.priceCents,
+      price_cents: body.priceCents,     // same value for variant base / simple
       discount_type: body.discount?.type ?? null,
       discount_value: body.discount?.value ?? null,
       discount_start_at: body.discount?.start ?? null,
@@ -502,6 +505,7 @@ export async function PUT(
 
   return NextResponse.json({ ok: true, productId });
 }
+
 
 /**
  * DELETE /api/products/[productId]

@@ -161,6 +161,29 @@ function generateBaseSku(input: string) {
   return slugifySkuPart(input || "PRODUCT");
 }
 
+function computeSkuPayload(
+  name: string,
+  baseSkuInput: string,
+  isCustom: boolean
+) {
+  const autoBase = generateBaseSku(name);
+
+  if (isCustom) {
+    // User typed their own SKU → store it as custom_sku,
+    // but still keep an auto base_sku.
+    return {
+      baseSkuToSave: autoBase,
+      customSkuToSave: baseSkuInput || autoBase,
+    };
+  }
+
+  // Not custom → treat the field as base_sku, and null custom_sku
+  return {
+    baseSkuToSave: baseSkuInput || autoBase,
+    customSkuToSave: null,
+  };
+}
+
 function buildVariantSku(
   baseSku: string,
   index: number,
@@ -262,6 +285,9 @@ export default function EditProductPage({
   const router = useRouter();
   const { productId } = params;
 
+  // optional guard, since you already import it
+  useAuthGuard();
+
   const [loading, setLoading] = useState(true);
 
   // sidebar profile
@@ -273,6 +299,7 @@ export default function EditProductPage({
   const [description, setDescription] = useState("");
   const [baseSku, setBaseSku] = useState("");
   const [isCustomSku, setIsCustomSku] = useState(false);
+  const [customSku, setCustomSku] = useState("");
 
   const [isVariant, setIsVariant] = useState(false);
 
@@ -302,8 +329,6 @@ export default function EditProductPage({
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [showVariantModal, setShowVariantModal] = useState(false);
 
-  const [customSkuEnabled, setCustomSkuEnabled] = useState(false);
-  const [customSkuSuffix, setCustomSkuSuffix] = useState("");
   const [baseVariantPrice, setBaseVariantPrice] =
     useState<number | undefined>(undefined);
 
@@ -404,7 +429,18 @@ export default function EditProductPage({
         // main fields
         setName(data.name ?? "");
         setDescription(data.description ?? "");
-        setBaseSku(data.baseSku ?? generateBaseSku(data.name ?? ""));
+
+        // Choose what to show in the SKU input:
+        // - if customSku exists → show that and mark as custom
+        // - else fall back to baseSku
+        const skuFieldValue =
+          (data.customSku && data.customSku.length > 0
+            ? data.customSku
+            : data.baseSku) ?? generateBaseSku(data.name ?? "");
+
+        setBaseSku(data.baseSku);
+        setCustomSku(data.customSku ?? "");
+        setIsCustomSku(!!data.customSku);
         setIsVariant(!!data.isVariant);
 
         // discount
@@ -423,54 +459,53 @@ export default function EditProductPage({
         }
 
         // pricing / inventory + variants
-        // pricing / inventory + variants
-if (data.isVariant) {
-  // treat product.priceCents as the "base variant price"
-  const basePriceFromServer =
-    typeof data.priceCents === "number" ? data.priceCents / 100 : 0;
+        if (data.isVariant) {
+          // treat product.priceCents as the "base variant price"
+          const basePriceFromServer =
+            typeof data.priceCents === "number" ? data.priceCents / 100 : 0;
 
-  setPrice(basePriceFromServer);            // if you still want price filled
-  setBaseVariantPrice(basePriceFromServer); // ⭐ key: base price comes from product
-  setOriginalBaseVariantPrice(basePriceFromServer);
-  setInventory(undefined);
+          setPrice(basePriceFromServer); // if you still want price filled
+          setBaseVariantPrice(basePriceFromServer); // ⭐ key: base price comes from product
+          setOriginalBaseVariantPrice(basePriceFromServer);
+          setInventory(undefined);
 
-  const loadedVariants: VariantRow[] = (data.variants ?? []).map(
-    (v: any) => ({
-      id: String(v.id),
-      sku: v.sku,
-      price: (v.priceCents ?? 0) / 100,
-      inventory: v.inventoryQty ?? 0,
-      imageUrl: v.imageUrl ?? null,
-      imageFile: null,
-      options: v.options ?? {},
-    })
-  );
-  setVariants(loadedVariants);
+          const loadedVariants: VariantRow[] = (data.variants ?? []).map(
+            (v: any) => ({
+              id: String(v.id),
+              sku: v.sku,
+              price: (v.priceCents ?? 0) / 100,
+              inventory: v.inventoryQty ?? 0,
+              imageUrl: v.imageUrl ?? null,
+              imageFile: null,
+              options: v.options ?? {},
+            })
+          );
+          setVariants(loadedVariants);
 
-  setOptionGroups(
-    (data.optionGroups ?? []).map((g: any) => ({
-      id: String(g.id),
-      name: g.name,
-      kind: g.kind,
-      values: (g.values ?? []).map((v: any) => ({
-        id: String(v.id),
-        label: v.label,
-        colorHex: v.colorHex,
-      })),
-    }))
-  );
-} else {
-  setPrice(
-    typeof data.priceCents === "number"
-      ? data.priceCents / 100
-      : undefined
-  );
-  setInventory(data.inventoryQty ?? undefined);
-  setVariants([]);
-  setOptionGroups([]);
-  setBaseVariantPrice(undefined);
-  setOriginalBaseVariantPrice(undefined);
-}
+          setOptionGroups(
+            (data.optionGroups ?? []).map((g: any) => ({
+              id: String(g.id),
+              name: g.name,
+              kind: g.kind,
+              values: (g.values ?? []).map((v: any) => ({
+                id: String(v.id),
+                label: v.label,
+                colorHex: v.colorHex,
+              })),
+            }))
+          );
+        } else {
+          setPrice(
+            typeof data.priceCents === "number"
+              ? data.priceCents / 100
+              : undefined
+          );
+          setInventory(data.inventoryQty ?? undefined);
+          setVariants([]);
+          setOptionGroups([]);
+          setBaseVariantPrice(undefined);
+          setOriginalBaseVariantPrice(undefined);
+        }
 
         // sections
         const mappedSections: DescriptionSection[] = (data.sections ?? []).map(
@@ -533,10 +568,11 @@ if (data.isVariant) {
     .map((g) => g.kind);
 
   useEffect(() => {
-    if (!isCustomSku && !customSkuEnabled && !loading) {
+    // Only auto-generate when NOT using custom SKU
+    if (!isCustomSku && !customSku && !loading) {
       setBaseSku(generateBaseSku(name));
     }
-  }, [name, isCustomSku, customSkuEnabled, loading]);
+  }, [name, isCustomSku, customSku, loading]);
 
   const canSave =
     name.trim().length > 0 &&
@@ -567,10 +603,7 @@ if (data.isVariant) {
         g.id === groupId
           ? {
               ...g,
-              values: [
-                ...g.values,
-                { id: uuid(), label: `` },
-              ],
+              values: [...g.values, { id: uuid(), label: `` }],
             }
           : g
       )
@@ -650,6 +683,13 @@ if (data.isVariant) {
     applyBasePriceToVariants: boolean
   ) {
     try {
+      // 0) Compute base_sku + custom_sku before sending to API
+      const { baseSkuToSave, customSkuToSave } = computeSkuPayload(
+        name,
+        baseSku,
+        isCustomSku
+      );
+
       // 1) Upload main product image if changed
       let finalProductImageUrl = productImageUrl;
       if (productImageFile && vendorId) {
@@ -701,7 +741,8 @@ if (data.isVariant) {
         status,
         name,
         description,
-        baseSku,
+        baseSku: baseSkuToSave,
+        customSku: customSku,
         isVariant,
         priceCents: isVariant
           ? Math.round((baseVariantPrice ?? price ?? 0) * 100)
@@ -897,11 +938,11 @@ if (data.isVariant) {
                 <ProductPricingAndStock
                   isVariant={isVariant}
                   baseSku={baseSku}
-                  customSkuEnabled={customSkuEnabled}
-                  customSkuSuffix={customSkuSuffix}
+                  customSkuEnabled={isCustomSku}
+                  customSku={customSku}
                   onBaseSkuChange={setBaseSku}
-                  onToggleCustomSku={setCustomSkuEnabled}
-                  onCustomSkuSuffixChange={setCustomSkuSuffix}
+                  onToggleCustomSku={setIsCustomSku}
+                  onCustomSkuChange={setCustomSku}
                   inventory={inventory}
                   price={price}
                   discountType={discountType}
@@ -971,7 +1012,7 @@ if (data.isVariant) {
                       optionGroups,
                       baseSku,
                       defaultPrice,
-                      customSkuEnabled ? customSkuSuffix : undefined
+                      isCustomSku ? customSku : undefined
                     );
                     setVariants(generated);
                     if (generated.length > 0) {
@@ -1096,7 +1137,7 @@ if (data.isVariant) {
                   Update stock, price, and images for each variant.
                 </p>
               </div>
-              <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items.center gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setShowVariantModal(false)}

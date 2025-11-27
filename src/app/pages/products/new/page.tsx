@@ -606,6 +606,7 @@ export default function NewProductPage() {
   const [description, setDescription] = useState("");
   const [baseSku, setBaseSku] = useState("");
   const [isCustomSku, setIsCustomSku] = useState(false);
+  const [customSku, setCustomSku] = useState("");
 
   const [isVariant, setIsVariant] = useState(false);
 
@@ -651,8 +652,6 @@ export default function NewProductPage() {
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [showVariantModal, setShowVariantModal] = useState(false);
 
-  const [customSkuEnabled, setCustomSkuEnabled] = useState(false);
-  const [customSkuSuffix, setCustomSkuSuffix] = useState("");
   const [baseVariantPrice, setBaseVariantPrice] = useState<number | undefined>(
     undefined
   );
@@ -721,10 +720,10 @@ export default function NewProductPage() {
 
   // auto-generate base SKU from name when not using custom overrides
   useEffect(() => {
-    if (!isCustomSku && !customSkuEnabled) {
+    if (!isCustomSku && !isCustomSku) {
       setBaseSku(generateBaseSku(name));
     }
-  }, [name, isCustomSku, customSkuEnabled]);
+  }, [name, isCustomSku, isCustomSku]);
 
   const canSave =
     name.trim().length > 0 &&
@@ -830,130 +829,140 @@ export default function NewProductPage() {
   }
 
   async function handleSave(status: "draft" | "published") {
-    setSubmitAttempted(true);
+  setSubmitAttempted(true);
 
-    // 1) Validate description sections – no empty titles allowed
-    if (!validateDescriptionSections(sections)) {
-      setShowDescriptionErrorModal(true);
-      return;
-    }
-
-    // 2) Validate categories for published products
-    if (status === "published" && categories.length === 0) {
-      setCategoryError("Please add at least one category.");
-      setShowCategoryErrorModal(true);
-      return;
-    } else {
-      setCategoryError(null);
-    }
-
-    if (!canSave) return;
-    if (!vendorId) {
-      alert("You must be logged in as a vendor to save a product.");
-      return;
-    }
-
-    try {
-      let imageUrlToSave = productImageUrl;
-
-      if (productImageFile) {
-        imageUrlToSave = await uploadImageToSupabase(
-          productImageFile,
-          vendorId
-        );
-      }
-
-      // 2) upload gallery images (up to 5)
-      const galleryImageUrls: string[] = [];
-      for (const img of images) {
-        if (img.file) {
-          const url = await uploadImageToSupabase(img.file, vendorId);
-          galleryImageUrls.push(url);
-        } else if (img.url) {
-          // e.g., if editing and already has URL
-          galleryImageUrls.push(img.url);
-        }
-      }
-
-      // 3) (optional) upload variant images if imageFile exists
-      const apiVariants = [];
-      for (const v of variants) {
-        let variantImageUrl = v.imageUrl ?? null;
-        if (v.imageFile) {
-          variantImageUrl = await uploadImageToSupabase(v.imageFile, vendorId);
-        }
-
-        apiVariants.push({
-          sku: v.sku,
-          priceCents: Math.round((v.price ?? 0) * 100),
-          inventoryQty: v.inventory ?? 0,
-          imageUrl: variantImageUrl,
-          optionsJson: v.options ?? {},
-        });
-      }
-
-      // Build wellness with id + name + slug
-      const selectedWellness = wellnessOptions
-        .filter((w) => selectedWellnessIds.includes(w.id))
-        .map((w) => ({
-          id: w.id,
-          name: w.name,
-          slug: w.slug,
-        }));
-
-      // Categories and tags currently only have the name
-      const categoriesPayload = categories.map((name) => ({ name }));
-      const tagsPayload = tags.map((name) => ({ name }));
-
-      const body = {
-        status,
-        vendorId,
-        name,
-        description,
-        baseSku,
-        isVariant,
-        priceCents: isVariant ? Math.round((price ?? 0) * 100) : Math.round((price ?? 0) * 100),
-        inventoryQty: isVariant ? 0 : inventory ?? 0,
-        discount: discountType
-          ? {
-              type: discountType,
-              value: discountValue ?? 0,
-              start: discountStart || null,
-              end: discountEnd || null,
-              applyToVariants: discountAllVariants,
-            }
-          : null,
-        wellnessIds: selectedWellness,
-        categoryIds: categoriesPayload,
-        tags: tagsPayload,
-        sections: sections.map((s, idx) => ({
-          title: s.title,
-          body: s.body,
-          sortOrder: idx,
-        })),
-        productImageUrl: imageUrlToSave, // main image
-        galleryImageUrls, // 1–5 gallery images
-        optionGroups,
-        variants: apiVariants,
-      };
-
-      const res = await fetch("/api/products", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || "Error saving product");
-        return;
-      }
-
-      router.push("/pages/products");
-    } catch (err) {
-      console.error(err);
-      alert("Error uploading image or saving product");
-    }
+  // 1) Validate description sections – no empty titles allowed
+  if (!validateDescriptionSections(sections)) {
+    setShowDescriptionErrorModal(true);
+    return;
   }
+
+  // 2) Validate categories for published products
+  if (status === "published" && categories.length === 0) {
+    setCategoryError("Please add at least one category.");
+    setShowCategoryErrorModal(true);
+    return;
+  } else {
+    setCategoryError(null);
+  }
+
+  if (!canSave) return;
+  if (!vendorId) {
+    alert("You must be logged in as a vendor to save a product.");
+    return;
+  }
+
+  try {
+    let imageUrlToSave = productImageUrl;
+
+    if (productImageFile) {
+      imageUrlToSave = await uploadImageToSupabase(
+        productImageFile,
+        vendorId
+      );
+    }
+
+    // 2) upload gallery images (up to 5)
+    const galleryImageUrls: string[] = [];
+    for (const img of images) {
+      if (img.file) {
+        const url = await uploadImageToSupabase(img.file, vendorId);
+        galleryImageUrls.push(url);
+      } else if (img.url) {
+        galleryImageUrls.push(img.url);
+      }
+    }
+
+    // 3) (optional) upload variant images if imageFile exists
+    const apiVariants = [];
+    for (const v of variants) {
+      let variantImageUrl = v.imageUrl ?? null;
+      if (v.imageFile) {
+        variantImageUrl = await uploadImageToSupabase(v.imageFile, vendorId);
+      }
+
+      apiVariants.push({
+        sku: v.sku,
+        priceCents: Math.round((v.price ?? 0) * 100),
+        inventoryQty: v.inventory ?? 0,
+        imageUrl: variantImageUrl,
+        optionsJson: v.options ?? {},
+      });
+    }
+
+    // Build wellness with id + name + slug
+    const selectedWellness = wellnessOptions
+      .filter((w) => selectedWellnessIds.includes(w.id))
+      .map((w) => ({
+        id: w.id,
+        name: w.name,
+        slug: w.slug,
+      }));
+
+    const categoriesPayload = categories.map((name) => ({ name }));
+    const tagsPayload = tags.map((name) => ({ name }));
+
+    // 🔹 NEW: compute auto base SKU + custom SKU separately
+    const autoBaseSku = generateBaseSku(name);
+    const trimmedBaseSku = baseSku.trim();
+    const customSku =
+      trimmedBaseSku && trimmedBaseSku !== autoBaseSku
+        ? trimmedBaseSku
+        : null;
+
+    const body = {
+      status,
+      vendorId,
+      name,
+      description,
+      baseSku: autoBaseSku,   // always save the auto-generated base SKU
+      customSku,              // save user override in another column
+      isVariant,
+      priceCents: isVariant
+        ? Math.round((price ?? 0) * 100)
+        : Math.round((price ?? 0) * 100),
+      inventoryQty: isVariant ? 0 : inventory ?? 0,
+      discount: discountType
+        ? {
+            type: discountType,
+            value: discountValue ?? 0,
+            start: discountStart || null,
+            end: discountEnd || null,
+            applyToVariants: discountAllVariants,
+          }
+        : null,
+      wellnessIds: selectedWellness,
+      categoryIds: categoriesPayload,
+      tags: tagsPayload,
+      sections: sections.map((s, idx) => ({
+        title: s.title,
+        body: s.body,
+        sortOrder: idx,
+      })),
+      productImageUrl: imageUrlToSave,
+      galleryImageUrls,
+      optionGroups,
+      variants: apiVariants,
+    };
+
+    const res = await fetch("/api/products", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "Error saving product");
+      return;
+    }
+
+    router.push("/pages/products");
+  } catch (err) {
+    console.error(err);
+    alert("Error uploading image or saving product");
+  }
+}
+
 
   const descriptionHasError =
   submitAttempted && !validateDescriptionSections(sections);
@@ -1018,8 +1027,8 @@ export default function NewProductPage() {
                     if (!value) {
                       setOptionGroups([]);
                       setVariants([]);
-                      setCustomSkuEnabled(false);
-                      setCustomSkuSuffix("");
+                      setIsCustomSku(false);
+                      setCustomSku("");
                       setBaseVariantPrice(undefined);
                     }
                   }}
@@ -1044,11 +1053,11 @@ export default function NewProductPage() {
                 <ProductPricingAndStock
                   isVariant={isVariant}
                   baseSku={baseSku}
-                  customSkuEnabled={customSkuEnabled}
-                  customSkuSuffix={customSkuSuffix}
+                  customSkuEnabled={isCustomSku}
+                  customSku={customSku}
                   onBaseSkuChange={setBaseSku}
-                  onToggleCustomSku={setCustomSkuEnabled}
-                  onCustomSkuSuffixChange={setCustomSkuSuffix}
+                  onToggleCustomSku={setIsCustomSku}
+                  onCustomSkuChange={setCustomSku}
                   inventory={inventory}
                   price={price}
                   discountType={discountType}
@@ -1087,8 +1096,8 @@ export default function NewProductPage() {
                     if (!value) {
                       setOptionGroups([]);
                       setVariants([]);
-                      setCustomSkuEnabled(false);
-                      setCustomSkuSuffix("");
+                      setIsCustomSku(false);
+                      setCustomSku("");
                       setBaseVariantPrice(undefined);
                     }
                   }}
@@ -1143,7 +1152,7 @@ export default function NewProductPage() {
                         optionGroups,
                         baseSku,
                         defaultPrice,
-                        customSkuEnabled ? customSkuSuffix : undefined
+                        isCustomSku ? customSku : undefined
                       );
                       setVariants(generated);
                       if (generated.length > 0) {
