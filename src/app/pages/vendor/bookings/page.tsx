@@ -92,7 +92,7 @@ const bookingStatusClasses: Record<BookingStatus, string> = {
 };
 
 function formatCurrencyFromCents(cents: number): string {
-  return `SGD ${(cents / 100).toFixed(2)}`;
+  return `$ ${(cents / 100).toFixed(2)}`;
 }
 
 function buildOrderCode(id: string): string {
@@ -635,7 +635,6 @@ export default function BookingsPage() {
                         <thead>
                           <tr className="border-b border-slate-100 bg-[#EFE6FF] text-xs uppercase tracking-wide text-slate-600">
                             <th className="px-6 py-3">Booking ID</th>
-                            <th className="px-6 py-3">Order</th>
                             <th className="px-6 py-3">Date &amp; time</th>
                             <th className="px-6 py-3">Service</th>
                             <th className="px-6 py-3">Customer</th>
@@ -656,11 +655,7 @@ export default function BookingsPage() {
                                 key={b.id}
                                 className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
                               >
-                                <td className="px-6 py-3 text-slate-800">
-                                  <span className="font-mono text-xs font-semibold">
-                                    {b.bookingCode}
-                                  </span>
-                                </td>
+                          
 
                                 <td className="px-6 py-3 text-slate-700">
                                   <Link
@@ -734,22 +729,7 @@ export default function BookingsPage() {
                                       <option value="cancelled">
                                         {bookingStatusLabel.cancelled}
                                       </option>
-                                    </select>
-
-                                    {/* Custom single arrow */}
-                                    <svg
-                                      className="pointer-events-none absolute right-2 h-3 w-3 opacity-60 text-inherit"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M19 9l-7 7-7-7"
-                                      />
-                                    </svg>
+                                    </select>                                  
                                   </div>
                                 </td>
 
