@@ -430,6 +430,22 @@ export default function BookingDetailPage() {
 
     // Guard: you can't mark as completed unless requirements are met
     if (!opts?.bypassChecks && newStatus === "completed") {
+      const multiSessions =
+        booking.sessionsCount != null && booking.sessionsCount > 1;
+      const remainingForLock = multiSessions
+        ? booking.remainingSessions ??
+          booking.sessionsCount ??
+          0
+        : 0;
+      const hasRemainingSessions = multiSessions && remainingForLock > 0;
+
+      if (hasRemainingSessions) {
+        setError(
+          "You can only mark this booking as completed after all sessions are fulfilled."
+        );
+        return;
+      }
+
       if (booking.isOnline) {
         const hasAnyLink = sessionInputs.some((s) => s.url.trim().length > 0);
         if (!hasAnyLink) {
@@ -585,9 +601,7 @@ export default function BookingDetailPage() {
         return;
       }
 
-      setEmailFeedback(
-        `Link for ${label} sent to ${booking.customerEmail}.`
-      );
+      setEmailFeedback(`Link for ${label} sent to ${booking.customerEmail}.`);
     } finally {
       setSendingEmail(false);
     }
@@ -798,6 +812,15 @@ export default function BookingDetailPage() {
         })()
       : null;
 
+  // UI helper flags for completion locking
+  const multiSessions =
+    booking.sessionsCount != null && booking.sessionsCount > 1;
+  const remainingForLock = multiSessions
+    ? booking.remainingSessions ?? booking.sessionsCount ?? 0
+    : 0;
+  const hasRemainingSessions = multiSessions && remainingForLock > 0;
+  const canManuallyComplete = !hasRemainingSessions;
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
@@ -875,7 +898,10 @@ export default function BookingDetailPage() {
                       >
                         <option value="confirmed">Confirmed</option>
                         <option value="awaiting_payment">Awaiting payment</option>
-                        <option value="completed">Completed</option>
+                        {/* Completed only visible when all sessions fulfilled or already completed */}
+                        {(booking.status === "completed" || canManuallyComplete) && (
+                          <option value="completed">Completed</option>
+                        )}
                         <option value="cancelled">Cancelled</option>
                       </select>
                     </div>
@@ -886,6 +912,12 @@ export default function BookingDetailPage() {
                           {bookingStatusLabel[booking.status].toLowerCase()}
                         </span>
                         .
+                      </span>
+                    )}
+                    {!statusLocked && hasRemainingSessions && (
+                      <span className="text-[11px] text-slate-400">
+                        Completion will be available after all{" "}
+                        {booking.sessionsCount} sessions are fulfilled.
                       </span>
                     )}
                   </div>
@@ -1071,14 +1103,17 @@ export default function BookingDetailPage() {
                             {sendingEmail ? "Sending…" : "Send link(s) to customer"}
                           </button>
 
-                          <button
-                            type="button"
-                            disabled={statusLocked}
-                            onClick={() => updateBookingStatus("completed")}
-                            className="rounded-full bg-black px-5 py-2.5 text-xs font-medium text-white disabled:opacity-40"
-                          >
-                            Mark as completed
-                          </button>
+                          {/* Only allow manual completion when all sessions fulfilled */}
+                          {canManuallyComplete && (
+                            <button
+                              type="button"
+                              disabled={statusLocked}
+                              onClick={() => updateBookingStatus("completed")}
+                              className="rounded-full bg-black px-5 py-2.5 text-xs font-medium text-white disabled:opacity-40"
+                            >
+                              Mark as completed
+                            </button>
+                          )}
                         </div>
 
                         {emailFeedback && (
