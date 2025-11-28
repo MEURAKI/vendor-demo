@@ -547,14 +547,29 @@ export default function BookingsPage() {
               </div>
 
               {/* Search */}
-              <div className="mb-4 rounded-full bg-white px-3 py-2 shadow-sm md:px-4">
-                <input
-                  className="w-full bg-transparent text-xs outline-none placeholder:text-slate-400 md:text-sm"
-                  placeholder="Search by customer, service, booking ID, or order ID"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
+<div className="mb-4 w-full rounded-full border border-[#7B61FF] bg-white px-4 py-2 shadow-sm">
+  <div className="flex items-center gap-2">
+    {/* search icon */}
+    <svg
+      className="h-4 w-4 text-[#7B61FF]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <line x1="16.5" y1="16.5" x2="21" y2="21" />
+    </svg>
+
+    <input
+      className="w-full border-none bg-transparent text-xs text-gray-700 placeholder:text-slate-400 focus:outline-none focus:ring-0 md:text-sm"
+      placeholder="Search by customer, service, booking ID, or order ID"
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+    />
+  </div>
+</div>
+
 
               {/* Error banner (non-fatal) */}
               {error && rows.length > 0 && (

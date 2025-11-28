@@ -59,6 +59,7 @@ type ServiceBookingRow = {
   total_sessions: number | null;
   remaining_sessions: number | null;
   package_label: string | null;
+  internal_notes: string | null;
 };
 
 type BookingView = {
@@ -140,9 +141,9 @@ function deriveLocationMeta(
 
   if (optionsSnapshot && typeof optionsSnapshot === "object") {
     locationValue =
-      optionsSnapshot.location_type ||
-      optionsSnapshot.location ||
-      optionsSnapshot.venue ||
+      (optionsSnapshot as any).location_type ||
+      (optionsSnapshot as any).location ||
+      (optionsSnapshot as any).venue ||
       null;
   }
 
@@ -253,6 +254,11 @@ export default function BookingDetailPage() {
   const [checkinError, setCheckinError] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
 
+  // internal notes
+  const [internalNotes, setInternalNotes] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesFeedback, setNotesFeedback] = useState<string | null>(null);
+
   useEffect(() => {
     if (!bookingId) return;
 
@@ -332,16 +338,19 @@ export default function BookingDetailPage() {
       const loc = deriveLocationMeta(row.options_snapshot);
       const pkgMeta = extractPackageMeta(row.options_snapshot);
 
-      // try to load service_bookings row for this order_item
+      // try to load service_bookings row for this order_item (incl internal_notes)
       const { data: sbData } = await supabase
         .from("service_bookings")
-        .select("order_item_id,total_sessions,remaining_sessions,package_label")
+        .select(
+          "order_item_id,total_sessions,remaining_sessions,package_label,internal_notes"
+        )
         .eq("order_item_id", bookingId)
         .maybeSingle();
 
       let sessionsCount = pkgMeta.sessionsCount;
       let packageLabel = pkgMeta.packageLabel;
       let remainingSessions: number | null = null;
+      let notes: string | null = null;
 
       if (sbData) {
         const sb = sbData as ServiceBookingRow;
@@ -354,6 +363,7 @@ export default function BookingDetailPage() {
         if (sb.package_label) {
           packageLabel = sb.package_label;
         }
+        notes = sb.internal_notes;
       }
 
       const mapped: BookingView = {
@@ -378,6 +388,7 @@ export default function BookingDetailPage() {
       };
 
       setBooking(mapped);
+      setInternalNotes(notes || "");
 
       // initialise session inputs based on sessionsCount
       const count = sessionsCount && sessionsCount > 0 ? sessionsCount : 1;
@@ -489,16 +500,15 @@ export default function BookingDetailPage() {
     }
   }
 
-  // Online meeting email – send one email per session link
+  // Online meeting email – send ONE email containing all non-empty session links
   async function handleSendMeetingEmail() {
     if (!booking || !booking.customerEmail) return;
 
     // Clean + validate sessions (drop empty links)
     const cleaned = sessionInputs
       .map((s) => ({
-        label: s.label.trim(),
+        label: s.label.trim() || undefined,
         url: s.url.trim(),
-        time: s.time.trim(),
       }))
       .filter((s) => s.url.length > 0);
 
@@ -512,25 +522,22 @@ export default function BookingDetailPage() {
     setError(null);
 
     try {
-      // One API call per session → separate emails
-      for (const session of cleaned) {
-        const res = await fetch("/api/vendor/bookings/send-session-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orderId: booking.orderId,
-            customer_email: booking.customerEmail,
-            customer_name: booking.customerName,
-            session, // { label, time, url }
-          }),
-        });
+      const res = await fetch("/api/vendor/bookings/send-session-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: booking.orderId,
+          customer_email: booking.customerEmail,
+          customer_name: booking.customerName,
+          sessions: cleaned,
+        }),
+      });
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          console.error("send-session-email failed", data);
-          setError(data?.error || "Failed to send one or more session emails.");
-          return;
-        }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error("send-session-email failed", data);
+        setError(data?.error || "Failed to send session email.");
+        return;
       }
 
       setEmailFeedback(
@@ -543,11 +550,56 @@ export default function BookingDetailPage() {
     }
   }
 
+  // Send email for a single session row
+  async function handleSendSingleSessionEmail(session: SessionInput, index: number) {
+    if (!booking || !booking.customerEmail) return;
+
+    const url = session.url.trim();
+    const label = session.label.trim() || `Session ${index + 1}`;
+
+    if (!url) {
+      setError("Please add a meeting link before emailing this session.");
+      return;
+    }
+
+    setSendingEmail(true);
+    setEmailFeedback(null);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/vendor/bookings/send-session-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: booking.orderId,
+          customer_email: booking.customerEmail,
+          customer_name: booking.customerName,
+          sessions: [{ label, url }],
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error("send-single-session-email failed", data);
+        setError(data?.error || "Failed to send this session email.");
+        return;
+      }
+
+      setEmailFeedback(
+        `Link for ${label} sent to ${booking.customerEmail}.`
+      );
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
   async function handleCheckinWithCode() {
     if (!booking) return;
+
     setCheckinError(null);
     setError(null);
 
+    // normalise codes (strip spaces / dashes) and compare
     const expected = booking.bookingCode.replace(/[^A-Z0-9]/g, "").toUpperCase();
     const entered = codeInput.replace(/[^A-Z0-9]/g, "").toUpperCase();
 
@@ -560,12 +612,84 @@ export default function BookingDetailPage() {
       return;
     }
 
-    // Valid → mark as completed (bypass guards since we validated here)
+    // already completed / cancelled? nothing to do
+    if (booking.status === "completed" || booking.status === "cancelled") {
+      setCheckinError("This booking is already closed.");
+      return;
+    }
+
     setCheckingIn(true);
     try {
-      await updateBookingStatus("completed", { bypassChecks: true });
+      const hasMultipleSessions = (booking.sessionsCount ?? 1) > 1;
+
+      if (hasMultipleSessions) {
+        const total = booking.sessionsCount!;
+        const currentRemaining =
+          booking.remainingSessions != null ? booking.remainingSessions : total;
+
+        if (currentRemaining <= 0) {
+          setCheckinError("All sessions are already completed.");
+          return;
+        }
+
+        const newRemaining = currentRemaining - 1;
+
+        // update service_bookings.remaining_sessions
+        const { error: sbError } = await supabase
+          .from("service_bookings")
+          .update({ remaining_sessions: newRemaining })
+          .eq("order_item_id", booking.id);
+
+        if (sbError) {
+          console.error("Failed to update remaining sessions", sbError);
+          setCheckinError("Failed to update remaining sessions. Please try again.");
+          return;
+        }
+
+        // update local state so UI chips + 'x remaining' refresh
+        setBooking((prev) =>
+          prev
+            ? {
+                ...prev,
+                remainingSessions: newRemaining,
+              }
+            : prev
+        );
+
+        // if it was the last session, mark booking completed
+        if (newRemaining === 0) {
+          await updateBookingStatus("completed", { bypassChecks: true });
+        }
+      } else {
+        // single-session physical booking → just complete
+        await updateBookingStatus("completed", { bypassChecks: true });
+      }
     } finally {
       setCheckingIn(false);
+    }
+  }
+
+  async function handleSaveNotes() {
+    if (!booking) return;
+    setNotesFeedback(null);
+    setError(null);
+    setSavingNotes(true);
+
+    try {
+      const { error: sbError } = await supabase
+        .from("service_bookings")
+        .update({ internal_notes: internalNotes })
+        .eq("order_item_id", booking.id);
+
+      if (sbError) {
+        console.error("Failed to save notes", sbError);
+        setError("Failed to save internal notes. Please try again.");
+        return;
+      }
+
+      setNotesFeedback("Notes saved.");
+    } finally {
+      setSavingNotes(false);
     }
   }
 
@@ -691,7 +815,7 @@ export default function BookingDetailPage() {
                   href={`/pages/vendor/orders/${booking.orderId}`}
                   className="text-xs font-medium text-[#7B61FF] underline-offset-2 hover:underline"
                 >
-                  View order {booking.orderCode}
+                  View product order
                 </Link>
               </div>
 
@@ -837,12 +961,15 @@ export default function BookingDetailPage() {
                         {/* Multiple session blocks */}
                         <div className="space-y-5">
                           {sessionInputs.map((row, idx) => (
-                            <div key={row.id} className="space-y-3 rounded-3xl bg-slate-50 p-4">
+                            <div
+                              key={row.id}
+                              className="space-y-3 rounded-3xl bg-slate-50 p-4"
+                            >
                               <p className="border-b border-indigo-100 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                 SESSION {idx + 1} DETAILS
                               </p>
 
-                              <div className="grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,1.4fr)_auto]">
+                              <div className="grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1.2fr)]">
                                 <div>
                                   <label className="mb-1 block text-xs font-medium text-slate-700">
                                     Session label
@@ -888,14 +1015,29 @@ export default function BookingDetailPage() {
                                     }
                                   />
                                 </div>
-                                <div className="flex items-end justify-end">
+                                <div className="flex flex-col items-end justify-end gap-2">
                                   <button
                                     type="button"
-                                    className="rounded-full bg-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-40"
+                                    className="rounded-full bg-[#7B61FF] px-3 py-1.5 text-[11px] font-medium text-white shadow-sm disabled:opacity-50"
+                                    disabled={
+                                      !booking.customerEmail ||
+                                      statusLocked ||
+                                      sendingEmail ||
+                                      !row.url.trim()
+                                    }
+                                    onClick={() =>
+                                      handleSendSingleSessionEmail(row, idx)
+                                    }
+                                  >
+                                    Email session
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:underline disabled:opacity-40"
                                     onClick={() => removeSessionRow(row.id)}
                                     disabled={sessionInputs.length === 1}
                                   >
-                                    Remove
+                                    Remove row
                                   </button>
                                 </div>
                               </div>
@@ -1024,7 +1166,7 @@ export default function BookingDetailPage() {
                   </div>
                 </div>
 
-                {/* RIGHT COLUMN – quick summary */}
+                {/* RIGHT COLUMN – summary + notes */}
                 <div className="space-y-5">
                   {/* Summary card */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
@@ -1073,12 +1215,11 @@ export default function BookingDetailPage() {
                     </dl>
 
                     <div className="mt-4 space-y-1 text-xs text-slate-500">
-                      <p>Order status: {booking.orderStatus}</p>
                       <p>Payment status: {booking.paymentStatus}</p>
                     </div>
                   </div>
 
-                  {/* Notes stub */}
+                  {/* Notes */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
                     <h2 className="mb-2 text-base font-semibold text-slate-900">
                       Internal notes
@@ -1089,11 +1230,23 @@ export default function BookingDetailPage() {
                     </p>
                     <textarea
                       className="h-24 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                      placeholder="Wire this up to an order_notes table or column when you're ready."
+                      placeholder="eg. Client prefers softer music, knee sensitivity, etc."
+                      value={internalNotes}
+                      onChange={(e) => setInternalNotes(e.target.value)}
                     />
-                    <div className="mt-3 flex justify-end">
-                      <button className="rounded-full bg-slate-900 px-5 py-2.5 text-xs font-medium text-white hover:bg-black">
-                        Save note
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      {notesFeedback && (
+                        <span className="text-[11px] text-emerald-700">
+                          {notesFeedback}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSaveNotes}
+                        disabled={savingNotes}
+                        className="ml-auto rounded-full bg-slate-900 px-5 py-2.5 text-xs font-medium text-white hover:bg-black disabled:opacity-40"
+                      >
+                        {savingNotes ? "Saving…" : "Save note"}
                       </button>
                     </div>
                   </div>
