@@ -45,6 +45,9 @@ type OrderRow = {
   fulfilmentMethod: string | null;
 };
 
+// NEW: tabs type
+type FulfilmentTab = "all" | "delivery" | "pickup";
+
 /* ---------- Helpers ---------- */
 
 function formatMoneyFromCents(cents: number) {
@@ -76,6 +79,9 @@ export default function DeliveryOrdersPage() {
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+
+  // NEW: top tab state
+  const [fulfilmentTab, setFulfilmentTab] = useState<FulfilmentTab>("all");
 
   // date filter (yyyy-mm-dd)
   const [dateFrom, setDateFrom] = useState<string | "">("");
@@ -125,7 +131,7 @@ export default function DeliveryOrdersPage() {
         data: { session },
       } = await supabase.auth.getSession();
 
-      // Let the API return all vendor orders; we’ll filter to delivery here
+      // Let the API return all vendor orders; we’ll filter by fulfilment in the UI
       const res = await fetch("/api/vendor/orders", {
         headers: {
           Authorization: session?.access_token
@@ -143,22 +149,17 @@ export default function DeliveryOrdersPage() {
       const mapped: OrderRow[] = (data.orders ?? data ?? []).map(
         (o: any): OrderRow => ({
           id: String(o.id),
-          // you can swap this for a real order number once you have it
           orderNumber: o.order_number ?? `ORD-${String(o.id).slice(0, 8)}`,
-          customerName:
-            o.contact_name ??
-            o.customer_name ??
-            "Guest",
+          customerName: o.contact_name ?? o.customer_name ?? "Guest",
           status: o.status ?? "pending",
           order_items: o.order_items ?? [],
-          totalCount: o.order_items?.length  ?? o.order_items?.length ?? 0,
+          totalCount:
+            o.order_items?.length ?? o.order_items?.length ?? 0,
           totalCents:
             o.total_cents ?? (o.subtotal_cents ?? 0) + (o.shipping_cents ?? 0),
           createdAt: o.created_at ?? o.createdAt ?? "",
-          // if you have items on the order, map their length here instead of 0
           itemsCount: o.items_count ?? o.itemsCount ?? 0,
-          fulfilmentMethod:
-            o.fulfilment_method ?? o.fulfilmentMethod ?? null,
+          fulfilmentMethod: o.fulfilment_method ?? o.fulfilmentMethod ?? null,
         })
       );
 
@@ -188,12 +189,19 @@ export default function DeliveryOrdersPage() {
   /* ---------- Filters & pagination ---------- */
 
   const filteredOrders = orders
-    // Delivery-only: just keep delivery orders on this page
-    .filter(
-      (o) =>
-        !o.fulfilmentMethod ||
-        o.fulfilmentMethod === "standard_delivery"
-    )
+    // NEW: fulfilment-tab filter
+    .filter((o) => {
+      if (fulfilmentTab === "delivery") {
+        // change "standard_delivery" if your DB uses another string
+        return o.fulfilmentMethod === "standard_delivery";
+      }
+      if (fulfilmentTab === "pickup") {
+        // change "pickup" to whatever you use, e.g. "self_pickup"
+        return o.fulfilmentMethod === "pickup";
+      }
+      // "all"
+      return true;
+    })
     .filter((o) => {
       const term = search.toLowerCase().trim();
       const matchesSearch =
@@ -220,16 +228,10 @@ export default function DeliveryOrdersPage() {
       return matchesSearch && matchesDate;
     });
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredOrders.length / pageSize)
-  );
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * pageSize;
-  const currentRows = filteredOrders.slice(
-    startIndex,
-    startIndex + pageSize
-  );
+  const currentRows = filteredOrders.slice(startIndex, startIndex + pageSize);
   const fromItem = filteredOrders.length === 0 ? 0 : startIndex + 1;
   const toItem = startIndex + currentRows.length;
 
@@ -274,9 +276,7 @@ export default function DeliveryOrdersPage() {
       // Optimistic local update
       setOrders((prev) =>
         prev.map((o) =>
-          selectedOrderIds.has(o.id)
-            ? { ...o, status: newStatus }
-            : o
+          selectedOrderIds.has(o.id) ? { ...o, status: newStatus } : o
         )
       );
       setSelectedOrderIds(new Set());
@@ -318,17 +318,42 @@ export default function DeliveryOrdersPage() {
           {/* Top bar */}
           <div className="sticky top-0 z-30 border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 md:px-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-3">
+              <div className="flex items-start gap-3">
                 <div className="flex flex-col">
                   <h1 className="text-lg font-semibold text-[#1B1529] md:text-xl">
-                    Delivery Orders
+                    Orders
                   </h1>
-                  <span className="mt-1 inline-flex w-max items-center rounded-full bg-[#16111F] px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#E4D9FF]">
-                    Delivery only
-                  </span>
+
+                  {/* Tabs: All | Delivery | Pickup */}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {[
+                      { id: "all", label: "All" as const },
+                      { id: "delivery", label: "Delivery" as const },
+                      { id: "pickup", label: "Pickup" as const },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => {
+                          setFulfilmentTab(tab.id as FulfilmentTab);
+                          setCurrentPage(1);
+                        }}
+                        className={clsx(
+                          "rounded-full px-4 py-1.5 text-xs font-semibold transition",
+                          fulfilmentTab === tab.id
+                            ? "bg-[#7C3AED] text-white shadow-sm"
+                            : "bg-white text-[#3B3355] border border-[#E4D7FF] hover:bg-[#F4F0FF]"
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <span className="inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
-                  {orders.length}
+
+                {/* Count badge (using filtered count so it reflects tab & filters) */}
+                <span className="mt-2 inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
+                  {filteredOrders.length}
                 </span>
               </div>
 
@@ -466,7 +491,7 @@ export default function DeliveryOrdersPage() {
           {/* Body */}
           <div className="flex-1 overflow-auto p-4 md:p-6">
             <div className="min-h-0 overflow-auto rounded-2xl border border-[#ECECFB] bg-white">
-              <div className="w-full  overflow-x-auto">
+              <div className="w-full overflow-x-auto">
                 <table className="min-w-[880px] w-full text-xs table-fixed">
                   <thead className="sticky top-0 z-20 bg-[#F6F5FF] text-[11px] font-semibold text-gray-500 shadow-sm">
                     <tr>
@@ -511,13 +536,15 @@ export default function DeliveryOrdersPage() {
                           colSpan={8}
                           className="px-4 py-16 text-center text-xs text-gray-500"
                         >
-                          No delivery orders found.
+                          No orders found.
                         </td>
                       </tr>
                     ) : (
                       currentRows.map((o, idx) => {
                         const isSelected = selectedOrderIds.has(o.id);
-                        const status = String(o.status) as OrderStatus | string;
+                        const status = String(o.status) as
+                          | OrderStatus
+                          | string;
 
                         return (
                           <tr
@@ -583,7 +610,9 @@ export default function DeliveryOrdersPage() {
                               <button
                                 className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-[#18171E]"
                                 onClick={() =>
-                                  router.push(`/pages/vendor/orders/${o.id}`)
+                                  router.push(
+                                    `/pages/vendor/orders/${o.id}`
+                                  )
                                 }
                               >
                                 View
@@ -595,7 +624,7 @@ export default function DeliveryOrdersPage() {
                     )}
                   </tbody>
                 </table>
-                </div>
+              </div>
             </div>
 
             {/* Pagination */}

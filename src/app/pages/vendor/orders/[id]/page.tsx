@@ -55,6 +55,9 @@ type Order = {
   payment_status: "pending" | "paid" | "refunded" | "failed";
   created_at: string;
   updated_at: string;
+
+  // NEW – internal notes column on orders
+  internal_note?: string | null;
 };
 
 type OrderItemLineType = "product" | "bundle" | "service";
@@ -304,6 +307,10 @@ export default function OrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [itemsModalOpen, setItemsModalOpen] = useState(false);
 
+  // NEW – internal notes
+  const [internalNote, setInternalNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
   // more actions dropdown
   const [actionsOpen, setActionsOpen] = useState(false);
 
@@ -377,6 +384,7 @@ export default function OrderDetailPage() {
       }
 
       setOrder(typedOrder);
+      setInternalNote(typedOrder.internal_note ?? ""); // NEW
 
       // Load product-only items via API
       const itemsRes = await fetch(`/api/vendor/orders/${orderId}/product-items`, {
@@ -504,10 +512,22 @@ export default function OrderDetailPage() {
               }
             : prev
         );
-        setEditingShipment(false); // exit edit mode after save
       }
     } finally {
       setSavingShipment(false);
+    }
+  }
+
+  // NEW – single black button behaviour
+  async function handleToggleShipmentEdit() {
+    if (!order || order.status === "delivered") return;
+
+    if (editingShipment) {
+      // finishing → save
+      await handleSaveShipment();
+      setEditingShipment(false);
+    } else {
+      setEditingShipment(true);
     }
   }
 
@@ -783,6 +803,32 @@ export default function OrderDetailPage() {
     window.open(url, "_blank");
   }
 
+  // NEW – save internal note
+  async function handleSaveInternalNote() {
+    if (!order) return;
+    setSavingNote(true);
+    setError(null);
+
+    try {
+      const { data, error: updateError } = await supabase
+        .from("orders")
+        .update({ internal_note: internalNote || null })
+        .eq("id", order.id)
+        .select("*")
+        .maybeSingle();
+
+      if (updateError || !data) {
+        setError("Failed to save internal note.");
+        setSavingNote(false);
+        return;
+      }
+
+      setOrder(data as Order);
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
@@ -910,6 +956,10 @@ export default function OrderDetailPage() {
   const steps = timeline;
   const firstNotDoneIndex = steps.findIndex((s) => !s.done);
   const currentStepIndex = firstNotDoneIndex === -1 ? steps.length - 1 : firstNotDoneIndex;
+
+  // NEW – single thick progress bar behind the steps
+  const progressPercent =
+    steps.length > 1 ? (currentStepIndex / (steps.length - 1)) * 100 : 0;
 
   // status select color
   const statusBgClass =
@@ -1040,45 +1090,42 @@ export default function OrderDetailPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div className="flex flex-1 items-center justify-between">
-                    {steps.map((step, idx, arr) => {
-                      const isCurrent = idx === currentStepIndex;
-                      const isDone = step.done && idx < currentStepIndex;
+                <div className="relative mt-2 flex flex-1 items-center justify-between">
+                  {/* background track */}
+                  <div className="absolute left-4 right-4 top-4 h-2 rounded-full bg-slate-200" />
+                  {/* progress */}
+                  <div
+                    className="absolute left-4 top-4 h-2 rounded-full bg-[#7B61FF] transition-all"
+                    style={{ width: `${progressPercent}%` }}
+                  />
 
-                      const circleBase =
-                        "flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-colors";
+                  {/* steps */}
+                  {steps.map((step, idx) => {
+                    const isCurrent = idx === currentStepIndex;
+                    const isDone = idx < currentStepIndex;
 
-                      const circleClass = isCurrent
-                        ? "bg-black text-white"
-                        : isDone
-                        ? "bg-[#7B61FF] text-white"
-                        : "bg-slate-200 text-slate-500";
+                    const circleBase =
+                      "flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-colors";
 
-                      const underlineClass =
-                        isDone || isCurrent ? "bg-[#7B61FF]" : "bg-slate-200";
+                    const circleClass = isCurrent
+                      ? "bg-black text-white"
+                      : isDone
+                      ? "bg-[#7B61FF] text-white"
+                      : "bg-slate-200 text-slate-500";
 
-                      return (
-                        <div key={step.label} className="flex flex-1 items-center">
-                          <div className="flex flex-col items-center">
-                            <div className={`${circleBase} ${circleClass}`}>
-                              {isDone ? "✓" : idx + 1}
-                            </div>
-                            <div className="mt-1 text-xs font-medium text-slate-700">
-                              {step.label}
-                            </div>
-                            <div className="text-[11px] text-slate-400">
-                              {step.date}
-                            </div>
-                            <div className={`mt-2 h-0.5 w-12 rounded-full ${underlineClass}`} />
-                          </div>
-                          {idx < arr.length - 1 && (
-                            <div className="mx-2 h-px flex-1 bg-slate-200" />
-                          )}
+                    return (
+                      <div
+                        key={step.label}
+                        className="relative z-10 flex flex-1 flex-col items-center"
+                      >
+                        <div className={`${circleBase} ${circleClass}`}>{isDone ? "✓" : idx + 1}</div>
+                        <div className="mt-1 text-xs font-medium text-slate-700">
+                          {step.label}
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="text-[11px] text-slate-400">{step.date}</div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1137,13 +1184,14 @@ export default function OrderDetailPage() {
                           </button>
                         )}
 
+                        {/* SINGLE black button now */}
                         <button
                           type="button"
-                          disabled={isDelivered}
-                          onClick={() => setEditingShipment((v) => !v)}
-                          className="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-800 shadow-sm disabled:opacity-50"
+                          disabled={isDelivered || savingShipment}
+                          onClick={handleToggleShipmentEdit}
+                          className="rounded-full bg-black px-4 py-1.5 text-xs font-medium text-white shadow-sm disabled:opacity-60"
                         >
-                          {editingShipment ? "Done editing" : "Edit"}
+                          {editingShipment ? "Done editing" : "Edit details"}
                         </button>
                       </div>
                     </div>
@@ -1264,17 +1312,6 @@ export default function OrderDetailPage() {
                         </p>
                       </div>
                     )}
-
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={handleSaveShipment}
-                        disabled={savingShipment || !editingShipment || isDelivered}
-                        className="rounded-full bg-black px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
-                      >
-                        {savingShipment ? "Saving…" : "Save shipping details"}
-                      </button>
-                    </div>
                   </div>
 
                   {/* Payment & totals */}
@@ -1343,6 +1380,30 @@ export default function OrderDetailPage() {
                       {productLines.map((line) => {
                         const isPacked = line.item_fulfilment_status === "packed";
 
+                        // Safely parse options (for custom SKU)
+                        let optionsRaw: any = line.options_snapshot || {};
+                        if (optionsRaw && typeof optionsRaw === "string") {
+                          try {
+                            optionsRaw = JSON.parse(optionsRaw);
+                          } catch {
+                            optionsRaw = {};
+                          }
+                        }
+
+                        const optionsText =
+                          optionsRaw && Object.keys(optionsRaw).length
+                            ? Object.entries(optionsRaw)
+                                .map(([k, v]) => `${k}: ${String(v)}`)
+                                .join(" · ")
+                            : "No options";
+
+                        const sku = line.sku_snapshot || "No SKU";
+                        const customSku =
+                          optionsRaw?.custom_sku ||
+                          optionsRaw?.customSku ||
+                          optionsRaw?.CustomSKU ||
+                          "";
+
                         return (
                           <div
                             key={line.id}
@@ -1365,13 +1426,11 @@ export default function OrderDetailPage() {
                                 <p className="text-sm font-semibold text-slate-900">
                                   {line.name_snapshot} × {line.quantity}
                                 </p>
+                                <p className="text-xs text-slate-500">{optionsText}</p>
+                                {/* NEW: SKU + Custom SKU */}
                                 <p className="text-xs text-slate-500">
-                                  {line.options_snapshot &&
-                                  Object.keys(line.options_snapshot).length
-                                    ? Object.entries(line.options_snapshot)
-                                        .map(([k, v]) => `${k}: ${String(v)}`)
-                                        .join(" · ")
-                                    : "No options"}
+                                  SKU: {sku}
+                                  {customSku && <> · Custom SKU: {customSku}</>}
                                 </p>
                                 <p className="text-xs font-medium text-slate-400">
                                   {formatCurrencyFromCents(line.unit_price_cents)}
@@ -1427,7 +1486,7 @@ export default function OrderDetailPage() {
                     )}
                   </div>
 
-                  {/* Internal notes (local only) */}
+                  {/* Internal notes (now saved) */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
                     <h2 className="mb-2 text-sm font-semibold text-slate-900">
                       Internal notes
@@ -1437,11 +1496,18 @@ export default function OrderDetailPage() {
                     </p>
                     <textarea
                       className="h-24 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                      placeholder="These notes are not shown to the customer. (Wire this up to a table or column when you're ready.)"
+                      placeholder="These notes are not shown to the customer."
+                      value={internalNote}
+                      onChange={(e) => setInternalNote(e.target.value)}
                     />
                     <div className="mt-3 flex justify-end">
-                      <button className="rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-black">
-                        Save note
+                      <button
+                        type="button"
+                        onClick={handleSaveInternalNote}
+                        disabled={savingNote}
+                        className="rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-black disabled:opacity-60"
+                      >
+                        {savingNote ? "Saving…" : "Save note"}
                       </button>
                     </div>
                   </div>

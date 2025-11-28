@@ -227,9 +227,7 @@ export default function DashboardPage() {
             items: [
               // make these paths match your actual routes
               { id: "o-all", label: "All Orders", href: "/pages/vendor/orders" },
-              { id: "o-pending", label: "Pending", href: "/pages/vendor/orders/pending" },
-              { id: "o-delivery", label: "Delivery Orders", href: "/pages/vendor/orders/delivery" },
-              { id: "o-pickup", label: "Pickup Orders", href: "/pages/vendor/orders/pickup" },
+            
             ],
           },
           {
@@ -238,9 +236,7 @@ export default function DashboardPage() {
             icon: "CalendarDays",
             items: [
               { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" },
-              { id: "b-upcoming", label: "Upcoming", href: "/pages/vendor/bookings/upcoming" },
-              { id: "b-reschedules", label: "Reschedules", href: "/pages/vendor/bookings/reschedules" },
-              { id: "b-cancelled", label: "Cancelled", href: "/pages/vendor/bookings/cancelled" },
+          
             ],
           },
           {
@@ -252,6 +248,29 @@ export default function DashboardPage() {
         ],
       },
 
+          {
+        id: "finance",
+        label: "Finance",
+        groups: [
+          {
+            id: "payouts",
+            label: "Earnings",
+            icon: "PiggyBank",
+            items: [
+              {
+                id: "f-overview",
+                label: "Finance Overview",
+                href: "/pages/vendor/finance",
+              },
+              // {
+              //   id: "f-payouts",
+              //   label: "Payouts",
+              //   href: "/pages/vendor/finance/payouts",
+              // },
+            ],
+          },
+        ]
+      }
       ],
     };
   }, [profile]);
