@@ -60,6 +60,7 @@ type ServiceBookingRow = {
   remaining_sessions: number | null;
   package_label: string | null;
   internal_notes: string | null;
+  sessions_meta: any | null; // 👈 new: to store sessions data
 };
 
 type BookingView = {
@@ -160,14 +161,6 @@ function deriveLocationMeta(
   }
 
   return { isOnline: false, label: String(locationValue) };
-}
-
-function deriveBookingStatus(order: OrderForBooking | null): BookingStatus {
-  if (!order) return "confirmed";
-  if (order.status === "cancelled") return "cancelled";
-  if (order.status === "delivered") return "completed";
-  if (order.payment_status !== "paid") return "awaiting_payment";
-  return "confirmed";
 }
 
 function normalisePhone(phone: string) {
@@ -334,15 +327,14 @@ export default function BookingDetailPage() {
       }
 
       const order = row.orders;
-      const bookingStatus = deriveBookingStatus(order);
       const loc = deriveLocationMeta(row.options_snapshot);
       const pkgMeta = extractPackageMeta(row.options_snapshot);
 
-      // try to load service_bookings row for this order_item (incl internal_notes)
+      // try to load service_bookings row for this order_item (incl internal_notes + sessions_meta)
       const { data: sbData } = await supabase
         .from("service_bookings")
         .select(
-          "order_item_id,total_sessions,remaining_sessions,package_label,internal_notes"
+          "order_item_id,total_sessions,remaining_sessions,package_label,internal_notes,sessions_meta"
         )
         .eq("order_item_id", bookingId)
         .maybeSingle();
@@ -351,6 +343,7 @@ export default function BookingDetailPage() {
       let packageLabel = pkgMeta.packageLabel;
       let remainingSessions: number | null = null;
       let notes: string | null = null;
+      let sessionsMeta: any | null = null;
 
       if (sbData) {
         const sb = sbData as ServiceBookingRow;
@@ -364,6 +357,24 @@ export default function BookingDetailPage() {
           packageLabel = sb.package_label;
         }
         notes = sb.internal_notes;
+        sessionsMeta = sb.sessions_meta;
+      }
+
+      // derive booking status ONLY from sessions + payment + order cancellation
+      let bookingStatus: BookingStatus = "confirmed";
+
+      if (order.status === "cancelled") {
+        bookingStatus = "cancelled";
+      } else if (
+        sessionsCount != null &&
+        sessionsCount > 0 &&
+        remainingSessions != null &&
+        remainingSessions === 0
+      ) {
+        // all sessions completed → completed
+        bookingStatus = "completed";
+      } else if (order.payment_status !== "paid") {
+        bookingStatus = "awaiting_payment";
       }
 
       const mapped: BookingView = {
@@ -380,7 +391,7 @@ export default function BookingDetailPage() {
         isOnline: loc.isOnline,
         status: bookingStatus,
         totalLabel: formatCurrencyFromCents(row.line_subtotal_cents),
-        orderStatus: order.status,
+        orderStatus: order.status, // read-only display
         paymentStatus: order.payment_status,
         packageLabel,
         sessionsCount,
@@ -390,18 +401,39 @@ export default function BookingDetailPage() {
       setBooking(mapped);
       setInternalNotes(notes || "");
 
-      // initialise session inputs based on sessionsCount
+      // initialise session inputs based on sessionsCount, preferring saved sessions_meta
       const count = sessionsCount && sessionsCount > 0 ? sessionsCount : 1;
 
-      const initial: SessionInput[] = Array.from({ length: count }, (_, idx) => ({
-        id: idx + 1,
-        label:
-          count > 1
-            ? `Session ${idx + 1}`
-            : mapped.dateTimeLabel || "Session",
-        url: "",
-        time: "", // datetime-local value
-      }));
+      let initial: SessionInput[];
+
+      if (Array.isArray(sessionsMeta) && sessionsMeta.length > 0) {
+        initial = Array.from({ length: count }, (_, idx) => {
+          const meta = sessionsMeta[idx] || {};
+          return {
+            id: idx + 1,
+            label:
+              typeof meta.label === "string" && meta.label.length > 0
+                ? meta.label
+                : count > 1
+                ? `Session ${idx + 1}`
+                : mapped.dateTimeLabel || "Session",
+            url: typeof meta.url === "string" ? meta.url : "",
+            time: typeof meta.time === "string" ? meta.time : "",
+          };
+        });
+      } else {
+        // fallback: old behaviour
+        initial = Array.from({ length: count }, (_, idx) => ({
+          id: idx + 1,
+          label:
+            count > 1
+              ? `Session ${idx + 1}`
+              : mapped.dateTimeLabel || "Session",
+          url: "",
+          time: "", // datetime-local value
+        }));
+      }
+
       setSessionInputs(initial);
 
       setLoading(false);
@@ -433,9 +465,7 @@ export default function BookingDetailPage() {
       const multiSessions =
         booking.sessionsCount != null && booking.sessionsCount > 1;
       const remainingForLock = multiSessions
-        ? booking.remainingSessions ??
-          booking.sessionsCount ??
-          0
+        ? booking.remainingSessions ?? booking.sessionsCount ?? 0
         : 0;
       const hasRemainingSessions = multiSessions && remainingForLock > 0;
 
@@ -466,15 +496,9 @@ export default function BookingDetailPage() {
     setError(null);
 
     try {
-      // map booking status → orders table fields
+      // Do NOT map booking status → orders.status
+      // Optionally adjust payment_status only when awaiting_payment
       const orderUpdates: Partial<OrderForBooking> = {};
-      if (newStatus === "completed") {
-        orderUpdates.status = "delivered";
-      } else if (newStatus === "cancelled") {
-        orderUpdates.status = "cancelled";
-      } else if (newStatus === "confirmed") {
-        orderUpdates.status = "fulfilled";
-      }
 
       if (newStatus === "awaiting_payment") {
         orderUpdates.payment_status = "pending";
@@ -498,14 +522,7 @@ export default function BookingDetailPage() {
           ? {
               ...prev,
               status: newStatus,
-              orderStatus:
-                newStatus === "completed"
-                  ? "delivered"
-                  : newStatus === "cancelled"
-                  ? "cancelled"
-                  : newStatus === "confirmed"
-                  ? "fulfilled"
-                  : prev.orderStatus,
+              // keep orderStatus as-is (order items / orders are source of truth)
               paymentStatus:
                 newStatus === "awaiting_payment" ? "pending" : prev.paymentStatus,
             }
@@ -520,15 +537,16 @@ export default function BookingDetailPage() {
   async function handleSendMeetingEmail() {
     if (!booking || !booking.customerEmail) return;
 
-    // Clean + validate sessions (drop empty links)
-    const cleaned = sessionInputs
-      .map((s) => ({
-        label: s.label.trim() || undefined,
-        url: s.url.trim(),
-      }))
-      .filter((s) => s.url.length > 0);
+    // Build payload to save (all rows) and payload to email (non-empty links)
+    const sessionsToSave = sessionInputs.map((s) => ({
+      label: s.label.trim(),
+      url: s.url.trim(),
+      time: s.time.trim(),
+    }));
 
-    if (cleaned.length === 0) {
+    const sessionsForEmail = sessionsToSave.filter((s) => s.url.length > 0);
+
+    if (sessionsForEmail.length === 0) {
       setError("Please add at least one session link before sending.");
       return;
     }
@@ -538,6 +556,19 @@ export default function BookingDetailPage() {
     setError(null);
 
     try {
+      // 1) Save all session rows to DB
+      const { error: sbError } = await supabase
+        .from("service_bookings")
+        .update({ sessions_meta: sessionsToSave })
+        .eq("order_item_id", booking.id);
+
+      if (sbError) {
+        console.error("Failed to save sessions_meta", sbError);
+        setError("Failed to save session details. Please try again.");
+        return;
+      }
+
+      // 2) Send email with non-empty links
       const res = await fetch("/api/vendor/bookings/send-session-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -545,7 +576,7 @@ export default function BookingDetailPage() {
           orderId: booking.orderId,
           customer_email: booking.customerEmail,
           customer_name: booking.customerName,
-          sessions: cleaned,
+          sessions: sessionsForEmail,
         }),
       });
 
@@ -557,9 +588,9 @@ export default function BookingDetailPage() {
       }
 
       setEmailFeedback(
-        cleaned.length === 1
+        sessionsForEmail.length === 1
           ? `Session link sent to ${booking.customerEmail}.`
-          : `${cleaned.length} session links sent to ${booking.customerEmail}.`
+          : `${sessionsForEmail.length} session links sent to ${booking.customerEmail}.`
       );
     } finally {
       setSendingEmail(false);
@@ -583,6 +614,25 @@ export default function BookingDetailPage() {
     setError(null);
 
     try {
+      // 1) Save ALL current sessions to DB
+      const sessionsToSave = sessionInputs.map((s) => ({
+        label: s.label.trim(),
+        url: s.url.trim(),
+        time: s.time.trim(),
+      }));
+
+      const { error: sbError } = await supabase
+        .from("service_bookings")
+        .update({ sessions_meta: sessionsToSave })
+        .eq("order_item_id", booking.id);
+
+      if (sbError) {
+        console.error("Failed to save sessions_meta", sbError);
+        setError("Failed to save session details. Please try again.");
+        return;
+      }
+
+      // 2) Send email only for this session
       const res = await fetch("/api/vendor/bookings/send-session-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -666,6 +716,7 @@ export default function BookingDetailPage() {
             ? {
                 ...prev,
                 remainingSessions: newRemaining,
+                // if this was the last session, status will be updated by updateBookingStatus below
               }
             : prev
         );
