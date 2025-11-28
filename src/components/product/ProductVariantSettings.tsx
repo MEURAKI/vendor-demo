@@ -32,8 +32,10 @@ interface ProductVariantSettingsProps {
   /** add another “Custom Variant N” group */
   onAddCustomGroup: () => void;
 
-  /** called when “Generate Variations” is clicked */
-  onGenerateVariants: () => void;
+  /** called when “Generate Variations” is clicked.
+   *  Receives ONLY groups that actually have at least one non-empty option value.
+   */
+  onGenerateVariants: (usableGroups: OptionGroup[]) => void;
 }
 
 export const ProductVariantSettings: React.FC<ProductVariantSettingsProps> = ({
@@ -68,6 +70,20 @@ export const ProductVariantSettings: React.FC<ProductVariantSettingsProps> = ({
   // Separate custom groups so we can number them nicely
   const baseGroups = optionGroups.filter((g) => g.kind !== "custom");
   const customGroups = optionGroups.filter((g) => g.kind === "custom");
+
+  // Helper to clean groups before generating variants:
+  // - remove values with empty labels
+  // - remove groups that have no remaining values
+  const buildUsableGroups = (): OptionGroup[] => {
+    return optionGroups
+      .map((g) => ({
+        ...g,
+        values: g.values.filter(
+          (v) => v.label && v.label.trim().length > 0
+        ),
+      }))
+      .filter((g) => g.values.length > 0);
+  };
 
   return (
     <section className="rounded-2xl border border-[#ECECFB] bg-[#F7F7FB] p-6 md:p-7">
@@ -228,7 +244,10 @@ export const ProductVariantSettings: React.FC<ProductVariantSettingsProps> = ({
           </button>
           <button
             type="button"
-            onClick={onGenerateVariants}
+            onClick={() => {
+              const usable = buildUsableGroups();
+              onGenerateVariants(usable);
+            }}
             className="h-10 flex-1 rounded-full bg-black px-4 text-xs font-semibold text-white"
           >
             Generate Variations

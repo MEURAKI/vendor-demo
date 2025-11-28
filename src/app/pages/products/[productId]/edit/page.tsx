@@ -240,6 +240,22 @@ function generateVariantCombinations(
 }
 
 /**
+ * Remove:
+ *  - option values with empty labels
+ *  - whole option groups that end up with no values
+ */
+function cleanOptionGroups(groups: OptionGroup[]): OptionGroup[] {
+  return groups
+    .map((g) => ({
+      ...g,
+      values: (g.values ?? []).filter(
+        (v) => v.label && v.label.trim().length > 0
+      ),
+    }))
+    .filter((g) => g.values.length > 0);
+}
+
+/**
  * Upload an image file to Supabase Storage and return the public URL.
  * Bucket: "product-images"
  */
@@ -332,11 +348,11 @@ export default function EditProductPage({
   const [baseVariantPrice, setBaseVariantPrice] =
     useState<number | undefined>(undefined);
 
-  // ✅ remember original base price for variants from the DB
+  // remember original base price for variants from the DB
   const [originalBaseVariantPrice, setOriginalBaseVariantPrice] =
     useState<number | undefined>(undefined);
 
-  // ✅ modal state when baseVariantPrice changed
+  // modal state when baseVariantPrice changed
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [pendingStatus, setPendingStatus] =
     useState<"draft" | "published" | null>(null);
@@ -430,15 +446,12 @@ export default function EditProductPage({
         setName(data.name ?? "");
         setDescription(data.description ?? "");
 
-        // Choose what to show in the SKU input:
-        // - if customSku exists → show that and mark as custom
-        // - else fall back to baseSku
         const skuFieldValue =
           (data.customSku && data.customSku.length > 0
             ? data.customSku
             : data.baseSku) ?? generateBaseSku(data.name ?? "");
 
-        setBaseSku(data.baseSku);
+        setBaseSku(data.baseSku ?? skuFieldValue);
         setCustomSku(data.customSku ?? "");
         setIsCustomSku(!!data.customSku);
         setIsVariant(!!data.isVariant);
@@ -460,12 +473,11 @@ export default function EditProductPage({
 
         // pricing / inventory + variants
         if (data.isVariant) {
-          // treat product.priceCents as the "base variant price"
           const basePriceFromServer =
             typeof data.priceCents === "number" ? data.priceCents / 100 : 0;
 
-          setPrice(basePriceFromServer); // if you still want price filled
-          setBaseVariantPrice(basePriceFromServer); // ⭐ key: base price comes from product
+          setPrice(basePriceFromServer);
+          setBaseVariantPrice(basePriceFromServer);
           setOriginalBaseVariantPrice(basePriceFromServer);
           setInventory(undefined);
 
@@ -603,7 +615,7 @@ export default function EditProductPage({
         g.id === groupId
           ? {
               ...g,
-              values: [...g.values, { id: uuid(), label: `` }],
+              values: [...g.values, { id: uuid(), label: "" }],
             }
           : g
       )
@@ -742,7 +754,7 @@ export default function EditProductPage({
         name,
         description,
         baseSku: baseSkuToSave,
-        customSku: customSku,
+        customSku: customSkuToSave,
         isVariant,
         priceCents: isVariant
           ? Math.round((baseVariantPrice ?? price ?? 0) * 100)
@@ -768,7 +780,7 @@ export default function EditProductPage({
         })),
         productImageUrl: finalProductImageUrl,
         galleryImageUrls,
-        optionGroups,
+        optionGroups: cleanOptionGroups(optionGroups),
         variants: variantUploads,
       };
 
@@ -870,10 +882,10 @@ export default function EditProductPage({
       <Sidebar config={sidebarConfig} />
 
       {/* Black bezel + tablet */}
-      <div className="flex flex-1 items-stretch justify.center px-3 py-3 sm:px-6 sm:py-4">
+      <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Sticky header */}
-          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient.to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
+          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
             <h1 className="text-lg font-semibold text-[#1B1529] sm:text-2xl">
               Edit product
             </h1>
@@ -1137,7 +1149,7 @@ export default function EditProductPage({
                   Update stock, price, and images for each variant.
                 </p>
               </div>
-              <div className="flex items.center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setShowVariantModal(false)}
@@ -1272,7 +1284,7 @@ export default function EditProductPage({
                         <td className="rounded-r-xl bg-[#F7F7FB] px-3 py-2">
                           <label
                             htmlFor={inputId}
-                            className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-gray-300 bg.white text-lg text-gray-400"
+                            className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-gray-300 bg-white text-lg text-gray-400"
                           >
                             {v.imageUrl ? (
                               <img
@@ -1364,7 +1376,6 @@ export default function EditProductPage({
       <AppModal
         open={showRegenerateModal}
         title="Update Variant Prices?"
-        // we build our own buttons inside the message
         message={
           <div className="space-y-3 text-xs text-gray-700">
             <p>
