@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Order update</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #05040b;
+      }
+      table {
+        border-collapse: collapse;
+      }
+    </style>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #05040b;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    "
+  >
+    <center>
+      <table
+        border="0"
+        cellpadding="0"
+        cellspacing="0"
+        width="100%"
+        style="background-color: #05040b; padding: 32px 0"
+      >
+        <tr>
+          <td align="center">
+            <table
+              border="0"
+              cellpadding="0"
+              cellspacing="0"
+              width="100%"
+              style="
+                max-width: 600px;
+                border-radius: 32px;
+                overflow: hidden;
+                background-color: #05040b;
+              "
+            >
+              <!-- Hero -->
+              <tr>
+                <td
+                  style="
+                    background: radial-gradient(
+                      circle at top,
+                      #ec4899 0,
+                      #7c3aed 40%,
+                      #111827 100%
+                    );
+                    padding: 32px 32px 40px 32px;
+                    text-align: center;
+                    color: #ffffff;
+                  "
+                >
+                  <div
+                    style="
+                      width: 46px;
+                      height: 46px;
+                      border-radius: 999px;
+                      border: 2px solid #ffffff;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      margin: 0 auto 16px auto;
+                      font-size: 24px;
+                    "
+                  >
+                    ✓
+                  </div>
+                  <h1
+                    style="
+                      margin: 0;
+                      font-size: 24px;
+                      font-weight: 700;
+                      line-height: 1.3;
+                    "
+                  >
+                    {{statusTitle}}
+                  </h1>
+                  <p
+                    style="
+                      margin: 8px 0 0 0;
+                      font-size: 13px;
+                      color: #e5e7eb;
+                    "
+                  >
+                    {{subtitle}}
+                  </p>
+                </td>
+              </tr>
+
+              <!-- White card -->
+              <tr>
+                <td style="background-color: #f9fafb">
+                  <table
+                    border="0"
+                    cellpadding="0"
+                    cellspacing="0"
+                    width="100%"
+                    style="border-radius: 32px 32px 0 0"
+                  >
+                    <!-- Intro -->
+                    <tr>
+                      <td style="padding: 24px 32px 16px 32px">
+                        <p
+                          style="
+                            margin: 0 0 8px 0;
+                            font-size: 13px;
+                            color: #111827;
+                          "
+                        >
+                          Hi {{userName}},
+                        </p>
+                        <p
+                          style="
+                            margin: 0;
+                            font-size: 13px;
+                            color: #4b5563;
+                            line-height: 1.6;
+                          "
+                        >
+                          Your MEURAKI order
+                          <strong>{{orderCode}}</strong> has an update.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <!-- Delivered / shipped to row -->
+                    <tr>
+                      <td style="padding: 16px 32px 0 32px">
+                        <table
+                          border="0"
+                          cellpadding="0"
+                          cellspacing="0"
+                          width="100%"
+                        >
+                          <tr>
+                            <td
+                              valign="top"
+                              style="
+                                width: 50%;
+                                font-size: 12px;
+                                color: #6b7280;
+                              "
+                            >
+                              <div
+                                style="
+                                  font-weight: 600;
+                                  text-transform: uppercase;
+                                "
+                              >
+                                Delivered on
+                              </div>
+                              <div
+                                style="
+                                  margin-top: 2px;
+                                  font-size: 13px;
+                                  color: #111827;
+                                "
+                              >
+                                {{deliveredDate}}
+                              </div>
+                            </td>
+                            <td
+                              valign="top"
+                              style="
+                                width: 50%;
+                                font-size: 12px;
+                                color: #6b7280;
+                                text-align: right;
+                              "
+                            >
+                              <div
+                                style="
+                                  font-weight: 600;
+                                  text-transform: uppercase;
+                                "
+                              >
+                                Shipped to
+                              </div>
+                              <div
+                                style="
+                                  margin-top: 2px;
+                                  font-size: 13px;
+                                  color: #111827;
+                                "
+                              >
+                                {{shippingAddress}}
+                              </div>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+
+                    <!-- Progress row (simple labels) -->
+                    <tr>
+                      <td style="padding: 20px 32px 8px 32px">
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          style="
+                            background: #f3f4f6;
+                            border-radius: 999px;
+                            font-size: 11px;
+                            color: #6b7280;
+                          "
+                        >
+                          <tr>
+                            <td
+                              style="
+                                width: 25%;
+                                text-align: center;
+                                padding: 10px 0;
+                              "
+                            >
+                              Placed
+                            </td>
+                            <td
+                              style="
+                                width: 25%;
+                                text-align: center;
+                                padding: 10px 0;
+                              "
+                            >
+                              Fulfilled
+                            </td>
+                            <td
+                              style="
+                                width: 25%;
+                                text-align: center;
+                                padding: 10px 0;
+                              "
+                            >
+                              Shipped
+                            </td>
+                            <td
+                              style="
+                                width: 25%;
+                                text-align: center;
+                                padding: 10px 0;
+                              "
+                            >
+                              Delivered
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+
+                    <!-- Order summary header -->
+                    <tr>
+                      <td style="padding: 20px 32px 8px 32px">
+                        <div
+                          style="
+                            font-size: 14px;
+                            font-weight: 700;
+                            color: #111827;
+                            margin-bottom: 6px;
+                          "
+                        >
+                          Order Summary
+                        </div>
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          style="
+                            font-size: 12px;
+                            color: #9ca3af;
+                            text-transform: uppercase;
+                            border-bottom: 1px solid #e5e7eb;
+                          "
+                        >
+                          <tr>
+                            <th
+                              align="left"
+                              style="padding: 6px 0; font-weight: 500"
+                            >
+                              Item
+                            </th>
+                            <th
+                              align="center"
+                              style="padding: 6px 0; font-weight: 500"
+                            >
+                              Qty
+                            </th>
+                            <th
+                              align="right"
+                              style="padding: 6px 0; font-weight: 500"
+                            >
+                              Price
+                            </th>
+                          </tr>
+                        </table>
+                        <!-- Items rows injected here -->
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          style="font-size: 13px; color: #111827"
+                        >
+                          {{itemsRows}}
+                        </table>
+                      </td>
+                    </tr>
+
+                    <!-- Totals -->
+                    <tr>
+                      <td style="padding: 8px 32px 24px 32px">
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          style="font-size: 13px; color: #111827"
+                        >
+                          <tr>
+                            <td style="padding: 4px 0">Subtotal</td>
+                            <td
+                              style="padding: 4px 0; text-align: right"
+                            >
+                              {{subtotal}}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 4px 0">Shipping</td>
+                            <td
+                              style="padding: 4px 0; text-align: right"
+                            >
+                              {{shipping}}
+                            </td>
+                          </tr>
+                          {{promoRow}}
+                          <tr>
+                            <td
+                              style="
+                                padding-top: 8px;
+                                border-top: 1px solid #e5e7eb;
+                                font-weight: 700;
+                              "
+                            >
+                              Total
+                            </td>
+                            <td
+                              style="
+                                padding-top: 8px;
+                                border-top: 1px solid #e5e7eb;
+                                font-weight: 700;
+                                text-align: right;
+                              "
+                            >
+                              {{total}}
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+
+                    <!-- Meta row -->
+                    <tr>
+                      <td
+                        style="
+                          padding: 16px 32px 20px 32px;
+                          background: #f3f4f6;
+                          border-radius: 0 0 32px 32px;
+                        "
+                      >
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          style="font-size: 12px; color: #4b5563"
+                        >
+                          <tr>
+                            <td style="padding: 4px 0">
+                              <strong>Date ordered</strong><br />
+                              {{placedDateTime}}
+                            </td>
+                            <td style="padding: 4px 0">
+                              <strong>Order no.</strong><br />
+                              {{orderCode}}
+                            </td>
+                            <td style="padding: 4px 0">
+                              <strong>Payment</strong><br />
+                              {{paymentStatus}}
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td
+                  style="
+                    background-color: #05040b;
+                    padding: 24px 32px;
+                    color: #f9fafb;
+                    text-align: center;
+                  "
+                >
+                  <p
+                    style="
+                      margin: 0 0 4px 0;
+                      font-size: 11px;
+                      text-transform: uppercase;
+                      letter-spacing: 0.08em;
+                    "
+                  >
+                    IN WELLNESS,
+                  </p>
+                  <p
+                    style="
+                      margin: 0 0 12px 0;
+                      font-size: 13px;
+                      font-weight: 700;
+                    "
+                  >
+                    THE MEURAKI TEAM
+                  </p>
+                  <p
+                    style="
+                      margin: 0 0 8px 0;
+                      font-size: 11px;
+                      color: #9ca3af;
+                    "
+                  >
+                    You’re receiving this message from
+                    <a
+                      href="mailto:hello@meuraki.com"
+                      style="color: #9d4eff; text-decoration: none"
+                      >hello@MEURAKI.com</a
+                    >.
+                    If you need help or have questions, please email us —
+                    our team is here for you.
+                  </p>
+                  <p
+                    style="
+                      margin: 0;
+                      font-size: 11px;
+                      color: #6b7280;
+                    "
+                  >
+                    © 2025 MEURAKI PTE. LTD. · 318 Tanglin Road, #01-36 &amp;
+                    37, Phoenix Park, Singapore 247979
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </center>
+  </body>
+</html>

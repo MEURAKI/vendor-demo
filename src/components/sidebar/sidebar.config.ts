@@ -64,7 +64,6 @@ function getInitials(nameOrEmail?: string | null) {
 /**
  * ✅ buildSidebarConfig
  * Central builder for your sidebar data.
- * You can import this in any page to get the same sidebar sections.
  */
 export function buildSidebarConfig({
   fullName,
@@ -87,6 +86,7 @@ export function buildSidebarConfig({
       status: status || "Active",
     },
     sections: [
+      // 1) Overview
       {
         id: "overview",
         label: "Overview",
@@ -97,14 +97,10 @@ export function buildSidebarConfig({
             icon: "BarChart3",
             items: [{ id: "dash-home", label: "Home", href: "/pages/dashboard" }],
           },
-          // {
-          //   id: "calendar",
-          //   label: "Calendar",
-          //   icon: "CalendarDays",
-          //   items: [{ id: "cal-home", label: "View Calendar", href: "/pages/calendar" }],
-          // },
         ],
       },
+
+      // 2) Shop Listings
       {
         id: "listings",
         label: "Shop Listings",
@@ -118,7 +114,6 @@ export function buildSidebarConfig({
               { id: "p-add", label: "Add Product", href: "/pages/products/new" },
               { id: "p-inv", label: "Inventory", href: "/pages/products/inventory" },
               { id: "p-bundles", label: "Bundles", href: "/pages/products/bundles" },
-              // { id: "p-cats", label: "Categories", href: "/pages/products/categories" },
             ],
           },
           {
@@ -132,67 +127,63 @@ export function buildSidebarConfig({
               { id: "s-spaces", label: "Wellness Spaces", href: "/pages/services/spaces" },
             ],
           },
-          // {
-          //   id: "discounts",
-          //   label: "Discounts",
-          //   icon: "Tag",
-          //   items: [
-          //     { id: "d-store", label: "Store Discounts", href: "/pages/discounts/store" },
-          //     { id: "d-item", label: "Item Discounts", href: "/pages/discounts/item" },
-          //   ],
-          // },
         ],
       },
-      // {
-      //   id: "orders-bookings",
-      //   label: "Orders & Bookings",
-      //   groups: [
-      //     {
-      //       id: "orders",
-      //       label: "Orders",
-      //       icon: "Boxes",
-      //       items: [
-      //         { id: "o-all", label: "All Orders", href: "/pages/orders" },
-      //         { id: "o-pending", label: "Pending", href: "/pages/orders/pending" },
-      //         { id: "o-delivery", label: "Delivery Orders", href: "/pages/orders/delivery" },
-      //         { id: "o-pickup", label: "Pickup Orders", href: "/pages/orders/pickup" },
-      //       ],
-      //     },
-      //     {
-      //       id: "bookings",
-      //       label: "Bookings",
-      //       icon: "CalendarDays",
-      //       items: [
-      //         { id: "b-all", label: "All Bookings", href: "/pages/bookings" },
-      //         { id: "b-upcoming", label: "Upcoming", href: "/pages/bookings/upcoming" },
-      //         { id: "b-reschedules", label: "Reschedules", href: "/pages/bookings/reschedules" },
-      //         { id: "b-cancelled", label: "Cancelled", href: "/pages/bookings/cancelled" },
-      //       ],
-      //     },
-      //     {
-      //       id: "customers",
-      //       label: "Customers",
-      //       icon: "Users",
-      //       items: [{ id: "c-all", label: "Customers", href: "/pages/customers" }],
-      //     },
-      //   ],
-      // },
-      // {
-      //   id: "finance",
-      //   label: "Finance",
-      //   groups: [
-      //     {
-      //       id: "income",
-      //       label: "Income",
-      //       icon: "PiggyBank",
-      //       items: [
-      //         { id: "i-trans", label: "Transactions", href: "/pages/income/transactions" },
-      //         { id: "i-payouts", label: "Payouts", href: "/pages/income/payouts" },
-      //         { id: "i-reports", label: "Reports", href: "/pages/income/reports" },
-      //       ],
-      //     },
-      //   ],
-      // },
+
+      // 3) Orders & Bookings – 👈 NEW SECTION FOR NAVBAR
+      {
+        id: "orders-bookings",
+        label: "Orders & Bookings",
+        groups: [
+          {
+            id: "orders",
+            label: "Orders",
+            icon: "Boxes",
+            items: [
+              { id: "o-all", label: "All Orders", href: "/pages/vendor/orders" },
+            ],
+          },
+          {
+            id: "bookings",
+            label: "Bookings",
+            icon: "CalendarDays",
+            items: [
+              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" }
+            ],
+          },
+          {
+            id: "customers",
+            label: "Customers",
+            icon: "Users",
+            items: [{ id: "c-all", label: "Customers", href: "/pages/vendor/customers" }],
+          },
+        ],
+      },
+       {
+        id: "finance",
+        label: "Finance",
+        groups: [
+          {
+            id: "payouts",
+            label: "Earnings",
+            icon: "PiggyBank",
+            items: [
+              {
+                id: "f-overview",
+                label: "Finance Overview",
+                href: "/pages/vendor/finance",
+              },
+              // {
+              //   id: "f-payouts",
+              //   label: "Payouts",
+              //   href: "/pages/vendor/finance/payouts",
+              // },
+            ],
+          },
+        ]
+      }
+
+      // (optional) Finance, Discounts, etc. you can re-enable later
     ],
   };
 }

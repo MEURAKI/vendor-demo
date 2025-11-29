@@ -216,6 +216,61 @@ export default function DashboardPage() {
             },
           ],
         },
+        {
+        id: "orders-bookings",
+        label: "Orders & Bookings",
+        groups: [
+          {
+            id: "orders",
+            label: "Orders",
+            icon: "Boxes",
+            items: [
+              // make these paths match your actual routes
+              { id: "o-all", label: "All Orders", href: "/pages/vendor/orders" },
+            
+            ],
+          },
+          {
+            id: "bookings",
+            label: "Bookings",
+            icon: "CalendarDays",
+            items: [
+              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" },
+          
+            ],
+          },
+          {
+            id: "customers",
+            label: "Customers",
+            icon: "Users",
+            items: [{ id: "c-all", label: "Customers", href: "/pages/vendor/customers" }],
+          },
+        ],
+      },
+
+          {
+        id: "finance",
+        label: "Finance",
+        groups: [
+          {
+            id: "payouts",
+            label: "Earnings",
+            icon: "PiggyBank",
+            items: [
+              {
+                id: "f-overview",
+                label: "Finance Overview",
+                href: "/pages/vendor/finance",
+              },
+              // {
+              //   id: "f-payouts",
+              //   label: "Payouts",
+              //   href: "/pages/vendor/finance/payouts",
+              // },
+            ],
+          },
+        ]
+      }
       ],
     };
   }, [profile]);
