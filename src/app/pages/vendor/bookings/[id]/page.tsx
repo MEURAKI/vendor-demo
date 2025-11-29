@@ -60,7 +60,8 @@ type ServiceBookingRow = {
   remaining_sessions: number | null;
   package_label: string | null;
   internal_notes: string | null;
-  sessions_meta: any | null; // 👈 new: to store sessions data
+  sessions_meta: any | null; 
+  service_id: string | null;
 };
 
 type BookingView = {
@@ -334,16 +335,18 @@ export default function BookingDetailPage() {
       const { data: sbData } = await supabase
         .from("service_bookings")
         .select(
-          "order_item_id,total_sessions,remaining_sessions,package_label,internal_notes,sessions_meta"
+          "order_item_id,total_sessions,remaining_sessions,package_label,internal_notes,sessions_meta,service_id"
         )
         .eq("order_item_id", bookingId)
         .maybeSingle();
+
 
       let sessionsCount = pkgMeta.sessionsCount;
       let packageLabel = pkgMeta.packageLabel;
       let remainingSessions: number | null = null;
       let notes: string | null = null;
       let sessionsMeta: any | null = null;
+      let serviceId: string | null = null;
 
       if (sbData) {
         const sb = sbData as ServiceBookingRow;
@@ -358,7 +361,36 @@ export default function BookingDetailPage() {
         }
         notes = sb.internal_notes;
         sessionsMeta = sb.sessions_meta;
+        serviceId = sb.service_id ?? null;
       }
+
+      let locationLabel = loc.label;
+let isOnline = loc.isOnline;
+
+if (serviceId) {
+  // 1) find the space_id for this service
+  const { data: serviceSpace } = await supabase
+    .from("service_spaces")
+    .select("space_id")
+    .eq("service_id", serviceId)
+    .maybeSingle();
+
+  const spaceId = serviceSpace?.space_id as string | undefined;
+
+  if (spaceId) {
+    // 2) get the actual space name
+    const { data: space } = await supabase
+      .from("spaces")
+      .select("name")
+      .eq("id", spaceId)
+      .maybeSingle();
+
+    if (space?.name) {
+      locationLabel = space.name; // 👈 override with Wellness Space name
+      isOnline = false;           // typically physical
+    }
+  }
+}
 
       // derive booking status ONLY from sessions + payment + order cancellation
       let bookingStatus: BookingStatus = "confirmed";
@@ -387,8 +419,8 @@ export default function BookingDetailPage() {
         customerName: order.contact_name || "Unknown customer",
         customerEmail: order.contact_email,
         customerPhone: order.contact_phone,
-        locationLabel: loc.label,
-        isOnline: loc.isOnline,
+        locationLabel, // 👈 from service_spaces / spaces if available
+        isOnline,      // 👈 updated flag
         status: bookingStatus,
         totalLabel: formatCurrencyFromCents(row.line_subtotal_cents),
         orderStatus: order.status, // read-only display

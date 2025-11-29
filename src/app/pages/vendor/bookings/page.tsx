@@ -18,8 +18,8 @@ type Profile = {
 
 type ServiceBookingForItem = {
   order_item_id: string;
-  total_sessions: number;
-  remaining_sessions: number;
+  total_sessions: number | null;
+  remaining_sessions: number | null;
 };
 
 type OrderStatus = "placed" | "fulfilled" | "shipped" | "delivered" | "cancelled";
@@ -129,7 +129,8 @@ function deriveLocationLabel(
 
   const fromOptions =
     optionsSnapshot && typeof optionsSnapshot === "object"
-      ? optionsSnapshot.location_type || optionsSnapshot.location
+      ? (optionsSnapshot as any).location_type ||
+        (optionsSnapshot as any).location
       : null;
 
   if (fromOptions === "online") return "Online";
@@ -141,11 +142,32 @@ function deriveLocationLabel(
   return "Studio / location not set";
 }
 
-function deriveBookingStatus(order: OrderForBooking | null): BookingStatus {
+// NEW: derive booking status based on remaining sessions + payment + cancellation
+function deriveBookingStatusFromMeta(
+  order: OrderForBooking | null,
+  sessionInfo: ServiceBookingForItem | undefined
+): BookingStatus {
   if (!order) return "confirmed";
+
   if (order.status === "cancelled") return "cancelled";
-  if (order.status === "delivered") return "completed";
-  if (order.payment_status !== "paid") return "awaiting_payment";
+
+  const total = sessionInfo?.total_sessions ?? null;
+  const remaining = sessionInfo?.remaining_sessions ?? null;
+
+  // If we track sessions and all are used → completed
+  if (
+    total != null &&
+    total > 0 &&
+    remaining != null &&
+    remaining === 0
+  ) {
+    return "completed";
+  }
+
+  if (order.payment_status !== "paid") {
+    return "awaiting_payment";
+  }
+
   return "confirmed";
 }
 
@@ -227,9 +249,9 @@ export default function BookingsPage() {
       }
 
       const typedItems = (itemsData || []) as unknown as OrderItemWithOrder[];
-
       const orderItemIds = typedItems.map((i) => i.id);
 
+      // Load session tracking info
       const { data: sessionsData, error: sessionsError } = await supabase
         .from("service_bookings")
         .select("order_item_id,total_sessions,remaining_sessions")
@@ -237,11 +259,11 @@ export default function BookingsPage() {
 
       if (sessionsError) {
         console.error(sessionsError);
-        // optional: surface error, but don't block the page
+        // optional: show error but don't block page
       }
 
       const sessionsByOrderItem = new Map<string, ServiceBookingForItem>();
-      (sessionsData || []).forEach((sb) => {
+      (sessionsData || []).forEach((sb: any) => {
         sessionsByOrderItem.set(sb.order_item_id, sb as ServiceBookingForItem);
       });
 
@@ -249,12 +271,22 @@ export default function BookingsPage() {
         .filter((row) => row.orders && row.orders.vendor_id === userId)
         .map((row) => {
           const order = row.orders!;
-          const status = deriveBookingStatus(order);
-
           const sessionInfo = sessionsByOrderItem.get(row.id);
-          const hasSessionTracking = !!sessionInfo;
-          const totalSessions = sessionInfo?.total_sessions ?? 1;
-          const remainingSessions = sessionInfo ? sessionInfo.remaining_sessions : 0; // if no tracking row, treat as fully used so you can complete
+
+          const hasSessionTracking =
+            !!sessionInfo &&
+            sessionInfo.total_sessions != null &&
+            sessionInfo.total_sessions > 0;
+
+          const totalSessions = hasSessionTracking
+            ? sessionInfo!.total_sessions!
+            : 1;
+
+          const remainingSessions = hasSessionTracking
+            ? Math.max(sessionInfo!.remaining_sessions ?? 0, 0)
+            : 0; // single-session: remainingSessions = 0 means already done
+
+          const status = deriveBookingStatusFromMeta(order, sessionInfo);
 
           return {
             id: row.id,
@@ -332,7 +364,10 @@ export default function BookingsPage() {
     return true;
   });
 
-  async function handleBookingStatusChange(bookingId: string, newStatus: BookingStatus) {
+  async function handleBookingStatusChange(
+    bookingId: string,
+    newStatus: BookingStatus
+  ) {
     const booking = rows.find((r) => r.id === bookingId);
     if (!booking) return;
 
@@ -340,7 +375,7 @@ export default function BookingsPage() {
     if (booking.status === "completed" || booking.status === "cancelled") return;
     if (booking.status === newStatus) return;
 
-    // NEW: don't allow completed if there are remaining sessions (for tracked packages)
+    // Don't allow "completed" if there are remaining sessions
     if (
       newStatus === "completed" &&
       booking.hasSessionTracking &&
@@ -356,16 +391,10 @@ export default function BookingsPage() {
     setError(null);
 
     try {
-      // Map booking status → order status / payment status
+      // IMPORTANT:
+      // Do NOT map booking status → orders.status.
+      // Only touch payment_status for awaiting_payment.
       const orderUpdates: Partial<OrderForBooking> = {};
-
-      if (newStatus === "completed") {
-        orderUpdates.status = "delivered";
-      } else if (newStatus === "cancelled") {
-        orderUpdates.status = "cancelled";
-      } else if (newStatus === "confirmed") {
-        orderUpdates.status = "fulfilled";
-      }
 
       if (newStatus === "awaiting_payment") {
         orderUpdates.payment_status = "pending";
@@ -385,7 +414,7 @@ export default function BookingsPage() {
         }
       }
 
-      // Update local state
+      // Update local state (UI-only status, orders remain source of truth)
       setRows((prev) =>
         prev.map((row) =>
           row.id === bookingId
@@ -393,14 +422,6 @@ export default function BookingsPage() {
                 ...row,
                 status: newStatus,
                 statusLabel: bookingStatusLabel[newStatus],
-                orderStatus:
-                  newStatus === "completed"
-                    ? "delivered"
-                    : newStatus === "cancelled"
-                    ? "cancelled"
-                    : newStatus === "confirmed"
-                    ? "fulfilled"
-                    : row.orderStatus,
                 paymentStatus:
                   newStatus === "awaiting_payment" ? "pending" : row.paymentStatus,
               }
@@ -509,7 +530,9 @@ export default function BookingsPage() {
                   <button
                     type="button"
                     onClick={() =>
-                      setTimeFilter((prev) => (prev === "all" ? "thisMonth" : "all"))
+                      setTimeFilter((prev) =>
+                        prev === "all" ? "thisMonth" : "all"
+                      )
                     }
                     className={`rounded-full px-3 py-1.5 text-xs md:px-4 ${
                       timeFilter === "thisMonth"
@@ -547,29 +570,28 @@ export default function BookingsPage() {
               </div>
 
               {/* Search */}
-<div className="mb-4 w-full rounded-full border border-[#7B61FF] bg-white px-4 py-2 shadow-sm">
-  <div className="flex items-center gap-2">
-    {/* search icon */}
-    <svg
-      className="h-4 w-4 text-[#7B61FF]"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      <circle cx="11" cy="11" r="7" />
-      <line x1="16.5" y1="16.5" x2="21" y2="21" />
-    </svg>
+              <div className="mb-4 w-full rounded-full border border-[#7B61FF] bg-white px-4 py-2 shadow-sm">
+                <div className="flex items-center gap-2">
+                  {/* search icon */}
+                  <svg
+                    className="h-4 w-4 text-[#7B61FF]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="16.5" y1="16.5" x2="21" y2="21" />
+                  </svg>
 
-    <input
-      className="w-full border-none bg-transparent text-xs text-gray-700 placeholder:text-slate-400 focus:outline-none focus:ring-0 md:text-sm"
-      placeholder="Search by customer, service, booking ID, or order ID"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-    />
-  </div>
-</div>
-
+                  <input
+                    className="w-full border-none bg-transparent text-xs text-gray-700 placeholder:text-slate-400 focus:outline-none focus:ring-0 md:text-sm"
+                    placeholder="Search by customer, service, booking ID, or order ID"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+              </div>
 
               {/* Error banner (non-fatal) */}
               {error && rows.length > 0 && (
