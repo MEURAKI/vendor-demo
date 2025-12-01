@@ -59,6 +59,33 @@ const MAX_AVATAR_SIZE_BYTES = 1024 * 1024; // 1MB
 
 type TabKey = "profile" | "security" | "notifications";
 
+/* ---- Completeness-related minimal types ---- */
+
+type DocKind =
+  | "vendor_agreement"
+  | "uen_acra"
+  | "product_certificate"
+  | "service_certificate";
+
+type DocRow = {
+  id: string;
+  vendor_id: string;
+  kind: DocKind;
+  status: "pending" | "approved" | "rejected";
+};
+
+type PayoutLite = {
+  vendor_id: string;
+  account_number?: string | null;
+  account_holder_name?: string | null;
+};
+
+type VendorBusinessBits = {
+  id: string;
+  brand_logo_url: string | null;
+  policy_url: string | null;
+};
+
 /* ------------------- Small UI helpers ------------------- */
 
 function Toggle({
@@ -156,18 +183,6 @@ function AccountSettingsPageInner() {
 
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
 
-  // read ?tab= from URL on first render / when it changes
-  useEffect(() => {
-    const tabParam = searchParams.get("tab");
-    if (
-      tabParam === "profile" ||
-      tabParam === "security" ||
-      tabParam === "notifications"
-    ) {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams]);
-
   // security state
   const [userEmail, setUserEmail] = useState("");
   const [oldPw, setOldPw] = useState("");
@@ -185,6 +200,24 @@ function AccountSettingsPageInner() {
   const [newEmail, setNewEmail] = useState("");
 
   const [userId, setUserId] = useState<string | null>(null);
+
+  // completeness state (business/docs/payout)
+  const [biz, setBiz] = useState<VendorBusinessBits | null>(null);
+  const [docs, setDocs] = useState<DocRow[]>([]);
+  const [payout, setPayout] = useState<PayoutLite | null>(null);
+
+  /* ------------ Read ?tab= from URL ------------ */
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (
+      tabParam === "profile" ||
+      tabParam === "security" ||
+      tabParam === "notifications"
+    ) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
 
   /* ------------ Load everything once ------------ */
 
@@ -204,15 +237,48 @@ function AccountSettingsPageInner() {
       const gConnected = !!user.identities?.some((i) => i.provider === "google");
       setGoogleConnected(gConnected);
 
-      // profile
-      const { data: profData } = await supabase
-        .from("profiles")
-        .select(
-          "id,email,status,onboarding_completed,role,full_name,first_name,last_name,phone,country_code,avatar_url"
-        )
-        .eq("id", user.id)
-        .maybeSingle();
+      const [
+        { data: profData },
+        { data: prefsData },
+        { data: recipientsData },
+        { data: vbRow },
+        { data: docsRows },
+        { data: payoutRow },
+      ] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            "id,email,status,onboarding_completed,role,full_name,first_name,last_name,phone,country_code,avatar_url"
+          )
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("notification_prefs")
+          .select("orders, bookings, payouts, verification")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("notification_recipients")
+          .select("id,email,enabled")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("vendor_business")
+          .select("id,brand_logo_url,policy_url")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("vendor_docs")
+          .select("id,vendor_id,kind,status")
+          .eq("vendor_id", user.id),
+        supabase
+          .from("vendor_payout")
+          .select("vendor_id,account_number,account_holder_name")
+          .eq("vendor_id", user.id)
+          .maybeSingle(),
+      ]);
 
+      // profile
       if (!profData) {
         setProfile({
           id: user.id,
@@ -240,28 +306,82 @@ function AccountSettingsPageInner() {
       }
 
       // notification prefs
-      const { data: p } = await supabase
-        .from("notification_prefs")
-        .select("orders, bookings, payouts, verification")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (p) {
-        setPrefs({ ...DEFAULT_PREFS, ...p });
+      if (prefsData) {
+        setPrefs({ ...DEFAULT_PREFS, ...prefsData });
       }
 
       // recipients
-      const { data: r } = await supabase
-        .from("notification_recipients")
-        .select("id,email,enabled")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
+      setRecipients((recipientsData ?? []) as Recipient[]);
 
-      setRecipients((r ?? []) as Recipient[]);
+      // completeness bits
+      if (vbRow) {
+        setBiz(vbRow as VendorBusinessBits);
+      } else {
+        setBiz(null);
+      }
+
+      setDocs((docsRows ?? []) as DocRow[]);
+      setPayout((payoutRow || null) as PayoutLite | null);
 
       setLoading(false);
     })();
   }, []);
+
+  /* ------------ completeness shared across settings ------------ */
+
+  const completeness = useMemo(() => {
+    if (!biz) {
+      const missing = {
+        logo: true,
+        policy: true,
+        certificates: true,
+        payout: true,
+      };
+      const overallIncomplete = true;
+
+      const navAlerts: Record<string, boolean> = {
+        "/pages/setting/business?tab=business": missing.logo,
+        "/pages/setting/business?tab=docs":
+          missing.policy || missing.certificates,
+        "/pages/setting/business?tab=verification": overallIncomplete,
+        "/pages/setting/payouts?tab=payouts": missing.payout,
+      };
+
+      return { missing, overallIncomplete, navAlerts };
+    }
+
+    const hasLogo = !!biz.brand_logo_url;
+    const hasPolicy = !!biz.policy_url;
+
+    const hasAnyCert =
+      docs.filter(
+        (d) =>
+          d.kind === "product_certificate" ||
+          d.kind === "service_certificate"
+      ).length > 0;
+
+    const hasPayout =
+      !!payout?.account_number || !!payout?.account_holder_name;
+
+    const missing = {
+      logo: !hasLogo,
+      policy: !hasPolicy,
+      certificates: !hasAnyCert,
+      payout: !hasPayout,
+    };
+
+    const overallIncomplete = Object.values(missing).some(Boolean);
+
+    const navAlerts: Record<string, boolean> = {
+      "/pages/setting/business?tab=business": missing.logo,
+      "/pages/setting/business?tab=docs":
+        missing.policy || missing.certificates,
+      "/pages/setting/business?tab=verification": overallIncomplete,
+      "/pages/setting/payouts?tab=payouts": missing.payout,
+    };
+
+    return { missing, overallIncomplete, navAlerts };
+  }, [biz, docs, payout]);
 
   /* ------------ Sidebar config ------------ */
 
@@ -271,9 +391,9 @@ function AccountSettingsPageInner() {
         fullName: profile?.full_name,
         email: profile?.email,
         role: "Vendor",
-       status: profile?.status ?? "active"
+        status: profile?.status ? "active" :  "Incomplete Registration",
       }),
-    [profile]
+    [profile, completeness.overallIncomplete]
   );
 
   /* ------------ Avatar upload ------------ */
@@ -585,8 +705,7 @@ function AccountSettingsPageInner() {
   if (loading || !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-                <ClipLoader size="md" color="gray" />
-
+        <ClipLoader size="md" color="gray" />
       </div>
     );
   }
@@ -596,12 +715,8 @@ function AccountSettingsPageInner() {
       {/* Dark app sidebar */}
       <Sidebar config={sidebarConfig} />
 
-      {/* Left settings nav */}
-      <SettingsNav
-        alerts={{
-          "/pages/setting/account": true,
-        }}
-      />
+      {/* Left settings nav – 🔴 global completeness alerts */}
+      <SettingsNav alerts={completeness.navAlerts} />
 
       {/* Right content area */}
       <main className="flex-1 overflow-y-auto px-6 py-8 md:px-10">
@@ -1170,8 +1285,7 @@ export default function AccountSettingsPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-white">
-                  <ClipLoader size="md" color="gray" />
-
+          <ClipLoader size="md" color="gray" />
         </div>
       }
     >

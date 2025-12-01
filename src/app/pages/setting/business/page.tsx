@@ -1,4 +1,3 @@
-// app/pages/setting/business/page.tsx
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -72,8 +71,12 @@ type DocRow = {
 
 type Payout = {
   vendor_id: string;
+  account_number?: string | null;
   stripe_account_id?: string | null;
-  bank_holder_name?: string | null;
+  account_holder_name?: string | null;
+  bank_code?: string | null;
+  branch_code?: string | null;
+  swift_iban?: string | null;
 };
 
 type Tab = "business" | "brand" | "docs" | "verification";
@@ -253,6 +256,8 @@ function FileChip({
 /* ======================================================================= */
 
 function BusinessSettingsPageInner() {
+  useAuthGuard(); // ensure unauth users are handled (redirect/guard)
+
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -285,6 +290,8 @@ function BusinessSettingsPageInner() {
   const urlTab = (searchParams.get("tab") as Tab) || "business";
   const [activeTab, setActiveTab] = useState<Tab>(urlTab);
 
+  const { successToast, errorToast } = useToast();
+
   // keep local state in sync when URL changes
   useEffect(() => {
     const next = (searchParams.get("tab") as Tab) || "business";
@@ -296,10 +303,6 @@ function BusinessSettingsPageInner() {
     params.set("tab", tab);
     router.replace(`${pathname}?${params.toString()}`);
   }
-
-  const { successToast, errorToast } = useToast();
-
-
 
   /* ---------- Load everything once ---------- */
   useEffect(() => {
@@ -343,10 +346,13 @@ function BusinessSettingsPageInner() {
       setProfile(
         (prof as Profile) ?? {
           id: user.id,
-          email: user.email ?? "",
-          status: "active",
+          email: user.email ?? null,
+          status: "pending_admin_approval",
           onboarding_completed: false,
-          full_name: user.email ?? "User",
+          full_name:
+            (user.user_metadata as any)?.full_name ??
+            user.email ??
+            "User",
         }
       );
 
@@ -362,7 +368,7 @@ function BusinessSettingsPageInner() {
           instagram: "",
           facebook: "",
           tiktok: "",
-          policy_url: "",
+          policy_url: null,
         }
       );
 
@@ -384,44 +390,58 @@ function BusinessSettingsPageInner() {
     })();
   }, []);
 
-  /* ---------- Sidebar config ---------- */
+  /* ---------- Sidebar + nav completeness ---------- */
 
-const completeness = useMemo(() => {
-  if (!biz) {
-    return {
-      missing: { logo: true, policy: true, certificates: true, payout: true },
-      overallIncomplete: true,
-      navAlerts: {} as Record<string, boolean>,
+  const completeness = useMemo(() => {
+    if (!biz) {
+      const missing = {
+        logo: true,
+        policy: true,
+        certificates: true,
+        payout: true,
+      };
+      const overallIncomplete = true;
+
+      const navAlerts = {
+        "/pages/setting/business?tab=business": missing.logo,
+        "/pages/setting/business?tab=docs": missing.policy || missing.certificates,
+        "/pages/setting/business?tab=verification": overallIncomplete,
+        "/pages/setting/payouts?tab=payouts": missing.payout,
+      };
+
+      return { missing, overallIncomplete, navAlerts };
+    }
+
+    const hasLogo = !!biz.brand_logo_url;
+    const hasPolicy = !!biz.policy_url;
+
+    const hasAnyCert =
+      docs.filter(
+        (d) => d.kind === "product_certificate" || d.kind === "service_certificate"
+      ).length > 0;
+
+    const hasPayout =
+      !!payout?.account_number || !!payout?.account_holder_name;
+
+    const missing = {
+      logo: !hasLogo,
+      policy: !hasPolicy,
+      certificates: !hasAnyCert,
+      payout: !hasPayout,
     };
-  }
 
-  const hasLogo = !!biz.brand_logo_url;
-  const hasPolicy = !!biz.policy_url;
+    const overallIncomplete = Object.values(missing).some(Boolean);
 
-  const hasAnyCert =
-    docs.filter(
-      (d) => d.kind === "product_certificate" || d.kind === "service_certificate"
-    ).length > 0;
+    // Per-tab alerts used by SettingsNav
+    const navAlerts: Record<string, boolean | number> = {
+      "/pages/setting/business?tab=business": missing.logo,
+      "/pages/setting/business?tab=docs": missing.policy || missing.certificates,
+      "/pages/setting/business?tab=verification": overallIncomplete,
+      "/pages/setting/payouts?tab=payouts": missing.payout,
+    };
 
-  const hasPayout =
-    !!payout?.stripe_account_id || !!payout?.bank_holder_name;
-
-  const missing = {
-    logo: !hasLogo,
-    policy: !hasPolicy,
-    certificates: !hasAnyCert,
-    payout: !hasPayout,
-  };
-
-  const overallIncomplete = Object.values(missing).some(Boolean);
-
-  const navAlerts = {
-    "/pages/setting/business": overallIncomplete,
-    "/pages/setting/payouts": missing.payout,
-  };
-
-  return { missing, overallIncomplete, navAlerts };
-}, [biz, docs, payout]);
+    return { missing, overallIncomplete, navAlerts };
+  }, [biz, docs, payout]);
 
   const sidebarConfig = useMemo(
     () =>
@@ -429,7 +449,9 @@ const completeness = useMemo(() => {
         fullName: profile?.full_name,
         email: profile?.email,
         role: "Vendor",
-        status: completeness.overallIncomplete ? "Incomplete Registration" : "Active",
+        status: completeness.overallIncomplete
+          ? "Incomplete Registration"
+          : profile?.status ?? "active",
       }),
     [profile, completeness.overallIncomplete]
   );
@@ -832,7 +854,7 @@ const completeness = useMemo(() => {
               </div>
             </div>
 
-            <div className="mt-8 border-t border-gray-200" />
+            <div className="mt-8 border-gray-200" />
           </section>
         </form>
       </>
@@ -884,7 +906,7 @@ const completeness = useMemo(() => {
               />
             ))}
           </div>
-          <div className="mt-8 border-gray-200" />
+          <div className="mt-8 border-t border-gray-200" />
         </section>
 
         {/* Offerings */}
@@ -1189,65 +1211,65 @@ const completeness = useMemo(() => {
     );
   }
 
-function renderVerificationTab() {
-  return (
-    <>
-      <div className="mt-8">
-        {/* Account status card */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <div className="flex items-center justify-between">
-            <div className="text-[15px] font-semibold text-gray-900">
-              Account Status
+  function renderVerificationTab() {
+    return (
+      <>
+        <div className="mt-8">
+          {/* Account status card */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center justify-between">
+              <div className="text-[15px] font-semibold text-gray-900">
+                Account Status
+              </div>
+              {completeness.overallIncomplete ? (
+                <span className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+                  ● Incomplete Registration
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  ● Complete
+                </span>
+              )}
             </div>
-            {completeness.overallIncomplete ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
-                ● Incomplete Registration
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                ● Complete
-              </span>
+
+            {completeness.overallIncomplete && (
+              <div className="mt-4 rounded-xl bg-black px-4 py-2 text-sm font-medium text-white">
+                Some required details are missing
+              </div>
             )}
           </div>
 
-          {completeness.overallIncomplete && (
-            <div className="mt-4 rounded-xl bg-black px-4 py-2 text-sm font-medium text-white">
-              Some required details are missing
-            </div>
-          )}
+          {/* Missing checklist */}
+          <div className="mt-6 divide-y divide-gray-200 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <VerificationRow
+              label="Business Logo"
+              missing={completeness.missing.logo}
+              href="/pages/setting/business?tab=business"
+              cta="Go to Business Information"
+            />
+            <VerificationRow
+              label="Refund Policy link"
+              missing={completeness.missing.policy}
+              href="/pages/setting/business?tab=docs"
+              cta="Go to Documents & Agreements"
+            />
+            <VerificationRow
+              label="Upload Business Certificates"
+              missing={completeness.missing.certificates}
+              href="/pages/setting/business?tab=docs"
+              cta="Go to Business Settings"
+            />
+            <VerificationRow
+              label="Payout Details"
+              missing={completeness.missing.payout}
+              href="/pages/setting/payouts?tab=payouts"
+              cta="Go to Payout Details"
+            />
+          </div>
         </div>
-
-        {/* Missing checklist */}
-        <div className="mt-6 divide-y divide-gray-200 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-          <VerificationRow
-            label="Business Logo"
-            missing={completeness.missing.logo}  
-            href="/pages/setting/business?tab=business"
-            cta="Go to Business Information"
-          />
-          <VerificationRow
-            label="Refund Policy link"
-            missing={completeness.missing.policy}
-            href="/pages/setting/business?tab=docs"
-            cta="Go to Documents & Agreements"
-          />
-          <VerificationRow
-            label="Upload Business Certificates"
-            missing={completeness.missing.certificates}
-            href="/pages/setting/business?tab=docs"
-            cta="Go to Business Settings"
-          />
-          <VerificationRow
-            label="Payout Details"
-            missing={completeness.missing.payout}
-            href="/pages/setting/payouts"
-            cta="Go to Payout Details"
-          />
-        </div>
-      </div>
-    </>
-  );
-}
+      </>
+    );
+  }
 
   /* ---------- Sticky footer per tab ---------- */
 
@@ -1297,10 +1319,21 @@ function renderVerificationTab() {
 
   /* ---------- Loading ---------- */
 
-  if (loading || !profile || !biz) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <ClipLoader size="md" color="gray" />
+        <ClipLoader size={32} color="#6b7280" />
+      </div>
+    );
+  }
+
+  if (!profile || !biz) {
+    // unauthenticated or broken state
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <p className="text-sm text-gray-500">
+          You must be logged in to view this page.
+        </p>
       </div>
     );
   }
@@ -1339,7 +1372,7 @@ export default function BusinessSettingsPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-white">
-                 <ClipLoader size="md" color="gray" />
+          <ClipLoader size={32} color="#6b7280" />
         </div>
       }
     >

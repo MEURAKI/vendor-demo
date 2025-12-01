@@ -74,6 +74,10 @@ type VendorBusiness = {
   pickup_address: string | null;
   pickup_postal_code: string | null;
   delivery_days_note: string | null;
+
+  // 🔴 pulled from vendor_business (for completeness)
+  brand_logo_url: string | null;
+  policy_url: string | null;
 };
 
 type TabKey = "general" | "fulfilment" | "promos";
@@ -119,6 +123,27 @@ type PromoFormState = {
 
 const DEFAULT_APPLIES_TO: PromoAppliesTo = "all";
 
+/* ---- Docs & payout for completeness ---- */
+
+type DocKind =
+  | "vendor_agreement"
+  | "uen_acra"
+  | "product_certificate"
+  | "service_certificate";
+
+type DocRow = {
+  id: string;
+  vendor_id: string;
+  kind: DocKind;
+  status: "pending" | "approved" | "rejected";
+};
+
+type PayoutLite = {
+  vendor_id: string;
+  account_number?: string | null;
+  account_holder_name?: string | null;
+};
+
 /* ---------------------- Simple Pill component ---------------------- */
 
 type DimensionPillProps = {
@@ -155,6 +180,17 @@ const DIMENSION_ICON_MAP: Record<string, string> = {
   Spiritual: "/images/wellness/spiritual-realm.png",
 };
 
+const DIMENSIONS_ALL = [
+  "Physical",
+  "Emotional",
+  "Mental",
+  "Occupational",
+  "Financial",
+  "Environmental",
+  "Social",
+  "Spiritual",
+];
+
 /* ---------------------- INNER PAGE (with hooks) ---------------------- */
 
 function ShopSettingsPageInner() {
@@ -164,6 +200,9 @@ function ShopSettingsPageInner() {
 
   const [profile, setProfile] = useState<ProfileLite | null>(null);
   const [vb, setVb] = useState<VendorBusiness | null>(null);
+  const [docs, setDocs] = useState<DocRow[]>([]);
+  const [payout, setPayout] = useState<PayoutLite | null>(null);
+
   const [bioCount, setBioCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -186,7 +225,6 @@ function ShopSettingsPageInner() {
 
   // Promo codes
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
-  const [promoLoading] = useState(false);
   const [promoSaving, setPromoSaving] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
@@ -201,17 +239,6 @@ function ShopSettingsPageInner() {
     max_redemptions: "",
     applies_to: DEFAULT_APPLIES_TO,
   });
-
-  const DIMENSIONS = [
-    "Physical",
-    "Emotional",
-    "Mental",
-    "Occupational",
-    "Financial",
-    "Environmental",
-    "Social",
-    "Spiritual",
-  ];
 
   const toggleIn = (
     arr: string[],
@@ -292,7 +319,7 @@ function ShopSettingsPageInner() {
     }
   }
 
-  /* ---------------- Initial load: profile + vendor_business + promos ---------------- */
+  /* ---------------- Initial load: profile + vendor_business + promos + docs + payout ---------------- */
 
   useEffect(() => {
     (async () => {
@@ -307,6 +334,8 @@ function ShopSettingsPageInner() {
         { data: prof },
         { data: vbRow },
         { data: promoRows, error: promoErr },
+        { data: docsRows },
+        { data: payoutRow },
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -343,7 +372,9 @@ function ShopSettingsPageInner() {
               pickup_address,
               pickup_postal_code,
               delivery_days_note,
-              dimensions
+              dimensions,
+              brand_logo_url,
+              policy_url
             `
           )
           .eq("id", user.id)
@@ -371,6 +402,15 @@ function ShopSettingsPageInner() {
           .eq("vendor_id", user.id)
           .eq("scope", "vendor")
           .order("created_at", { ascending: false }),
+        supabase
+          .from("vendor_docs")
+          .select("id,vendor_id,kind,status")
+          .eq("vendor_id", user.id),
+        supabase
+          .from("vendor_payout")
+          .select("vendor_id,account_number,bank_holder_name")
+          .eq("vendor_id", user.id)
+          .maybeSingle(),
       ]);
 
       const profTyped: ProfileLite = {
@@ -410,6 +450,9 @@ function ShopSettingsPageInner() {
         pickup_postal_code: "",
         delivery_days_note: "",
         dimensions: [],
+
+        brand_logo_url: null,
+        policy_url: null,
       };
 
       const merged: VendorBusiness = { ...defaults, ...(vbRow || {}) };
@@ -424,6 +467,9 @@ function ShopSettingsPageInner() {
       } else if (promoRows) {
         setPromoCodes(promoRows as PromoCode[]);
       }
+
+      setDocs((docsRows || []) as DocRow[]);
+      setPayout((payoutRow || null) as PayoutLite | null);
 
       setLoading(false);
     })();
@@ -537,11 +583,66 @@ function ShopSettingsPageInner() {
     };
   }, [placesLoaded]);
 
+  /* ------------------------- completeness (shared across settings) ------------------------- */
+
+  const completeness = useMemo(() => {
+    if (!vb) {
+      const missing = {
+        logo: true,
+        policy: true,
+        certificates: true,
+        payout: true,
+      };
+      const overallIncomplete = true;
+
+      const navAlerts: Record<string, boolean> = {
+        "/pages/setting/business?tab=business": missing.logo,
+        "/pages/setting/business?tab=docs":
+          missing.policy || missing.certificates,
+        "/pages/setting/business?tab=verification": overallIncomplete,
+        "/pages/setting/payouts?tab=payouts": missing.payout,
+      };
+
+      return { missing, overallIncomplete, navAlerts };
+    }
+
+    const hasLogo = !!vb.brand_logo_url;
+    const hasPolicy = !!vb.policy_url;
+
+    const hasAnyCert =
+      docs.filter(
+        (d) =>
+          d.kind === "product_certificate" ||
+          d.kind === "service_certificate"
+      ).length > 0;
+
+    const hasPayout =
+      !!payout?.account_number || !!payout?.account_holder_name;
+
+    const missing = {
+      logo: !hasLogo,
+      policy: !hasPolicy,
+      certificates: !hasAnyCert,
+      payout: !hasPayout,
+    };
+
+    const overallIncomplete = Object.values(missing).some(Boolean);
+
+    const navAlerts: Record<string, boolean> = {
+      "/pages/setting/business?tab=business": missing.logo,
+      "/pages/setting/business?tab=docs":
+        missing.policy || missing.certificates,
+      "/pages/setting/business?tab=verification": overallIncomplete,
+      "/pages/setting/payouts?tab=payouts": missing.payout,
+    };
+
+    return { missing, overallIncomplete, navAlerts };
+  }, [vb, docs, payout]);
+
   /* ------------------------- Sidebar config ------------------------- */
 
   const sidebarConfig = useMemo(() => {
-    const statusLabel =
-      profile?.status === "active" ? "active" : "Incomplete Registration";
+    const statusLabel = profile?.status ? "active" : "Incomplete Registration";
 
     return buildSidebarConfig({
       fullName: profile?.full_name ?? profile?.email ?? "User",
@@ -549,7 +650,7 @@ function ShopSettingsPageInner() {
       role: "Vendor",
       status: statusLabel,
     });
-  }, [profile]);
+  }, [profile, completeness.overallIncomplete]);
 
   /* ------------------------- Save helpers --------------------------- */
 
@@ -588,6 +689,10 @@ function ShopSettingsPageInner() {
 
       // dimensions as array
       dimensions: dimensions.length ? dimensions : null,
+
+      // keep business-level fields
+      brand_logo_url: src.brand_logo_url,
+      policy_url: src.policy_url,
 
       updated_at: new Date().toISOString(),
     };
@@ -834,7 +939,9 @@ function ShopSettingsPageInner() {
 
       <div className="flex h-screen bg-[#F7F7FB]">
         <Sidebar config={sidebarConfig} />
-        <SettingsNav />
+
+        {/* 🔴 Pass global completeness alerts so Business/Payouts dots show even here */}
+        <SettingsNav alerts={completeness.navAlerts} />
 
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-5xl px-8 py-10 pb-32">
@@ -1094,7 +1201,7 @@ function ShopSettingsPageInner() {
                   </p>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {DIMENSIONS.map((d) => {
+                    {DIMENSIONS_ALL.map((d) => {
                       const active = dimensions.includes(d);
                       const iconSrc = DIMENSION_ICON_MAP[d];
 

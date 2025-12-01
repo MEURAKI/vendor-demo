@@ -1,4 +1,3 @@
-// app/pages/setting/payouts/page.tsx
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -9,7 +8,6 @@ import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
 import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { useToast } from "../../../../components/toast/ToastProvider";
-import { useAuthGuard } from "../../../../hooks/useAuthGuard";
 import ClipLoader from "react-spinners/ClipLoader";
 
 /* ---------- Types ---------- */
@@ -26,9 +24,36 @@ type Payout = {
   updated_at?: string;
 };
 
-type Me = { id: string; email: string | null; full_name: string | null; status: string | null; onboarding_completed: boolean; };
+type Me = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  status: string | null;
+  onboarding_completed: boolean;
+};
 
 type BillingTab = "payouts" | "plan" | "invoices";
+
+/* ---- Completeness-related minimal types ---- */
+
+type DocKind =
+  | "vendor_agreement"
+  | "uen_acra"
+  | "product_certificate"
+  | "service_certificate";
+
+type DocRow = {
+  id: string;
+  vendor_id: string;
+  kind: DocKind;
+  status: "pending" | "approved" | "rejected";
+};
+
+type VendorBusinessBits = {
+  id: string;
+  brand_logo_url: string | null;
+  policy_url: string | null;
+};
 
 /* ---------- Small shared UI helpers ---------- */
 
@@ -131,7 +156,7 @@ function LockedInvoicesCard() {
 }
 
 /* ======================================================================= */
-/*                         INNER PAGE (uses hooks)                        */
+/*                         INNER PAGE (uses hooks)                         */
 /* ======================================================================= */
 
 function BillingSettingsPageInner() {
@@ -152,6 +177,10 @@ function BillingSettingsPageInner() {
     currency: "SGD",
   });
 
+  // completeness bits
+  const [biz, setBiz] = useState<VendorBusinessBits | null>(null);
+  const [docs, setDocs] = useState<DocRow[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -165,7 +194,7 @@ function BillingSettingsPageInner() {
     setActiveTab(urlTab);
   }, [urlTab]);
 
-  // initial load of user + payout
+  // initial load of user + payout + business + docs
   useEffect(() => {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
@@ -174,17 +203,33 @@ function BillingSettingsPageInner() {
         return;
       }
 
-      const [{ data: profile }, { data: p }] = await Promise.all([
+      const userId = auth.user.id;
+
+      const [
+        { data: profile },
+        { data: p },
+        { data: vbRow },
+        { data: docsRows },
+      ] = await Promise.all([
         supabase
           .from("profiles")
           .select("id,email,full_name,status,onboarding_completed")
-          .eq("id", auth.user.id)
+          .eq("id", userId)
           .maybeSingle(),
         supabase
           .from("vendor_payout")
           .select("*")
-          .eq("vendor_id", auth.user.id)
+          .eq("vendor_id", userId)
           .maybeSingle(),
+        supabase
+          .from("vendor_business")
+          .select("id,brand_logo_url,policy_url")
+          .eq("id", userId)
+          .maybeSingle(),
+        supabase
+          .from("vendor_docs")
+          .select("id,vendor_id,kind,status")
+          .eq("vendor_id", userId),
       ]);
 
       setMe((profile || null) as Me);
@@ -202,23 +247,15 @@ function BillingSettingsPageInner() {
           currency: p.currency ?? "SGD",
         });
       } else {
-        setPayout((x) => ({ ...x, vendor_id: auth.user!.id }));
+        setPayout((x) => ({ ...x, vendor_id: userId }));
       }
+
+      setBiz((vbRow || null) as VendorBusinessBits | null);
+      setDocs((docsRows ?? []) as DocRow[]);
 
       setLoading(false);
     })();
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: me?.full_name || me?.email || "User",
-        email: me?.email || "",
-        role: "Vendor",
-       status: me?.status ?? "active"
-      }),
-    [me]
-  );
 
   function switchTab(tab: BillingTab) {
     const params = new URLSearchParams(searchParams.toString());
@@ -261,11 +298,79 @@ function BillingSettingsPageInner() {
     else successToast({ title: "Success", description: "Payout details saved." });
   }
 
+  /* ---------- Completeness (shared across settings) ---------- */
+
+  const completeness = useMemo(() => {
+    if (!biz) {
+      const missing = {
+        logo: true,
+        policy: true,
+        certificates: true,
+        payout: true,
+      };
+      const overallIncomplete = true;
+
+      const navAlerts: Record<string, boolean> = {
+        "/pages/setting/business?tab=business": missing.logo,
+        "/pages/setting/business?tab=docs":
+          missing.policy || missing.certificates,
+        "/pages/setting/business?tab=verification": overallIncomplete,
+        "/pages/setting/payouts?tab=payouts": missing.payout,
+      };
+
+      return { missing, overallIncomplete, navAlerts };
+    }
+
+    const hasLogo = !!biz.brand_logo_url;
+    const hasPolicy = !!biz.policy_url;
+
+    const hasAnyCert =
+      docs.filter(
+        (d) =>
+          d.kind === "product_certificate" ||
+          d.kind === "service_certificate"
+      ).length > 0;
+
+    const hasPayout =
+      !!payout?.account_number || !!payout?.account_holder_name;
+
+    const missing = {
+      logo: !hasLogo,
+      policy: !hasPolicy,
+      certificates: !hasAnyCert,
+      payout: !hasPayout,
+    };
+
+    const overallIncomplete = Object.values(missing).some(Boolean);
+
+    const navAlerts: Record<string, boolean> = {
+      "/pages/setting/business?tab=business": missing.logo,
+      "/pages/setting/business?tab=docs":
+        missing.policy || missing.certificates,
+      "/pages/setting/business?tab=verification": overallIncomplete,
+      "/pages/setting/payouts?tab=payouts": missing.payout,
+    };
+
+    return { missing, overallIncomplete, navAlerts };
+  }, [biz, docs, payout]);
+
+  const sidebarConfig = useMemo(
+    () =>
+      buildSidebarConfig({
+        fullName: me?.full_name || me?.email || "User",
+        email: me?.email || "",
+        role: "Vendor",
+        status: completeness.overallIncomplete
+          ? "Incomplete Registration"
+          : me?.status ?? "active",
+      }),
+    [me, completeness.overallIncomplete]
+  );
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-                <ClipLoader size="md" color="gray" />
-
+        <ClipLoader size="md" color="gray" />
       </div>
     );
   }
@@ -273,14 +378,7 @@ function BillingSettingsPageInner() {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar config={sidebarConfig} />
-      <SettingsNav
-        alerts={{
-          "/pages/setting/payouts?tab=payouts":
-            !payout.bank_name ||
-            !payout.account_number ||
-            !payout.account_holder_name,
-        }}
-      />
+      <SettingsNav alerts={completeness.navAlerts} />
 
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-8 py-10">
@@ -412,27 +510,6 @@ function BillingSettingsPageInner() {
                   />
                 </TwoColsWrap>
               </TwoCols>
-
-              {/* Sticky Save bar */}
-              <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-10">
-                <div className="mx-auto max-w-5xl px-8 pb-6">
-                  <div className="pointer-events-auto flex items-center justify-end gap-3 rounded-full border border-gray-200 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur">
-                    <Link
-                      href="/pages/setting/verification"
-                      className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Go back without saving
-                    </Link>
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
-                    >
-                      {saving ? "Saving…" : "Save"}
-                    </button>
-                  </div>
-                </div>
-              </div>
             </form>
           )}
 
@@ -451,6 +528,28 @@ function BillingSettingsPageInner() {
             </div>
           )}
         </div>
+
+        {/* Sticky footer aligned with main content */}
+        {activeTab === "payouts" && (
+          <div className="fixed bottom-0 left-0 right-0 z-20 ml-[calc(300px+280px)] bg-white/85 backdrop-blur border-t border-gray-200">
+            <div className="mx-auto max-w-5xl px-8 py-4 flex items-center justify-end gap-3">
+              <Link
+                href="/pages/setting/verification"
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Go back without saving
+              </Link>
+              <button
+                type="button"
+                onClick={onSavePayout}
+                disabled={saving}
+                className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -461,13 +560,11 @@ function BillingSettingsPageInner() {
 /* ======================================================================= */
 
 export default function BillingSettingsPage() {
-
   return (
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-white">
-                  <ClipLoader size="md" color="gray" />
-
+          <ClipLoader size="md" color="gray" />
         </div>
       }
     >

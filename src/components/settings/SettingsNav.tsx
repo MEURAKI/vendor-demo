@@ -1,4 +1,3 @@
-// components/settings/SettingsNav.tsx
 "use client";
 
 import Link from "next/link";
@@ -16,7 +15,7 @@ const groups: { label: string; items: NavItem[] }[] = [
   {
     label: "Account Settings",
     items: [
-      { href: "/pages/setting/profile", label: "Profile Information" , tabKey: "profile"},
+      { href: "/pages/setting/profile", label: "Profile Information", tabKey: "profile" },
       { href: "/pages/setting/profile", label: "Login & Security", tabKey: "security" },
       { href: "/pages/setting/profile", label: "Notifications", tabKey: "notifications" },
     ],
@@ -24,7 +23,6 @@ const groups: { label: string; items: NavItem[] }[] = [
   {
     label: "Business Settings",
     items: [
-      // all these are now tabs of /pages/setting/business
       { href: "/pages/setting/business", label: "Business Information", tabKey: "business" },
       { href: "/pages/setting/business", label: "Brand Story & Offerings", tabKey: "brand" },
       { href: "/pages/setting/business", label: "Documents & Agreements", tabKey: "docs" },
@@ -87,16 +85,23 @@ export default function SettingsNav({ alerts = {} as Alerts }: { alerts?: Alerts
                     ? `${i.href}?tab=${i.tabKey}`
                     : i.href;
 
-                  const showDot = Boolean(alerts[keyForAlert] ?? alerts[i.href]);
+                  const alertVal = alerts[keyForAlert] ?? alerts[i.href];
+
+                  let showDot = false;
+                  let isMissing = false;
+
+                  if (typeof alertVal === "boolean") {
+                    showDot = true;
+                    isMissing = alertVal; // true => missing, false => complete
+                  } else if (typeof alertVal === "number") {
+                    showDot = true;
+                    isMissing = alertVal > 0; // e.g. count of missing items
+                  }
 
                   return (
                     <li key={`${i.href}-${i.tabKey || "root"}`}>
                       <Link
-                        href={
-                          i.tabKey
-                            ? `${i.href}?tab=${i.tabKey}`
-                            : i.href
-                        }
+                        href={i.tabKey ? `${i.href}?tab=${i.tabKey}` : i.href}
                         className={[
                           "flex items-center justify-between rounded-lg px-3 py-2 text-sm",
                           active
@@ -107,9 +112,12 @@ export default function SettingsNav({ alerts = {} as Alerts }: { alerts?: Alerts
                         <span>{i.label}</span>
                         {showDot && (
                           <span
-                            className="ml-3 inline-block h-2 w-2 flex-none rounded-full bg-rose-500"
-                            aria-label="Requires attention"
-                            title="Requires attention"
+                            className={[
+                              "ml-3 inline-block h-2 w-2 flex-none rounded-full",
+                              isMissing ? "bg-rose-500" : "bg-emerald-500",
+                            ].join(" ")}
+                            aria-label={isMissing ? "Requires attention" : "Completed"}
+                            title={isMissing ? "Requires attention" : "Completed"}
                           />
                         )}
                       </Link>
