@@ -53,24 +53,39 @@ const EMPTY: Step3 = {
 };
 
 async function setVendorStatus(status: VendorStatus, completed: boolean) {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
   if (error || !user) throw new Error("No user");
 
-  const [p1, p2] = await Promise.all([
-    supabase.from("profiles").update({
+  const { error: pError } = await supabase
+    .from("profiles")
+    .update({
       status,
       onboarding_completed: completed,
-    }).eq("id", user.id),
+    })
+    .eq("id", user.id);
 
-    supabase.from("onboarding").upsert({
-      user_id: user.id,
-      status,
-      onboarding_completed: completed,
-    }),
-  ]);
+  if (pError) throw pError;
+}
 
-  if (p1.error) throw p1.error;
-  if (p2.error) throw p2.error;
+// Use the same bucket pattern as profile avatars
+const STORAGE_BUCKET = "avatars"; // bucket where avatars/logos are stored
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!; // e.g. https://kltjywhkfwoaefxtzztg.supabase.co
+
+async function uploadToStorage(path: string, file: File) {
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, file, { upsert: true });
+
+  if (error) throw error;
+  return data.path; // e.g. "065e5bae-.../1764673572039.png"
+}
+
+function buildPublicUrl(path: string) {
+  // Produces: https://<project>.supabase.co/storage/v1/object/public/avatars/<path>
+  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
 }
 
 /* -------------------------------------------------------
@@ -88,33 +103,70 @@ export default function VerifyBusinessPage() {
 
   const { successToast, errorToast } = useToast();
 
-  // Prefill from Supabase (onboarding.data.step3)
+  // Prefill from vendor_business + vendor_payout
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
-        .from("onboarding")
-        .select("data")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const userId = user.id;
 
-      const raw = data?.data?.step3;
-      if (!raw) return;
+      const [businessRes, payoutRes] = await Promise.all([
+        supabase
+          .from("vendor_business")
+          .select(
+            `
+            company_name,
+            uen,
+            incorporation_year,
+            instagram,
+            facebook,
+            tiktok,
+            refund_policy_url
+          `
+          )
+          .eq("id", userId)
+          .maybeSingle(),
+        supabase
+          .from("vendor_payout")
+          .select(
+            `
+            account_number,
+            bank_name,
+            bank_code,
+            branch_code,
+            swift_iban
+          `
+          )
+          .eq("vendor_id", userId)
+          .maybeSingle(),
+      ]);
 
-      // Back-compat for single policyLink field
-      const policyLinks: string[] = Array.isArray(raw.policyLinks)
-        ? raw.policyLinks
-        : raw.policyLink
-        ? [raw.policyLink]
-        : [""];
+      const business = businessRes.data;
+      const payout = payoutRes.data;
 
-      setForm({
-        ...EMPTY,
-        ...raw,
-        policyLinks: policyLinks.length ? policyLinks : [""],
-      });
+      const policyLinks =
+        business?.refund_policy_url?.trim().length > 0
+          ? [business?.refund_policy_url]
+          : [""];
+
+      setForm((prev) => ({
+        ...prev,
+        company: business?.company_name || prev.company,
+        uen: business?.uen || prev.uen,
+        year: business?.incorporation_year || prev.year,
+        instagram: business?.instagram || prev.instagram,
+        facebook: business?.facebook || prev.facebook,
+        tiktok: business?.tiktok || prev.tiktok,
+        bankName: payout?.bank_name || prev.bankName,
+        accNo: payout?.account_number || prev.accNo,
+        bankCode: payout?.bank_code || prev.bankCode,
+        branchCode: payout?.branch_code || prev.branchCode,
+        swift: payout?.swift_iban || prev.swift,
+        policyLinks,
+      }));
     })();
   }, []);
 
@@ -136,104 +188,60 @@ export default function VerifyBusinessPage() {
       policyLinks: f.policyLinks.filter((_, idx) => idx !== i) || [""],
     }));
 
-const STORAGE_BUCKET = "brand-assets"; // <-- change to your bucket name
+  const handleNext = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace("/pages/auth/login");
+        return;
+      }
 
-async function uploadToStorage(path: string, file: File) {
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(path, file, { upsert: true });
+      const userId = user.id;
 
-  if (error) throw error;
-  return data.path;
-}
+      // -------- 1) Upload files (if any) --------
+      let logoPublicUrl: string | null = null;
 
-async function getPublicUrl(path: string) {
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
-}
+      if (logo) {
+        const ext = logo.name.split(".").pop() ?? "png";
+        // Use timestamped filename similar to avatar pattern
+        const logoPath = `${userId}/${Date.now()}.${ext}`;
 
-const handleNext = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setSaving(true);
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.replace("/pages/auth/login");
-      return;
-    }
+        const storageKey = await uploadToStorage(logoPath, logo);
+        logoPublicUrl = buildPublicUrl(storageKey);
 
-    const userId = user.id;
+        // Update profile avatar_url with the same URL
+        await supabase
+          .from("profiles")
+          .update({ avatar_url: logoPublicUrl })
+          .eq("id", userId);
+      }
 
-    // -------- 1) Upload files (if any) --------
-    let logoPublicUrl: string | null = null;
+      if (certs) {
+        const ext = certs.name.split(".").pop() ?? "zip";
+        const certsPath = `${userId}/certs/${Date.now()}.${ext}`;
 
-    if (logo) {
-      const ext = logo.name.split(".").pop() ?? "png";
-      const logoPath = `${userId}/logo.${ext}`;
+        const storageKey = await uploadToStorage(certsPath, certs);
 
-      const storageKey = await uploadToStorage(logoPath, logo);
-      logoPublicUrl = await getPublicUrl(storageKey);
+        await supabase.from("vendor_docs").insert({
+          vendor_id: userId,
+          kind: "business_certificates", // must exist in vendor_doc_type enum
+          storage_key: storageKey,
+          file_name: certs.name,
+          mime_type: certs.type,
+          size_bytes: certs.size,
+          uploaded_by: userId,
+        });
+      }
 
-      // vendor_docs for logo
-      await supabase.from("vendor_docs").insert({
-        vendor_id: userId,
-        kind: "brand_logo", // <-- MUST match your vendor_doc_type enum
-        storage_key: storageKey,
-        file_name: logo.name,
-        mime_type: logo.type,
-        size_bytes: logo.size,
-        uploaded_by: userId,
-      });
-    }
+      // -------- 2) Update vendor_business --------
+      const firstPolicyUrl =
+        form.policyLinks.find((p) => p.trim().length > 0) ?? null;
 
-    if (certs) {
-      const ext = certs.name.split(".").pop() ?? "zip";
-      const certsPath = `${userId}/certs/${Date.now()}.${ext}`;
-
-      const storageKey = await uploadToStorage(certsPath, certs);
-
-      await supabase.from("vendor_docs").insert({
-        vendor_id: userId,
-        kind: "business_certificates", // <-- MUST match your vendor_doc_type enum
-        storage_key: storageKey,
-        file_name: certs.name,
-        mime_type: certs.type,
-        size_bytes: certs.size,
-        uploaded_by: userId,
-      });
-    }
-
-    // -------- 2) Save step3 into onboarding JSON (as you already do) --------
-    const { data: existing } = await supabase
-      .from("onboarding")
-      .select("data")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const nextData = {
-      ...(existing?.data ?? {}),
-      step3: {
-        ...form,
-        _logoFileName: logo?.name || null,
-        _certsFileName: certs?.name || null,
-      },
-    };
-
-    const { error: onboardingError } = await supabase.from("onboarding").upsert({
-      user_id: userId,
-      step: 3,
-      data: nextData,
-    });
-
-    if (onboardingError) throw onboardingError;
-
-    // -------- 3) Update vendor_business --------
-    const firstPolicyUrl =
-      form.policyLinks.find((p) => p.trim().length > 0) ?? null;
-
-    await supabase
-      .from("vendor_business")
-      .upsert({
+      const vendorBusinessPayload: any = {
         id: userId,
         company_name: form.company || null,
         uen: form.uen || null,
@@ -242,24 +250,48 @@ const handleNext = async (e: React.FormEvent) => {
         facebook: form.facebook || null,
         tiktok: form.tiktok || null,
         refund_policy_url: firstPolicyUrl,
-        brand_logo_url: logoPublicUrl, // or logo_url
-      });
+      };
 
-    // -------- 4) Mark status (your existing helper) --------
-    await setVendorStatus("under_review", true);
+      // Only send brand_logo_url if we actually uploaded a new logo
+      if (logoPublicUrl) {
+        vendorBusinessPayload.brand_logo_url = logoPublicUrl;
+      }
 
-    router.push("/pages/auth/pending");
-  } catch (err) {
-    console.error(err);
-    errorToast({ title: "Error", description: "Error saving your details." });
-  } finally {
-    setSaving(false);
-  }
-};
+      const { error: vbError } = await supabase
+        .from("vendor_business")
+        .upsert(vendorBusinessPayload);
 
+      if (vbError) throw vbError;
 
+      // -------- 3) Upsert vendor_payout (bank details) --------
+      const { error: payoutError } = await supabase
+        .from("vendor_payout")
+        .upsert({
+          vendor_id: userId,
+          account_number: form.accNo || null,
+          account_holder_name: form.company || null, // or use profile full_name if you prefer
+          bank_name: form.bankName || null,
+          bank_code: form.bankCode || null,
+          branch_code: form.branchCode || null,
+          swift_iban: form.swift || null,
+          // country, currency left null for now (no UI fields yet)
+        });
 
-  // Finish later (mark incomplete_registration + not completed)
+      if (payoutError) throw payoutError;
+
+      // -------- 4) Mark status --------
+      await setVendorStatus("under_review", true);
+
+      router.push("/pages/auth/pending");
+    } catch (err) {
+      console.error(err);
+      errorToast({ title: "Error", description: "Error saving your details." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Finish later (mark pending_admin_approval + not completed)
   const finishLater = async () => {
     try {
       await setVendorStatus("pending_admin_approval", false);
@@ -282,12 +314,16 @@ const handleNext = async (e: React.FormEvent) => {
       <div className="pointer-events-none absolute right-0 bottom-0 h-[520px] w-[520px] bg-fuchsia-200/40 blur-[140px]" />
 
       {/* Side slogans */}
-      <p className="hidden md:block absolute left-10 top-1/2 -translate-y-1/2 text-purple-300/70 text-[12px] font-semibold"
-         style={{ writingMode: "vertical-rl" }}>
+      <p
+        className="hidden md:block absolute left-10 top-1/2 -translate-y-1/2 text-purple-300/70 text-[12px] font-semibold"
+        style={{ writingMode: "vertical-rl" }}
+      >
         MEURAKI HOLISTIC REVOLUTION
       </p>
-      <p className="hidden md:block absolute right-10 top-1/2 -translate-y-1/2 text-purple-300/70 text-[12px] font-semibold"
-         style={{ writingMode: "vertical-rl" }}>
+      <p
+        className="hidden md:block absolute right-10 top-1/2 -translate-y-1/2 text-purple-300/70 text-[12px] font-semibold"
+        style={{ writingMode: "vertical-rl" }}
+      >
         JOIN THE WELLNESS COMMUNITY
       </p>
 
@@ -325,12 +361,19 @@ const handleNext = async (e: React.FormEvent) => {
                        max-h-[calc(100vh-300px)] md:max-h-[calc(100vh-380px)]"
             style={{ scrollbarWidth: "none" }}
           >
-            <h1 className="text-2xl sm:text-[26px] font-extrabold text-gray-900">Verify your business</h1>
+            <h1 className="text-2xl sm:text-[26px] font-extrabold text-gray-900">
+              Verify your business
+            </h1>
 
             {/* Company Logo (row style) */}
             <section className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-800">Company Logo *</label>
-              <p className="text-xs text-gray-500">This logo will be displayed on the app. Click to upload. Size file max upload 300kb.</p>
+              <label className="block text-sm font-semibold text-gray-800">
+                Company Logo *
+              </label>
+              <p className="text-xs text-gray-500">
+                This logo will be displayed on the app. Click to upload. Size
+                file max upload 300kb.
+              </p>
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-purple-50/80 border border-purple-200 flex items-center justify-center">
                   <span className="text-lg">🗂️</span>
@@ -340,8 +383,13 @@ const handleNext = async (e: React.FormEvent) => {
                   <span className="inline-flex items-center rounded-full bg-black text-white px-5 py-2 cursor-pointer select-none">
                     Choose File
                   </span>
-                  <input id="logo" type="file" accept="image/*" className="hidden"
-                         onChange={(e) => setLogo(e.target.files?.[0] ?? null)} />
+                  <input
+                    id="logo"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setLogo(e.target.files?.[0] ?? null)}
+                  />
                 </label>
 
                 <div className="flex-1">
@@ -353,28 +401,102 @@ const handleNext = async (e: React.FormEvent) => {
             </section>
 
             {/* Company details */}
-            <Field label="Full Company Name (Displayed on your ACRA)" name="company" value={form.company} onChange={handleChange} placeholder="ABC PTE. LTD." />
-            <Field label="Company Registration / UEN" name="uen" value={form.uen} onChange={handleChange} placeholder="U2202039" />
-            <Field label="Year of Incorporation" name="year" value={form.year} onChange={handleChange} placeholder="2025" />
+            <Field
+              label="Full Company Name (Displayed on your ACRA)"
+              name="company"
+              value={form.company}
+              onChange={handleChange}
+              placeholder="ABC PTE. LTD."
+            />
+            <Field
+              label="Company Registration / UEN"
+              name="uen"
+              value={form.uen}
+              onChange={handleChange}
+              placeholder="U2202039"
+            />
+            <Field
+              label="Year of Incorporation"
+              name="year"
+              value={form.year}
+              onChange={handleChange}
+              placeholder="2025"
+            />
 
             {/* Social media */}
             <section className="space-y-3">
-              <label className="block text-sm font-semibold text-gray-800">Social Media Links</label>
-              <p className="text-xs text-gray-500">Enter the full link including https://</p>
-              <Field placeholder="Instagram Handle" name="instagram" value={form.instagram} onChange={handleChange} />
-              <Field placeholder="Facebook Handle" name="facebook" value={form.facebook} onChange={handleChange} />
-              <Field placeholder="Tiktok Handle" name="tiktok" value={form.tiktok} onChange={handleChange} />
-              <Field placeholder="Additional Social Link 1" name="socialExtra" value={form.socialExtra} onChange={handleChange} />
+              <label className="block text-sm font-semibold text-gray-800">
+                Social Media Links
+              </label>
+              <p className="text-xs text-gray-500">
+                Enter the full link including https://
+              </p>
+              <Field
+                placeholder="Instagram Handle"
+                name="instagram"
+                value={form.instagram}
+                onChange={handleChange}
+              />
+              <Field
+                placeholder="Facebook Handle"
+                name="facebook"
+                value={form.facebook}
+                onChange={handleChange}
+              />
+              <Field
+                placeholder="Tiktok Handle"
+                name="tiktok"
+                value={form.tiktok}
+                onChange={handleChange}
+              />
+              <Field
+                placeholder="Additional Social Link 1"
+                name="socialExtra"
+                value={form.socialExtra}
+                onChange={handleChange}
+              />
             </section>
 
             {/* Bank */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">Bank Account Details (for payouts)</h2>
-              <Field label="Bank Name" name="bankName" value={form.bankName} onChange={handleChange} placeholder="OCBC Bank" />
-              <Field label="Account Number" name="accNo" value={form.accNo} onChange={handleChange} placeholder="0000000000" />
-              <Field label="Bank Code" name="bankCode" value={form.bankCode} onChange={handleChange} placeholder="7339" />
-              <Field label="Branch Code" name="branchCode" value={form.branchCode} onChange={handleChange} placeholder="604" />
-              <Field label="SWIFT Code" name="swift" value={form.swift} onChange={handleChange} placeholder="OCBCSGSG" />
+              <h2 className="text-lg font-semibold text-gray-900">
+                Bank Account Details (for payouts)
+              </h2>
+              <Field
+                label="Bank Name"
+                name="bankName"
+                value={form.bankName}
+                onChange={handleChange}
+                placeholder="OCBC Bank"
+              />
+              <Field
+                label="Account Number"
+                name="accNo"
+                value={form.accNo}
+                onChange={handleChange}
+                placeholder="0000000000"
+              />
+              <Field
+                label="Bank Code"
+                name="bankCode"
+                value={form.bankCode}
+                onChange={handleChange}
+                placeholder="7339"
+              />
+              <Field
+                label="Branch Code"
+                name="branchCode"
+                value={form.branchCode}
+                onChange={handleChange}
+                placeholder="604"
+              />
+              <Field
+                label="SWIFT Code"
+                name="swift"
+                value={form.swift}
+                onChange={handleChange}
+                placeholder="OCBCSGSG"
+              />
             </section>
 
             {/* Policy links (multi) */}
@@ -382,7 +504,9 @@ const handleNext = async (e: React.FormEvent) => {
               <h2 className="text-lg font-semibold text-gray-900">
                 Rescheduling / Cancelation / Returns / Refund Policy
               </h2>
-              <p className="text-xs text-gray-500">Please indicate your guideline (you can add multiple links).</p>
+              <p className="text-xs text-gray-500">
+                Please indicate your guideline (you can add multiple links).
+              </p>
 
               {form.policyLinks.map((link, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -419,10 +543,13 @@ const handleNext = async (e: React.FormEvent) => {
 
             {/* Certificates upload (row style) */}
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-gray-900">Upload All Business Certificates</h2>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Upload All Business Certificates
+              </h2>
               <p className="text-xs text-gray-500">
-                This includes all documents required to sell your business or services (e.g. qualifications, …).  
-                Please upload only one <code>.zip</code> file with all documents.
+                This includes all documents required to sell your business or
+                services (e.g. qualifications, …). Please upload only one{" "}
+                <code>.zip</code> file with all documents.
               </p>
 
               <div className="flex items-center gap-3">
@@ -479,7 +606,13 @@ const handleNext = async (e: React.FormEvent) => {
 
       {/* Fixed logo bottom center (md+) */}
       <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-        <Image src="/images/logo-meuraki.svg" alt="Meuraki" width={120} height={30} className="opacity-70" />
+        <Image
+          src="/images/logo-meuraki.svg"
+          alt="Meuraki"
+          width={120}
+          height={30}
+          className="opacity-70"
+        />
       </div>
 
       {/* Confirm modal for Skip */}
@@ -492,18 +625,28 @@ const handleNext = async (e: React.FormEvent) => {
               </div>
             </div>
             <h2 className="text-xl font-bold mb-3 text-gray-900">
-              Are you sure?<br /> We won’t be able to verify your business yet.
+              Are you sure?
+              <br /> We won’t be able to verify your business yet.
             </h2>
             <p className="text-sm text-gray-600 mb-4 leading-relaxed">
               You can complete onboarding later from your account. However,{" "}
-              <span className="font-semibold">you won’t be able to start selling or receive payments</span>{" "}
-              until all required details and documents are submitted and approved.
+              <span className="font-semibold">
+                you won’t be able to start selling or receive payments
+              </span>{" "}
+              until all required details and documents are submitted and
+              approved.
             </p>
             <div className="flex justify-center gap-3 mt-6">
-              <button onClick={() => setShowConfirm(false)} className="px-6 py-3 rounded-full bg-black text-white hover:bg-gray-900 transition">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="px-6 py-3 rounded-full bg-black text-white hover:bg-gray-900 transition"
+              >
                 Go back to onboarding
               </button>
-              <button onClick={finishLater} className="px-6 py-3 rounded-full bg-purple-100 text-purple-600 font-medium hover:bg-purple-200 transition">
+              <button
+                onClick={finishLater}
+                className="px-6 py-3 rounded-full bg-purple-100 text-purple-600 font-medium hover:bg-purple-200 transition"
+              >
                 Finish later
               </button>
             </div>
@@ -529,7 +672,11 @@ function Field({
 }) {
   return (
     <div>
-      {label && <label className="block text-sm font-semibold text-gray-800 mb-1">{label}</label>}
+      {label && (
+        <label className="block text-sm font-semibold text-gray-800 mb-1">
+          {label}
+        </label>
+      )}
       <input
         name={name}
         value={value}

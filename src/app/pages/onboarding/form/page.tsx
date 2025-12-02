@@ -9,7 +9,8 @@ import Field from "../../../../components/auth/onboarding/Field";
 import { useToast } from "../../../../components/toast/ToastProvider";
 
 type Step1 = {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   role: string;
   email: string;
   phone: string;
@@ -22,7 +23,8 @@ type Step1 = {
 };
 
 const EMPTY: Step1 = {
-  fullName: "",
+  firstName: "",
+  lastName: "",
   role: "",
   email: "",
   phone: "",
@@ -40,59 +42,140 @@ export default function OnboardingForm() {
   const [form, setForm] = useState<Step1>(EMPTY);
   const { successToast, errorToast } = useToast();
 
-  /** Prefill from Supabase **/
+  /** Prefill from profiles + vendor_business (onboarding tables ignored) **/
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase
-        .from("onboarding")
-        .select("data")
-        .eq("user_id", user.id)
-        .single();
-      if (data?.data?.step1) setForm((prev) => ({ ...prev, ...data.data.step1 }));
+
+      const [profilesRes, vendorRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            `
+            full_name,
+            first_name,
+            last_name,
+            role,
+            email,
+            phone,
+            country_code
+          `
+          )
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("vendor_business")
+          .select(
+            `
+            brand_name,
+            company_name,
+            shop_name,
+            contact_email,
+            phone_country_code,
+            phone_number,
+            shop_address,
+            pickup_address,
+            pickup_postal_code,
+            uen
+          `
+          )
+          .eq("id", user.id)
+          .maybeSingle(),
+      ]);
+
+      const profile = profilesRes.data;
+      const vendor = vendorRes.data;
+
+      setForm((prev) => ({
+        ...prev,
+        firstName: profile?.first_name || prev.firstName,
+        lastName: profile?.last_name || prev.lastName,
+        role: profile?.role || prev.role,
+        email: profile?.email || vendor?.contact_email || prev.email,
+        phone: profile?.phone || vendor?.phone_number || prev.phone,
+        countryCode:
+          profile?.country_code ||
+          vendor?.phone_country_code ||
+          prev.countryCode ||
+          "+65",
+        organization:
+          vendor?.brand_name ||
+          vendor?.shop_name ||
+          vendor?.company_name ||
+          prev.organization,
+        address: vendor?.shop_address || vendor?.pickup_address || prev.address,
+        postal: vendor?.pickup_postal_code || prev.postal,
+        uen: vendor?.uen || prev.uen,
+        // country stays as-is (separate concern)
+      }));
     })();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
-const handleNext = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.replace("/pages/auth/login");
-      return;
+  const handleNext = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace("/pages/auth/login");
+        return;
+      }
+
+      const fullName = [form.firstName, form.lastName].filter(Boolean).join(" ").trim();
+
+      // ----- 1) Update profiles with first/last/full name + role + phone -----
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          full_name: fullName || null,
+          first_name: form.firstName || null,
+          last_name: form.lastName || null,
+          role: form.role || null,
+          phone: form.phone || null,
+          country_code: form.countryCode || "+65",
+          // email: form.email || null, // uncomment if you want to sync email too
+        })
+        .eq("id", user.id);
+
+      if (profileError) throw profileError;
+
+      // ----- 2) Upsert vendor_business with business info -----
+      const vendorPayload = {
+        id: user.id,
+        brand_name: form.organization,
+        company_name: form.organization,
+        shop_name: form.organization,
+        contact_email: form.email,
+        phone_country_code: form.countryCode || "+65",
+        phone_number: form.phone,
+        shop_address: form.address,
+        pickup_address: form.address,
+        pickup_postal_code: form.postal,
+        uen: form.uen || null,
+        // leave dimensions, bio, socials etc for later steps
+      };
+
+      const { error: vendorError } = await supabase
+        .from("vendor_business")
+        .upsert(vendorPayload);
+      if (vendorError) throw vendorError;
+
+      router.push("/pages/onboarding/brand");
+    } catch (err) {
+      console.error(err);
+      errorToast({ title: "Error", description: "Error saving your details." });
+    } finally {
+      setSaving(false);
     }
-
-    const vendorPayload = {
-      id: user.id,
-      brand_name: form.organization,
-      company_name: form.organization,
-      shop_name: form.organization,
-      contact_email: form.email,
-      phone_country_code: form.countryCode || "+65",
-      phone_number: form.phone,
-      shop_address: form.address,
-      pickup_address: form.address,
-      pickup_postal_code: form.postal,
-      uen: form.uen || null,
-      // leave dimensions, bio, socials etc for later steps
-    };
-
-    await supabase.from("vendor_business").upsert(vendorPayload);
-
-    router.push("/pages/onboarding/brand");
-  } catch (err) {
-    console.error(err);
-    errorToast({ title: "Error", description: "Error saving your details." });
-  } finally {
-    setSaving(false);
-  }
-};
-
+  };
 
   return (
     <div className="relative min-h-screen bg-gradient-to-tr from-purple-50 via-white to-purple-50 overflow-hidden font-poppins text-gray-900">
@@ -146,16 +229,42 @@ const handleNext = async (e: React.FormEvent) => {
             className="flex-1 overflow-y-auto no-scrollbar scroll-smooth px-8 sm:px-12 py-8 space-y-6
                       max-h-[calc(100vh-300px)] md:max-h-[calc(100vh-380px)]"
           >
-            <h1 className="text-2xl sm:text-[26px] font-extrabold text-gray-900" style={{ letterSpacing: "-1px" }}>
+            <h1
+              className="text-2xl sm:text-[26px] font-extrabold text-gray-900"
+              style={{ letterSpacing: "-1px" }}
+            >
               Registration Details <span className="text-gray-500">(Mandatory)</span>
             </h1>
 
             <div className="space-y-6">
+              {/* First name / Last name */}
               <div className="grid sm:grid-cols-2 gap-4">
-                <Field label="Full Name *" name="fullName" value={form.fullName} onChange={handleChange} placeholder="Jane Doe" />
-                <Field label="Designation / Role *" name="role" value={form.role} onChange={handleChange} placeholder="Sales Manager" />
+                <Field
+                  label="First Name *"
+                  name="firstName"
+                  value={form.firstName}
+                  onChange={handleChange}
+                  placeholder="Jane"
+                />
+                <Field
+                  label="Last Name *"
+                  name="lastName"
+                  value={form.lastName}
+                  onChange={handleChange}
+                  placeholder="Doe"
+                />
               </div>
 
+              {/* Role */}
+              <Field
+                label="Designation / Role *"
+                name="role"
+                value={form.role}
+                onChange={handleChange}
+                placeholder="Sales Manager"
+              />
+
+              {/* Email + Phone */}
               <div className="grid sm:grid-cols-2 gap-4">
                 <Field
                   label="Contact Email Address *"
@@ -167,7 +276,10 @@ const handleNext = async (e: React.FormEvent) => {
                 />
 
                 <div>
-                  <label className="block text-sm font-semibold mb-1" style={{ letterSpacing: 0 }}>
+                  <label
+                    className="block text-sm font-semibold mb-1"
+                    style={{ letterSpacing: 0 }}
+                  >
                     Contact Number *
                   </label>
                   <div className="flex items-center gap-2">
@@ -188,13 +300,43 @@ const handleNext = async (e: React.FormEvent) => {
                 </div>
               </div>
 
-              <Field label="Organization / Brand Name *" name="organization" value={form.organization} onChange={handleChange} placeholder="BeautyCo" />
-              <Field label="Company UEN" name="uen" value={form.uen} onChange={handleChange} placeholder="201234567Z" />
-              <Field label="Business Full Address *" name="address" value={form.address} onChange={handleChange} placeholder="Address Line 1" />
+              <Field
+                label="Organization / Brand Name *"
+                name="organization"
+                value={form.organization}
+                onChange={handleChange}
+                placeholder="BeautyCo"
+              />
+              <Field
+                label="Company UEN"
+                name="uen"
+                value={form.uen}
+                onChange={handleChange}
+                placeholder="201234567Z"
+              />
+              <Field
+                label="Business Full Address *"
+                name="address"
+                value={form.address}
+                onChange={handleChange}
+                placeholder="Address Line 1"
+              />
 
               <div className="grid sm:grid-cols-2 gap-4">
-                <Field label="" name="postal" value={form.postal} onChange={handleChange} placeholder="Postal Code" />
-                <Field label="" name="country" value={form.country} onChange={handleChange} placeholder="Country" />
+                <Field
+                  label=""
+                  name="postal"
+                  value={form.postal}
+                  onChange={handleChange}
+                  placeholder="Postal Code"
+                />
+                <Field
+                  label=""
+                  name="country"
+                  value={form.country}
+                  onChange={handleChange}
+                  placeholder="Country"
+                />
               </div>
             </div>
           </div>
@@ -220,7 +362,13 @@ const handleNext = async (e: React.FormEvent) => {
 
       {/* Fixed bottom logo */}
       <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-        <Image src="/images/logo-meuraki.svg" alt="Meuraki" width={120} height={30} className="opacity-70" />
+        <Image
+          src="/images/logo-meuraki.svg"
+          alt="Meuraki"
+          width={120}
+          height={30}
+          className="opacity-70"
+        />
       </div>
     </div>
   );
