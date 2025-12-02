@@ -162,38 +162,58 @@ export default function BrandStoryOfferingsPage() {
 
 
   /** ---------- Persist (Next or Skip) ---------- */
-  const persistAndGo = async (to: string) => {
-    try {
-      setSaving(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace("/pages/auth/login");
-        return;
-      }
-
-      const { data: existing } = await supabase
-        .from("onboarding")
-        .select("data")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const nextData = { ...(existing?.data ?? {}), step2: state };
-
-      // Move step to 3 (verification) regardless of "Skip" or "Next"
-      await supabase.from("onboarding").upsert({
-        user_id: user.id,
-        step: 3,
-        data: nextData,
-      });
-
-      router.push(to);
-    } catch (e) {
-      console.error(e);
-      errorToast({ title: "Error", description: "Error saving your details." });
-    } finally {
-      setSaving(false);
+const persistAndGo = async (to: string) => {
+  try {
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.replace("/pages/auth/login");
+      return;
     }
-  };
+
+    // 1) Keep existing onboarding JSON behaviour
+    const { data: existing } = await supabase
+      .from("onboarding")
+      .select("data")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const nextData = { ...(existing?.data ?? {}), step2: state };
+
+    await supabase.from("onboarding").upsert({
+      user_id: user.id,
+      step: 3,
+      data: nextData,
+    });
+
+    // 2) Update vendor_business with brand story + dimensions (+ optional tags)
+    const businessTags = [
+      ...state.offerings,
+      ...state.platforms,
+      ...state.motivations,
+      ...state.interests,
+    ]
+      .filter(Boolean)
+      .join(",");
+
+    await supabase
+      .from("vendor_business")
+      .update({
+        shop_bio: state.desc || null,
+        dimensions: state.dimensions.length ? state.dimensions : null,
+        business_tags: businessTags || null,
+      })
+      .eq("id", user.id);
+
+    router.push(to);
+  } catch (e) {
+    console.error(e);
+    errorToast({ title: "Error", description: "Error saving your details." });
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

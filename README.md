@@ -1,4 +1,4 @@
-# Meuraki Vendor Portal - Setup Guide
+# Meuraki Subscriber Portal - Setup Guide
 
 ## Prerequisites
 - Node.js 18.x or higher

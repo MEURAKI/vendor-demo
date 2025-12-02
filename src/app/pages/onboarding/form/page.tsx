@@ -57,38 +57,42 @@ export default function OnboardingForm() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleNext = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setSaving(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace("/pages/auth/login");
-        return;
-      }
-
-      const { data: existing } = await supabase
-        .from("onboarding")
-        .select("data")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const nextData = { ...(existing?.data ?? {}), step1: form };
-
-      await supabase.from("onboarding").upsert({
-        user_id: user.id,
-        step: 2,
-        data: nextData,
-      });
-
-      router.push("/pages/onboarding/brand");
-    } catch (err) {
-      console.error(err);
-      errorToast({ title: "Error", description: "Error saving your details." });
-    } finally {
-      setSaving(false);
+const handleNext = async (e: React.FormEvent) => {
+  e.preventDefault();
+  try {
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.replace("/pages/auth/login");
+      return;
     }
-  };
+
+    const vendorPayload = {
+      id: user.id,
+      brand_name: form.organization,
+      company_name: form.organization,
+      shop_name: form.organization,
+      contact_email: form.email,
+      phone_country_code: form.countryCode || "+65",
+      phone_number: form.phone,
+      shop_address: form.address,
+      pickup_address: form.address,
+      pickup_postal_code: form.postal,
+      uen: form.uen || null,
+      // leave dimensions, bio, socials etc for later steps
+    };
+
+    await supabase.from("vendor_business").upsert(vendorPayload);
+
+    router.push("/pages/onboarding/brand");
+  } catch (err) {
+    console.error(err);
+    errorToast({ title: "Error", description: "Error saving your details." });
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   return (
     <div className="relative min-h-screen bg-gradient-to-tr from-purple-50 via-white to-purple-50 overflow-hidden font-poppins text-gray-900">

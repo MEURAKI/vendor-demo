@@ -1067,8 +1067,8 @@ function BulkUploadModal({
           <div>
             <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
               {isProducts
-                ? "Import to Products (Vendor Portal)"
-                : "Import to Product Variants (Vendor Portal)"}
+                ? "Import to Products (Subscriber Portal)"
+                : "Import to Product Variants (Subscriber Portal)"}
             </div>
 
             {isProducts ? (

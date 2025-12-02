@@ -136,52 +136,128 @@ export default function VerifyBusinessPage() {
       policyLinks: f.policyLinks.filter((_, idx) => idx !== i) || [""],
     }));
 
-  // Submit (mark under_review + completed)
-  const handleNext = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace("/pages/auth/login");
-        return;
-      }
+const STORAGE_BUCKET = "brand-assets"; // <-- change to your bucket name
 
-      // Persist step3 (store file names for now)
-      const { data: existing } = await supabase
-        .from("onboarding")
-        .select("data")
-        .eq("user_id", user.id)
-        .maybeSingle();
+async function uploadToStorage(path: string, file: File) {
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, file, { upsert: true });
 
-      const nextData = {
-        ...(existing?.data ?? {}),
-        step3: {
-          ...form,
-          _logoFileName: logo?.name || null,
-          _certsFileName: certs?.name || null,
-        },
-      };
+  if (error) throw error;
+  return data.path;
+}
 
-      const { error } = await supabase.from("onboarding").upsert({
-        user_id: user.id,
-        step: 3,
-        data: nextData,
-      });
-      if (error) throw error;
+async function getPublicUrl(path: string) {
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
 
-      // Mark status
-      await setVendorStatus("under_review", true);
-
-      // Go to a light "pending" screen
-      router.push("/pages/auth/pending");
-    } catch (err) {
-      console.error(err);
-      errorToast({ title: "Error", description: "Error saving your details." });
-    } finally {
-      setSaving(false);
+const handleNext = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setSaving(true);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.replace("/pages/auth/login");
+      return;
     }
-  };
+
+    const userId = user.id;
+
+    // -------- 1) Upload files (if any) --------
+    let logoPublicUrl: string | null = null;
+
+    if (logo) {
+      const ext = logo.name.split(".").pop() ?? "png";
+      const logoPath = `${userId}/logo.${ext}`;
+
+      const storageKey = await uploadToStorage(logoPath, logo);
+      logoPublicUrl = await getPublicUrl(storageKey);
+
+      // vendor_docs for logo
+      await supabase.from("vendor_docs").insert({
+        vendor_id: userId,
+        kind: "brand_logo", // <-- MUST match your vendor_doc_type enum
+        storage_key: storageKey,
+        file_name: logo.name,
+        mime_type: logo.type,
+        size_bytes: logo.size,
+        uploaded_by: userId,
+      });
+    }
+
+    if (certs) {
+      const ext = certs.name.split(".").pop() ?? "zip";
+      const certsPath = `${userId}/certs/${Date.now()}.${ext}`;
+
+      const storageKey = await uploadToStorage(certsPath, certs);
+
+      await supabase.from("vendor_docs").insert({
+        vendor_id: userId,
+        kind: "business_certificates", // <-- MUST match your vendor_doc_type enum
+        storage_key: storageKey,
+        file_name: certs.name,
+        mime_type: certs.type,
+        size_bytes: certs.size,
+        uploaded_by: userId,
+      });
+    }
+
+    // -------- 2) Save step3 into onboarding JSON (as you already do) --------
+    const { data: existing } = await supabase
+      .from("onboarding")
+      .select("data")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const nextData = {
+      ...(existing?.data ?? {}),
+      step3: {
+        ...form,
+        _logoFileName: logo?.name || null,
+        _certsFileName: certs?.name || null,
+      },
+    };
+
+    const { error: onboardingError } = await supabase.from("onboarding").upsert({
+      user_id: userId,
+      step: 3,
+      data: nextData,
+    });
+
+    if (onboardingError) throw onboardingError;
+
+    // -------- 3) Update vendor_business --------
+    const firstPolicyUrl =
+      form.policyLinks.find((p) => p.trim().length > 0) ?? null;
+
+    await supabase
+      .from("vendor_business")
+      .upsert({
+        id: userId,
+        company_name: form.company || null,
+        uen: form.uen || null,
+        incorporation_year: form.year || null,
+        instagram: form.instagram || null,
+        facebook: form.facebook || null,
+        tiktok: form.tiktok || null,
+        refund_policy_url: firstPolicyUrl,
+        brand_logo_url: logoPublicUrl, // or logo_url
+      });
+
+    // -------- 4) Mark status (your existing helper) --------
+    await setVendorStatus("under_review", true);
+
+    router.push("/pages/auth/pending");
+  } catch (err) {
+    console.error(err);
+    errorToast({ title: "Error", description: "Error saving your details." });
+  } finally {
+    setSaving(false);
+  }
+};
+
+
 
   // Finish later (mark incomplete_registration + not completed)
   const finishLater = async () => {

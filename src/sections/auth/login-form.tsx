@@ -169,7 +169,7 @@ export default function LoginForm() {
           <div className="mb-3 sm:mb-4 md:mb-5">
             <h1 className="mt-4 sm:mt-5 lg:mt-6 text-xl font-extrabold leading-tight text-black sm:text-3xl md:text-4xl lg:text-5xl">
               MEURAKI
-              <br /> Vendor Portal
+              <br /> Subscriber Portal
             </h1>
             <p className="mt-2 text-xs text-gray-500 sm:mt-2 sm:text-sm md:text-sm">
               Welcome back! Please sign in to access your account.

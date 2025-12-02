@@ -293,7 +293,7 @@ export default function DashboardPage() {
           Welcome{profile.full_name ? `, ${profile.full_name}` : ""} 👋
         </h1>
         <p className="mb-8 text-gray-600">
-          You’re successfully logged in to the Meuraki Vendor Portal.
+          You’re successfully logged in to the Meuraki Subscriber Portal.
         </p>
 
         {/* Simple stats row */}
