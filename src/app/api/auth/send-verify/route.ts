@@ -9,7 +9,7 @@ import crypto from "node:crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL!.replace(/\/$/, "");
+const SITE = process.env.NEXT_PUBLIC_SITE_URL!.replace(/\/$/, "") || "https://subscriber.meuraki.com.sg";
 
 function supaAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
