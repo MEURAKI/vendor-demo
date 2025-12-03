@@ -9,18 +9,23 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Fallback site (used only if we can't detect the origin)
+ * This is the app that actually hosts /pages/auth/reset-password
+ *
+ * LOCAL .env:
+ *   NEXT_PUBLIC_RESET_BASE_URL=http://localhost:3000
+ *
+ * PROD .env:
+ *   NEXT_PUBLIC_RESET_BASE_URL=https://vendor.meuraki.com.sg
+ *
+ * (or whatever domain your reset page lives on)
  */
-const RAW_SITE =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://vendor.meuraki.com.sg";
+const RAW_RESET_BASE =
+  process.env.NEXT_PUBLIC_RESET_BASE_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL || // optional fallback
+  "http://localhost:3000";
 
-const FALLBACK_SITE = RAW_SITE.replace(/\/$/, "");
-
-/**
- * Path to the reset page on each portal.
- * Change this if your route is different.
- */
-const RESET_PATH = "/pages/auth/reset-password";
+const RESET_BASE = RAW_RESET_BASE.replace(/\/$/, "");
+const RESET_PATH = "/pages/auth/reset-password"; // change if your route is different
 
 /**
  * Supabase admin client (SERVICE ROLE)
@@ -44,25 +49,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email required" }, { status: 400 });
     }
 
-    /**
-     * Determine which portal called this API.
-     * Example origins:
-     *  - https://subscriber.meuraki.com.sg
-     *  - https://vendor.meuraki.com.sg
-     *  - http://localhost:3000
-     */
-    const origin = req.headers.get("origin") || FALLBACK_SITE;
-
-    let portalBase: string;
-    try {
-      const url = new URL(origin);
-      portalBase = `${url.protocol}//${url.host}`;
-    } catch {
-      portalBase = origin.replace(/\/$/, "");
-    }
-
-    // 👇 This is the crucial part: we append RESET_PATH
-    const redirectTo = `${portalBase}${RESET_PATH}`;
+    // 🔑 The ONLY URL Supabase will redirect back to
+    const redirectTo = `${RESET_BASE}${RESET_PATH}`;
 
     console.log("Using redirectTo:", redirectTo);
 
@@ -78,10 +66,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    // Supabase returns the full verification URL here
     const resetUrl =
       (data as any)?.properties?.action_link ?? (data as any)?.action_link;
 
-    console.log("Generated reset URL:", resetUrl);
 
     if (!resetUrl) {
       return NextResponse.json(
@@ -101,7 +89,7 @@ export async function POST(req: Request) {
     // 3) Send via Mailchimp Transactional (Mandrill)
     await mch.messages.send({
       message: {
-        from_email: "no-reply@meuraki.com.sg",
+        from_email: "no-reply@meuraki.com.sg", // must be verified domain
         from_name: "MEURAKI",
         to: [{ email, type: "to" }],
         subject: "Reset your MEURAKI password",
