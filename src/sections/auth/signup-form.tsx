@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -14,11 +14,14 @@ const redirectTo =
 export default function SignupForm() {
   const router = useRouter();
   const { successToast, errorToast } = useToast();
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     acceptTerms: false,
   });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const checks = useMemo(() => {
     const p = formData.password || "";
@@ -39,8 +42,8 @@ export default function SignupForm() {
     checks.special &&
     formData.acceptTerms;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doSignup = async (opts?: { quick?: boolean }) => {
+    const quick = opts?.quick ?? false;
 
     if (!formData.acceptTerms) {
       errorToast({
@@ -52,18 +55,101 @@ export default function SignupForm() {
 
     const { email, password } = formData;
 
-    const { error } = await supabase.auth.signUp({
+    setIsSubmitting(true);
+
+    // 1) Supabase sign up with metadata flag
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          quick_signup: quick,
+        },
+      },
     });
 
     if (error) {
       console.error("Signup error:", error.message);
       errorToast({ title: "Error", description: error.message });
+      setIsSubmitting(false);
       return;
     }
 
+    // 1.5) If quick signup, mark onboarding_completed = true on profiles
+    if (quick && data.user?.id) {
+      try {
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({ onboarding_completed: true, status: "incomplete_registration", email_verified: true })
+          .eq("id", data.user.id);
+
+        if (profileError) {
+          console.error(
+            "Error setting onboarding_completed on profile:",
+            profileError.message
+          );
+        }
+      } catch (e) {
+        console.error("Unexpected error updating profile onboarding flag:", e);
+      }
+    }
+
     try {
+      if (quick) {
+        // QUICK SIGN UP FLOW:
+        // - no email verification
+        // - log the user in
+        // - notify admin
+        // - go straight to dashboard
+
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          console.error("Quick signup sign-in error:", signInError.message);
+          errorToast({
+            title: "Error",
+            description:
+              signInError.message ||
+              "Could not sign you in after creating your account.",
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Notify admin (fire-and-forget)
+        fetch("/api/auth/notify-admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            quickSignup: true,
+            userId: data.user?.id,
+          }),
+        }).catch((err) => {
+          console.error("Failed to notify admin:", err);
+        });
+
+        successToast({
+          title: "Welcome!",
+          description: "Your account is ready and you’re now logged in.",
+        });
+
+        setFormData({
+          email: "",
+          password: "",
+          acceptTerms: false,
+        });
+
+        router.push("/pages/dashboard");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // NORMAL SIGNUP FLOW:
+      // 2) Send verification email (your existing endpoint)
       const r = await fetch("/api/auth/send-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -77,8 +163,22 @@ export default function SignupForm() {
           title: "Error",
           description: j.error || "Couldn’t send verification email.",
         });
+        setIsSubmitting(false);
         return;
       }
+
+      // 3) Notify admin for normal signup as well
+      fetch("/api/auth/notify-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          quickSignup: false,
+          userId: data.user?.id,
+        }),
+      }).catch((err) => {
+        console.error("Failed to notify admin:", err);
+      });
 
       successToast({
         title: "Check your email",
@@ -91,16 +191,28 @@ export default function SignupForm() {
         acceptTerms: false,
       });
 
+      // 4) Normal flow → verify email screen
       router.push(
         `/pages/auth/verify-email?email=${encodeURIComponent(email)}`
       );
     } catch (err) {
-      console.error("Network error sending verify email:", err);
+      console.error("Network error during signup:", err);
       errorToast({
         title: "Error",
         description: "Network error. Please try again.",
       });
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    await doSignup({ quick: false });
+  };
+
+  const handleQuickSignup = async () => {
+    await doSignup({ quick: true });
   };
 
   const handleGoogleSignup = async () => {
@@ -224,18 +336,28 @@ export default function SignupForm() {
               </span>
             </label>
 
-            {/* CTA */}
+            {/* CTA – normal sign up */}
             <button
               type="submit"
-              disabled={!allGood}
+              disabled={!allGood || isSubmitting}
               className={`w-full h-11 sm:h-12 rounded-full text-sm sm:text-base font-medium transition-colors shadow-lg
                          ${
-                           allGood
+                           allGood && !isSubmitting
                              ? "bg-black text-white hover:bg-gray-900"
                              : "bg-gray-200 text-gray-500 cursor-not-allowed"
                          }`}
             >
-              Sign up
+              {isSubmitting ? "Signing up..." : "Sign up"}
+            </button>
+
+            {/* Quick sign up – skips confirmation & onboarding */}
+            <button
+              type="button"
+              onClick={handleQuickSignup}
+              disabled={!allGood || isSubmitting}
+              className="w-full h-10 sm:h-11 rounded-full text-xs sm:text-sm font-medium mt-2 border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed"
+            >
+              Quick sign up (skip email & onboarding)
             </button>
 
             {/* Divider */}
@@ -254,11 +376,16 @@ export default function SignupForm() {
             <button
               type="button"
               onClick={handleGoogleSignup}
+              disabled={isSubmitting}
               className="w-full h-11 sm:h-12 rounded-2xl bg-white border border-gray-200
                          flex items-center justify-center gap-3 text-sm text-gray-700 font-medium
-                         shadow-sm hover:shadow transition-shadow"
+                         shadow-sm hover:shadow transition-shadow disabled:cursor-not-allowed"
             >
-              <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" aria-hidden="true">
+              <svg
+                className="h-4 w-4 sm:h-5 sm:w-5"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

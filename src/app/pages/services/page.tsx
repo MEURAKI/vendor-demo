@@ -66,16 +66,16 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
   const [uploading, setUploading] = useState(false);
 
   const handleCancel = () => {
-  if (uploading) return;
+    if (uploading) return;
 
-  // Clear selected files
-  setSpacesFile(null);
-  setProvidersFile(null);
-  setServicesFile(null);
+    // Clear selected files
+    setSpacesFile(null);
+    setProvidersFile(null);
+    setServicesFile(null);
 
-  // Close modal / drawer
-  onClose();
-};
+    // Close modal / drawer
+    onClose();
+  };
 
   if (!open) return null;
 
@@ -165,10 +165,10 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
         </div>
 
         {/* Body */}
- <div className="mt-6 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
           {/* Spaces (Step 1) */}
           <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
-            <div className="text-[10px] font-semibold text-pink-600 mb-1">
+            <div className="mb-1 text-[10px] font-semibold text-pink-600">
               Step 1 — Upload Spaces
             </div>
 
@@ -182,7 +182,7 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
               Physical spaces / venues linked to your services.
             </p>
 
-            {/* NEW: template link */}
+            {/* template link */}
             <a
               href="/templates/spaces-template.csv"
               download
@@ -210,7 +210,7 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
 
           {/* Providers (Step 2) */}
           <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
-            <div className="text-[10px] font-semibold text-red-600 mb-1">
+            <div className="mb-1 text-[10px] font-semibold text-red-600">
               Step 2 — Upload Providers
             </div>
 
@@ -224,7 +224,7 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
               Coaches / practitioners who deliver these services.
             </p>
 
-            {/* NEW: template link */}
+            {/* template link */}
             <a
               href="/templates/providers-template.csv"
               download
@@ -253,7 +253,7 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
 
           {/* Services (Step 3) */}
           <div className="group rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm transition hover:border-violet-400 hover:shadow-md">
-            <div className="text-[10px] font-semibold text-violet-600 mb-1">
+            <div className="mb-1 text-[10px] font-semibold text-violet-600">
               Step 3 — Upload Services
             </div>
 
@@ -267,7 +267,7 @@ function BulkUploadModal({ open, onClose, onUploaded }: BulkUploadModalProps) {
               Core service definitions (names, pricing, duration, etc.).
             </p>
 
-            {/* NEW: template link */}
+            {/* template link */}
             <a
               href="/templates/services-template.csv"
               download
@@ -797,28 +797,6 @@ export default function ServicesPage() {
     );
   }
 
-  function renderStatusChip(status: ServiceStatus) {
-    if (status === "active") {
-      return (
-        <span className="inline-flex h-7 items-center rounded-full bg-[#DCFCE7] px-3 text-[11px] font-semibold text-[#166534]">
-          Active
-        </span>
-      );
-    }
-    if (status === "unavailable") {
-      return (
-        <span className="inline-flex h-7 items-center rounded-full bg-[#FEE2E2] px-3 text-[11px] font-semibold text-[#B91C1C]">
-          Unavailable
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex h-7 items-center rounded-full bg-[#E5E7EB] px-3 text-[11px] font-semibold text-gray-700">
-        Draft
-      </span>
-    );
-  }
-
   function renderLocations(locations: LocationType[]) {
     if (!locations?.length)
       return <span className="text-[11px] text-gray-400">—</span>;
@@ -858,6 +836,49 @@ export default function ServicesPage() {
     window.location.href = `/pages/services/${id}/edit`;
   }
 
+  // NEW: inline status change like Products screen
+  async function handleStatusChange(
+    serviceId: string,
+    newStatus: ServiceStatus
+  ) {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const res = await fetch("/api/services/bulk-edit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token && {
+            Authorization: `Bearer ${session.access_token}`,
+          }),
+        },
+        body: JSON.stringify({
+          serviceIds: [serviceId],
+          status: newStatus,
+        }),
+      });
+
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        console.error("Failed to update service status", j);
+        alert(j.error || "Failed to update service status");
+        return;
+      }
+
+      // update local state
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === serviceId ? { ...row, status: newStatus } : row
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Error updating service status");
+    }
+  }
+
   async function handleConfirmTrash() {
     if (!serviceIdToTrash) return;
 
@@ -892,7 +913,7 @@ export default function ServicesPage() {
     }
   }
 
-  // bulk apply handler (wire this to your own API)
+  // bulk apply handler
   async function handleBulkApply(payload: {
     serviceIds: string[];
     price?: number | null;
@@ -901,7 +922,6 @@ export default function ServicesPage() {
     status?: ServiceStatus | null;
   }) {
     try {
-      // Example API call – adjust to match your backend route + shape
       await fetch("/api/services/bulk-edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1151,9 +1171,36 @@ export default function ServicesPage() {
                             : "—"}
                         </td>
 
-                        {/* STATUS */}
+                        {/* STATUS - inline dropdown like Products */}
                         <td className="px-3 py-3 text-center">
-                          {renderStatusChip(row.status)}
+                          <div className="relative inline-flex">
+                            <select
+                              value={row.status}
+                              onChange={(e) =>
+                                handleStatusChange(
+                                  row.id,
+                                  e.target.value as ServiceStatus
+                                )
+                              }
+                              className={clsx(
+                                "rounded-full border pl-3 pr-8 py-1.5 text-[11px] font-semibold focus:outline-none appearance-none",
+                                row.status === "active" &&
+                                  "border-transparent bg-[#DCFCE7] text-[#166534]",
+                                row.status === "unavailable" &&
+                                  "border-transparent bg-[#FEE2E2] text-[#B91C1C]",
+                                row.status === "draft" &&
+                                  "border-transparent bg-[#E5E7EB] text-gray-700"
+                              )}
+                            >
+                              <option value="draft">Draft</option>
+                              <option value="active">Active</option>
+                              <option value="unavailable">Unavailable</option>
+                            </select>
+
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">
+                              ▾
+                            </span>
+                          </div>
                         </td>
 
                         {/* ACTIONS */}
