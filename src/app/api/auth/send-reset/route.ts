@@ -19,10 +19,6 @@ const FALLBACK_SITE = RAW_SITE.replace(/\/$/, "");
 /**
  * Path to the reset page on each portal.
  * Change this if your route is different.
- *
- * Examples:
- * - "/pages/auth/reset-password" (Next.js pages dir)
- * - "/auth/reset-password" (Next.js app dir)
  */
 const RESET_PATH = "/pages/auth/reset-password";
 
@@ -49,30 +45,28 @@ export async function POST(req: Request) {
     }
 
     /**
-     * Figure out which portal called this API
-     * e.g.:
-     *  - https://vendor.meuraki.com.sg
+     * Determine which portal called this API.
+     * Example origins:
      *  - https://subscriber.meuraki.com.sg
+     *  - https://vendor.meuraki.com.sg
      *  - http://localhost:3000
      */
     const origin = req.headers.get("origin") || FALLBACK_SITE;
 
-    // Ensure we only keep protocol + host (no paths, no trailing slash)
     let portalBase: string;
     try {
       const url = new URL(origin);
       portalBase = `${url.protocol}//${url.host}`;
     } catch {
-      // If origin isn't a valid URL for some reason, just sanitize manually
       portalBase = origin.replace(/\/$/, "");
     }
 
-    // Final redirect URL for the reset flow on *that* portal
+    // 👇 This is the crucial part: we append RESET_PATH
     const redirectTo = `${portalBase}${RESET_PATH}`;
 
-    // console.log("Using redirectTo:", redirectTo);
+    console.log("Using redirectTo:", redirectTo);
 
-    // 1) Ask Supabase to generate a recovery link that carries the tokens
+    // 1) Ask Supabase to generate a recovery link
     const { data, error } = await supaAdmin().auth.admin.generateLink({
       type: "recovery",
       email,
@@ -84,11 +78,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // Supabase returns the link here:
     const resetUrl =
       (data as any)?.properties?.action_link ?? (data as any)?.action_link;
 
-    // console.log("Generated reset URL:", resetUrl);
+    console.log("Generated reset URL:", resetUrl);
 
     if (!resetUrl) {
       return NextResponse.json(
@@ -108,7 +101,7 @@ export async function POST(req: Request) {
     // 3) Send via Mailchimp Transactional (Mandrill)
     await mch.messages.send({
       message: {
-        from_email: "no-reply@meuraki.com.sg", // must be verified domain
+        from_email: "no-reply@meuraki.com.sg",
         from_name: "MEURAKI",
         to: [{ email, type: "to" }],
         subject: "Reset your MEURAKI password",
