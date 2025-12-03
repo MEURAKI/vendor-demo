@@ -83,7 +83,7 @@ type Tab = "business" | "brand" | "docs" | "verification";
 
 /* ---------- Constants ---------- */
 
-const STORY_LIMIT = 200;
+const STORY_WORD_LIMIT = 200;
 
 const DIMENSIONS = [
   "Physical",
@@ -170,7 +170,7 @@ function CheckboxRow({
 }: {
   label: string;
   checked: boolean;
-  onChange: (v: boolean) => void;
+  onChange: () => void;
 }) {
   return (
     <label className="flex items-center gap-3 text-sm text-gray-800">
@@ -178,7 +178,7 @@ function CheckboxRow({
         type="checkbox"
         className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
         checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
+        onChange={onChange}
       />
       <span>{label}</span>
     </label>
@@ -307,12 +307,12 @@ function BusinessSettingsPageInner() {
   /* ---------- Load everything once ---------- */
   useEffect(() => {
     (async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth.user;
-      if (!user) {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth?.user) {
         setLoading(false);
         return;
       }
+      const user = auth.user;
 
       const [
         { data: prof },
@@ -432,7 +432,6 @@ function BusinessSettingsPageInner() {
 
     const overallIncomplete = Object.values(missing).some(Boolean);
 
-    // Per-tab alerts used by SettingsNav
     const navAlerts: Record<string, boolean | number> = {
       "/pages/setting/business?tab=business": missing.logo,
       "/pages/setting/business?tab=docs": missing.policy || missing.certificates,
@@ -515,6 +514,21 @@ function BusinessSettingsPageInner() {
   const toggleIn = (arr: string[], value: string, setArr: (next: string[]) => void) => {
     setArr(arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]);
   };
+
+  function handleShortStoryChange(value: string) {
+    const words = value.trim().split(/\s+/).filter(Boolean);
+    if (words.length > STORY_WORD_LIMIT) {
+      const clipped = words.slice(0, STORY_WORD_LIMIT).join(" ");
+      setShortStory(clipped);
+    } else {
+      setShortStory(value);
+    }
+  }
+
+  const shortStoryWordCount = useMemo(
+    () => (shortStory.trim() ? shortStory.trim().split(/\s+/).filter(Boolean).length : 0),
+    [shortStory]
+  );
 
   async function saveBrand() {
     if (!profile?.id) return;
@@ -736,7 +750,9 @@ function BusinessSettingsPageInner() {
           <section>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
-                <div className="text-sm font-semibold text-gray-900">Business / Brand Name</div>
+                <div className="text-sm font-semibold text-gray-900">
+                  Business / Brand Name
+                </div>
                 <p className="mt-1 text-xs text-gray-500">
                   Displayed across the marketplace and on your MEURAKI vendor listings.
                 </p>
@@ -843,7 +859,7 @@ function BusinessSettingsPageInner() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-gray-500">Tiktok</label>
+                  <label className="mb-1 block text-xs text-gray-500">TikTok</label>
                   <input
                     className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-900 focus:border-purple-500 focus:ring-purple-500"
                     placeholder="https://www.tiktok.com/@yourbrand"
@@ -854,7 +870,7 @@ function BusinessSettingsPageInner() {
               </div>
             </div>
 
-            <div className="mt-8 border-gray-200" />
+            <div className="mt-8 border-t border-gray-200" />
           </section>
         </form>
       </>
@@ -870,19 +886,19 @@ function BusinessSettingsPageInner() {
             Short Description of Your Brand Story
           </div>
           <p className="mt-1 text-xs text-gray-500">
-            Write a short story (max {STORY_LIMIT} characters) describing your brand’s
+            Write a short story (max {STORY_WORD_LIMIT} words) describing your brand’s
             journey or mission.
           </p>
           <div className="mt-3 rounded-xl border border-gray-200 bg-white">
             <textarea
               value={shortStory}
-              onChange={(e) => setShortStory(e.target.value.slice(0, STORY_LIMIT))}
+              onChange={(e) => handleShortStoryChange(e.target.value)}
               rows={4}
               className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-gray-900 outline-none"
               placeholder="Write a short story here"
             />
             <div className="flex items-center justify-end px-4 pb-3 text-xs text-gray-400">
-              {shortStory.length}/{STORY_LIMIT}
+              {shortStoryWordCount}/{STORY_WORD_LIMIT} words
             </div>
           </div>
           <div className="mt-8 border-t border-gray-200" />
@@ -1300,7 +1316,7 @@ function BusinessSettingsPageInner() {
           <button
             type="button"
             className="rounded-full border border-gray-300 px-5 py-2.5 text-sm hover:bg-gray-50"
-            onClick={() => window.history.back()}
+            onClick={() => router.back()}
           >
             Go back without saving
           </button>

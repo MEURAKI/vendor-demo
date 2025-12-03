@@ -8,13 +8,15 @@ import mailchimp from "@mailchimp/mailchimp_transactional";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Base site URL comes from env per deployment.
-// Fallback is your subscriber portal.
-// Then we strip any trailing slash.
-const RAW_SITE =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://subscriber.meuraki.com.sg";
+// Base URL that actually hosts /pages/auth/callback
+// .env.local: NEXT_PUBLIC_VERIFY_BASE_URL=http://localhost:3000
+// .env.prod:  NEXT_PUBLIC_VERIFY_BASE_URL=https://subscriber.meuraki.com.sg
+const RAW_VERIFY_BASE =
+  process.env.NEXT_PUBLIC_VERIFY_BASE_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  "https://subscriber.meuraki.com.sg";
 
-const SITE = RAW_SITE.replace(/\/$/, "");
+const VERIFY_BASE = RAW_VERIFY_BASE.replace(/\/$/, "");
 
 // Supabase admin client using service role key
 function supaAdmin() {
@@ -33,8 +35,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email required" }, { status: 400 });
     }
 
-    // Where the magic-link flow should land after Supabase auth
-    const redirectTo = `${SITE}/pages/auth/callback`;
+    const redirectTo = `${VERIFY_BASE}/pages/auth/callback`;
     console.log("send-verify redirectTo:", redirectTo);
 
     // 1) Generate Supabase magic link
@@ -49,7 +50,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // Supabase usually returns it on data.properties.action_link
     const verifyUrl =
       (data as any)?.properties?.action_link || (data as any)?.action_link;
 
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         subject: "Confirm your MEURAKI email",
         html,
         track_opens: true,
-        track_clicks: false, // don't wrap the link with redirect hashes
+        track_clicks: false,
       },
     });
 
