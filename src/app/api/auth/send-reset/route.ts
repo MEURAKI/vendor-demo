@@ -8,19 +8,36 @@ import mailchimp from "@mailchimp/mailchimp_transactional";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Use env if present, otherwise fall back; THEN strip trailing slash.
+/**
+ * Fallback site (used only if we can't detect the origin)
+ */
 const RAW_SITE =
   process.env.NEXT_PUBLIC_SITE_URL || "https://vendor.meuraki.com.sg";
 
-const SITE = RAW_SITE.replace(/\/$/, "");
+const FALLBACK_SITE = RAW_SITE.replace(/\/$/, "");
 
-// ✅ server client with SERVICE ROLE (needed for admin.generateLink)
+/**
+ * Path to the reset page on each portal.
+ * Change this if your route is different.
+ *
+ * Examples:
+ * - "/pages/auth/reset-password" (Next.js pages dir)
+ * - "/auth/reset-password" (Next.js app dir)
+ */
+const RESET_PATH = "/pages/auth/reset-password";
+
+/**
+ * Supabase admin client (SERVICE ROLE)
+ */
 function supaAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!; // service role key
   return createClient(url, key);
 }
 
+/**
+ * Mailchimp Transactional (Mandrill) client
+ */
 const mch = mailchimp(process.env.MAILCHIMP_TRANSACTIONAL_KEY!);
 
 export async function POST(req: Request) {
@@ -31,9 +48,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email required" }, { status: 400 });
     }
 
-    // 1) Ask Supabase to generate a recovery link that carries the tokens
-    const redirectTo = `${SITE}/pages/auth/reset-password`;
+    /**
+     * Figure out which portal called this API
+     * e.g.:
+     *  - https://vendor.meuraki.com.sg
+     *  - https://subscriber.meuraki.com.sg
+     *  - http://localhost:3000
+     */
+    const origin = req.headers.get("origin") || FALLBACK_SITE;
 
+    // Ensure we only keep protocol + host (no paths, no trailing slash)
+    let portalBase: string;
+    try {
+      const url = new URL(origin);
+      portalBase = `${url.protocol}//${url.host}`;
+    } catch {
+      // If origin isn't a valid URL for some reason, just sanitize manually
+      portalBase = origin.replace(/\/$/, "");
+    }
+
+    // Final redirect URL for the reset flow on *that* portal
+    const redirectTo = `${portalBase}${RESET_PATH}`;
+
+    // console.log("Using redirectTo:", redirectTo);
+
+    // 1) Ask Supabase to generate a recovery link that carries the tokens
     const { data, error } = await supaAdmin().auth.admin.generateLink({
       type: "recovery",
       email,
@@ -49,7 +88,7 @@ export async function POST(req: Request) {
     const resetUrl =
       (data as any)?.properties?.action_link ?? (data as any)?.action_link;
 
-    console.log("Generated reset URL:", resetUrl);
+    // console.log("Generated reset URL:", resetUrl);
 
     if (!resetUrl) {
       return NextResponse.json(

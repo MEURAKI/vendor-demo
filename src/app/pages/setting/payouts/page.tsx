@@ -370,7 +370,7 @@ function BillingSettingsPageInner() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <ClipLoader size="md" color="gray" />
+        <ClipLoader size={24} color="gray" />
       </div>
     );
   }
@@ -564,7 +564,7 @@ export default function BillingSettingsPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-white">
-          <ClipLoader size="md" color="gray" />
+          <ClipLoader size={24} color="gray" />
         </div>
       }
     >

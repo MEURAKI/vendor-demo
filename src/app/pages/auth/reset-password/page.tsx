@@ -83,7 +83,7 @@ export default function ResetPasswordPage() {
   if (!ready) {
     return (
       <div className="grid min-h-screen place-items-center bg-white">
-               <ClipLoader size="md" color="gray" />
+               <ClipLoader size={24} color="gray" />
       </div>
     ); 
   }
