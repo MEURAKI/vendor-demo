@@ -63,6 +63,7 @@ export default function SignupForm() {
       password,
       options: {
         data: {
+          role : "vendor",
           quick_signup: quick,
         },
       },
