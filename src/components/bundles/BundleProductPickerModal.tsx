@@ -15,7 +15,7 @@ type ProductRow = {
 };
 
 type VariantRow = {
-  id: string;           // product_variants.id
+  id: string; // product_variants.id
   product_id: string;
   price_cents: number;
   inventory_qty: number;
@@ -29,6 +29,13 @@ type Props = {
   onContinue: (items: BundleCandidateItem[]) => void;
 };
 
+function buildVariantName(options_json: Record<string, any>): string {
+  if (!options_json || typeof options_json !== "object") return "Variant";
+  const values = Object.values(options_json).filter(Boolean);
+  if (!values.length) return "Variant";
+  return String(values.join(" / "));
+}
+
 export function BundleProductPickerModal({
   open,
   onClose,
@@ -39,11 +46,14 @@ export function BundleProductPickerModal({
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [selected, setSelected] = useState<BundleCandidateItem[]>([]);
+  const [search, setSearch] = useState("");
 
+  /* sync selected from parent */
   useEffect(() => {
     setSelected(initialSelected || []);
   }, [initialSelected]);
 
+  /* load products + variants for logged-in vendor */
   useEffect(() => {
     if (!open) return;
 
@@ -53,52 +63,52 @@ export function BundleProductPickerModal({
       try {
         setLoading(true);
 
-        // ✅ Logged-in vendor
+        // 1) Get logged-in vendor
         const { data: auth } = await supabase.auth.getUser();
         const user = auth?.user;
         if (!user) {
-          if (mounted) {
-            setProducts([]);
-            setVariants([]);
-          }
+          if (mounted) setLoading(false);
           return;
         }
 
-        // ✅ Load only this vendor's products
-        const { data: prodRows, error: prodErr } = await supabase
+        // 2) Load this vendor's products
+        const { data: prodRows, error: prodError } = await supabase
           .from("products")
           .select("id,name,is_variant,price_cents,inventory_qty")
           .eq("vendor_id", user.id)
+          // .eq("status", "active") // enable if you only want active ones
           .order("name", { ascending: true });
 
-        if (prodErr) {
-          console.error("Error loading products", prodErr);
+        if (prodError) {
+          console.error("Error loading products", prodError);
         }
 
         const productList = (prodRows || []) as ProductRow[];
-        const productIds = productList.map((p) => p.id);
+        if (!mounted) return;
 
-        if (productIds.length === 0) {
-          if (mounted) {
-            setProducts([]);
-            setVariants([]);
-          }
+        setProducts(productList);
+
+        if (!productList.length) {
+          setVariants([]);
           return;
         }
 
-        // ✅ Load variants only for those products
-        const { data: varRows, error: varErr } = await supabase
+        const productIds = productList.map((p) => p.id);
+
+        // 3) Load variants for those products
+        const { data: varRows, error: varError } = await supabase
           .from("product_variants")
           .select("id,product_id,price_cents,inventory_qty,options_json")
           .in("product_id", productIds)
-          .order("product_id", { ascending: true });
+          .eq("is_active", true)
+          .order("position", { ascending: true });
 
-        if (varErr) {
-          console.error("Error loading product_variants", varErr);
+        if (varError) {
+          console.error("Error loading product variants", varError);
         }
 
         if (!mounted) return;
-        setProducts(productList);
+
         setVariants((varRows || []) as VariantRow[]);
       } finally {
         if (mounted) setLoading(false);
@@ -114,43 +124,35 @@ export function BundleProductPickerModal({
 
   if (!open) return null;
 
-  /* ------------------------ Helpers ------------------------ */
+  /* helpers */
 
-  // Build a human label for a variant from options_json (e.g. {Color: "Black", Size: "L"} → "Black / L")
-  function getVariantLabel(v: VariantRow): string {
-    try {
-      if (!v.options_json) return "Variant";
-      const values = Object.values(v.options_json).filter(Boolean);
-      if (!values.length) return "Variant";
-      return values.join(" / ");
-    } catch {
-      return "Variant";
-    }
-  }
+  const isVariantSelected = (id: string) =>
+    !!selected.find((s) => s.id === id);
 
-  const toggleVariant = (product: ProductRow, variant: VariantRow) => {
-    const stock = variant.inventory_qty ?? 0;
-    // 🔒 Out of stock: do nothing
-    if (stock <= 0) return;
+  const isProductVariantGroupSelected = (productId: string) =>
+    !!selected.find((s) => s.kind === "variant" && s.productId === productId);
 
-    const id = variant.id; // unique bundle item id
+  const isProductAnythingSelected = (productId: string) =>
+    !!selected.find((s) => s.productId === productId);
+
+  const toggleSingleVariant = (product: ProductRow, variant: VariantRow) => {
+    const id = variant.id; // product_variants.id
+
     const exists = selected.find((s) => s.id === id);
-
     if (exists) {
       setSelected((prev) => prev.filter((s) => s.id !== id));
       return;
     }
 
-    const label = getVariantLabel(variant);
-
+    const nameSuffix = buildVariantName(variant.options_json);
     const item: BundleCandidateItem = {
-      id,
+      id, // unique ID of bundle item
       productId: product.id,
-      variantId: variant.id,
-      inventoryId: variant.id, // 👈 used for stock deduction later
-      name: `${product.name} — ${label}`,
-      kind: "single", // fixed inventory item (e.g. "Black towel")
-      stock: stock,
+      variantId: variant.id, // matches bundle_items.variant_id
+      inventoryId: variant.id, // if you deduct from product_variants.inventory_qty
+      name: `${product.name} — ${nameSuffix}`,
+      kind: "single", // fixed variant (e.g. "Black towel")
+      stock: variant.inventory_qty,
       priceCents: variant.price_cents,
       variantCount: null,
     };
@@ -158,19 +160,9 @@ export function BundleProductPickerModal({
     setSelected((prev) => [...prev, item]);
   };
 
-  // For "I don't care which colour, choose any 3 towels"
   const addAsVariantGroup = (product: ProductRow) => {
-    if (!product.is_variant) return; // multi-choice only makes sense for variant products
-
     const productVariants = variants.filter((v) => v.product_id === product.id);
     const variantCount = productVariants.length;
-    const totalStock = productVariants.reduce(
-      (acc, v) => acc + (v.inventory_qty ?? 0),
-      0
-    );
-
-    // 🔒 If no variants or no stock across them, don't allow
-    if (variantCount === 0 || totalStock <= 0) return;
 
     const id = `prod-${product.id}-variants`;
 
@@ -181,7 +173,14 @@ export function BundleProductPickerModal({
     }
 
     const priceCents =
-      variantCount > 0 ? productVariants[0].price_cents : product.price_cents ?? 0;
+      productVariants.length > 0
+        ? productVariants[0].price_cents
+        : product.price_cents || 0;
+
+    const totalStock = productVariants.reduce(
+      (acc, v) => acc + (v.inventory_qty || 0),
+      0
+    );
 
     const item: BundleCandidateItem = {
       id,
@@ -198,13 +197,26 @@ export function BundleProductPickerModal({
     setSelected((prev) => [...prev, item]);
   };
 
-  const isVariantSelected = (id: string) =>
-    !!selected.find((s) => s.id === id);
+  /* search filter */
 
-  const isProductVariantGroupSelected = (productId: string) =>
-    !!selected.find((s) => s.kind === "variant" && s.productId === productId);
+  const normalizedSearch = search.trim().toLowerCase();
 
-  /* ------------------------ UI ------------------------ */
+  const filteredProducts = normalizedSearch
+    ? products.filter((p) => {
+        const productVariants = variants.filter(
+          (v) => v.product_id === p.id
+        );
+
+        const variantNames = productVariants
+          .map((v) => buildVariantName(v.options_json))
+          .join(" ");
+
+        const haystack = `${p.name} ${variantNames}`.toLowerCase();
+        return haystack.includes(normalizedSearch);
+      })
+    : products;
+
+  /* UI */
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -225,140 +237,191 @@ export function BundleProductPickerModal({
 
         {/* Body */}
         <div className="flex flex-1 overflow-hidden text-xs">
-          {/* Products + variants list */}
-          <div className="w-2/3 overflow-y-auto border-r p-4">
-            {loading && <p className="text-gray-500">Loading products…</p>}
+          {/* LEFT: products + variants */}
+          <div className="flex w-2/3 flex-col border-r">
+            {/* Search bar */}
+            <div className="border-b px-4 py-2">
+              <input
+                type="text"
+                placeholder="Search products or variants…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs focus:border-black focus:outline-none"
+              />
+            </div>
 
-            {!loading && products.length === 0 && (
-              <p className="text-gray-500">No products found.</p>
-            )}
+            <div className="flex-1 overflow-y-auto p-4">
+              {loading && (
+                <p className="text-gray-500">Loading products…</p>
+              )}
 
-            {!loading &&
-              products.map((p) => {
-                // For variant products → real variants
-                // For single products → treat the product itself as a "single variant" row
-                const productVariants: VariantRow[] = p.is_variant
-                  ? variants.filter((v) => v.product_id === p.id)
-                  : [
-                      {
-                        id: p.id,
-                        product_id: p.id,
-                        price_cents: p.price_cents ?? 0,
-                        inventory_qty: p.inventory_qty ?? 0,
-                        options_json: {}, // label built from product name instead
-                      },
-                    ];
+              {!loading && filteredProducts.length === 0 && (
+                <p className="text-gray-500">
+                  {products.length === 0
+                    ? "No products found for your account."
+                    : "No products match your search."}
+                </p>
+              )}
 
-                const variantCount = productVariants.length;
-                const totalStock = productVariants.reduce(
-                  (acc, v) => acc + (v.inventory_qty ?? 0),
-                  0
-                );
+              {!loading &&
+                filteredProducts.map((p) => {
+                  const productVariants = variants.filter(
+                    (v) => v.product_id === p.id
+                  );
 
-                const multiDisabled =
-                  !p.is_variant || variantCount === 0 || totalStock <= 0;
+                  const hasVariants =
+                    p.is_variant && productVariants.length > 0;
 
-                return (
-                  <div
-                    key={p.id}
-                    className="mb-3 rounded-xl border border-gray-200 bg-gray-50 p-3"
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <div>
-                        <div className="text-xs font-semibold text-gray-900">
-                          {p.name}
-                        </div>
-                        <div className="text-[11px] text-gray-500">
-                          {p.is_variant
-                            ? `${variantCount} variants · Total stock: ${totalStock}`
-                            : `Single product · Stock: ${
-                                productVariants[0]?.inventory_qty ?? 0
-                              }`}
-                        </div>
-                      </div>
+                  const productHighlighted = isProductAnythingSelected(p.id);
 
-                      {p.is_variant && (
-                        <button
-                          type="button"
-                          onClick={() => !multiDisabled && addAsVariantGroup(p)}
-                          disabled={multiDisabled}
-                          className={clsx(
-                            "rounded-full border px-3 py-1 text-[11px]",
-                            multiDisabled
-                              ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                              : isProductVariantGroupSelected(p.id)
-                              ? "border-purple-600 bg-purple-50 text-purple-700"
-                              : "border-gray-300 bg-white text-gray-700 hover:border-purple-400"
-                          )}
-                        >
-                          {multiDisabled
-                            ? "No stock for choices"
-                            : isProductVariantGroupSelected(p.id)
-                            ? "Remove multi-choice"
-                            : "Add as multi-choice"}
-                        </button>
+                  return (
+                    <div
+                      key={p.id}
+                      className={clsx(
+                        "mb-3 rounded-xl border p-3",
+                        productHighlighted
+                          ? "border-black bg-black/5"
+                          : "border-gray-200 bg-gray-50"
                       )}
-                    </div>
+                    >
+                      <div className="mb-2 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-semibold text-gray-900">
+                            {p.name}
+                          </div>
+                          <div className="text-[11px] text-gray-500">
+                            {hasVariants
+                              ? `${productVariants.length} variants`
+                              : "Single product"}
+                          </div>
+                        </div>
 
-                    {/* Variants or single row */}
-                    <div className="space-y-1">
-                      {productVariants.map((v) => {
-                        const vid = v.id;
-                        const checked = isVariantSelected(vid);
-                        const stock = v.inventory_qty ?? 0;
-                        const outOfStock = stock <= 0;
-
-                        // Label:
-                        const label = p.is_variant
-                          ? getVariantLabel(v)
-                          : p.name; // single product → just use product name
-
-                        return (
-                          <label
-                            key={vid}
+                        {hasVariants && (
+                          <button
+                            type="button"
+                            onClick={() => addAsVariantGroup(p)}
                             className={clsx(
-                              "flex cursor-pointer items-center justify-between rounded-lg border px-2 py-1.5",
-                              outOfStock
-                                ? "cursor-not-allowed border-gray-200 bg-gray-100 opacity-60"
-                                : checked
-                                ? "border-purple-600 bg-purple-50"
-                                : "border-gray-200 bg-white hover:border-purple-300"
+                              "rounded-full border px-3 py-1 text-[11px]",
+                              isProductVariantGroupSelected(p.id)
+                                ? "border-purple-600 bg-purple-50 text-purple-700"
+                                : "border-gray-300 bg-white text-gray-700 hover:border-purple-400"
                             )}
                           >
-                            <div>
-                              <div className="text-[11px] font-medium text-gray-900">
-                                {p.is_variant ? label : "Single product"}
-                              </div>
-                              <div className="text-[10px] text-gray-500">
-                                {outOfStock ? (
-                                  <span className="font-semibold text-red-500">
-                                    Out of stock – cannot add
-                                  </span>
-                                ) : (
-                                  <>
-                                    Stock: {stock} · $
-                                    {(v.price_cents / 100).toFixed(2)}
-                                  </>
-                                )}
-                              </div>
+                            {isProductVariantGroupSelected(p.id)
+                              ? "Remove multi-choice"
+                              : "Add as multi-choice"}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Single-product (no variants) path */}
+                      {!hasVariants && (
+                        <label
+                          className={clsx(
+                            "mt-1 flex cursor-pointer items-center justify-between rounded-lg border px-2 py-1.5",
+                            isVariantSelected(p.id)
+                              ? "border-purple-600 bg-purple-50"
+                              : "border-gray-200 bg-white hover:border-purple-300"
+                          )}
+                        >
+                          <div>
+                            <div className="text-[11px] font-medium text-gray-900">
+                              Default
                             </div>
-                            <input
-                              type="checkbox"
-                              className="h-3 w-3"
-                              checked={checked}
-                              disabled={outOfStock}
-                              onChange={() => toggleVariant(p, v)}
-                            />
-                          </label>
-                        );
-                      })}
+                            <div className="text-[10px] text-gray-500">
+                              Stock: {p.inventory_qty ?? 0} · $
+                              {((p.price_cents || 0) / 100).toFixed(2)}
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="h-3 w-3"
+                            checked={isVariantSelected(p.id)}
+                            onChange={() => {
+                              const exists = selected.find(
+                                (s) => s.id === p.id
+                              );
+                              if (exists) {
+                                setSelected((prev) =>
+                                  prev.filter((x) => x.id !== p.id)
+                                );
+                                return;
+                              }
+
+                              const item: BundleCandidateItem = {
+                                id: p.id,
+                                productId: p.id,
+                                variantId: null,
+                                inventoryId: null,
+                                name: p.name,
+                                kind: "single",
+                                stock: p.inventory_qty ?? 0,
+                                priceCents: p.price_cents || 0,
+                                variantCount: null,
+                              };
+
+                              setSelected((prev) => [...prev, item]);
+                            }}
+                          />
+                        </label>
+                      )}
+
+                      {/* Variants list for variant products */}
+                      {hasVariants && (
+                        <div className="mt-2 space-y-1">
+                          {productVariants.map((v) => {
+                            const vid = v.id;
+                            const checked = isVariantSelected(vid);
+                            const variantName = buildVariantName(
+                              v.options_json
+                            );
+                            const outOfStock =
+                              !v.inventory_qty || v.inventory_qty <= 0;
+
+                            return (
+                              <label
+                                key={vid}
+                                className={clsx(
+                                  "flex cursor-pointer items-center justify-between rounded-lg border px-2 py-1.5",
+                                  outOfStock
+                                    ? "border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed"
+                                    : checked
+                                    ? "border-purple-600 bg-purple-50"
+                                    : "border-gray-200 bg-white hover:border-purple-300"
+                                )}
+                              >
+                                <div>
+                                  <div className="text-[11px] font-medium text-gray-900">
+                                    {variantName}
+                                  </div>
+                                  <div className="text-[10px] text-gray-500">
+                                    Stock: {v.inventory_qty} · $
+                                    {(v.price_cents / 100).toFixed(2)}
+                                    {outOfStock && " — Out of stock"}
+                                  </div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  className="h-3 w-3"
+                                  checked={checked}
+                                  disabled={outOfStock}
+                                  onChange={() => {
+                                    if (outOfStock) return;
+                                    toggleSingleVariant(p, v);
+                                  }}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+            </div>
           </div>
 
-          {/* Selected list */}
+          {/* RIGHT: selected list */}
           <div className="w-1/3 p-4">
             <h3 className="mb-2 text-[11px] font-semibold text-gray-700">
               Selected items
@@ -378,7 +441,9 @@ export function BundleProductPickerModal({
                   <button
                     type="button"
                     onClick={() =>
-                      setSelected((prev) => prev.filter((x) => x.id !== s.id))
+                      setSelected((prev) =>
+                        prev.filter((x) => x.id !== s.id)
+                      )
                     }
                     className="ml-2 text-gray-500 hover:text-black"
                   >

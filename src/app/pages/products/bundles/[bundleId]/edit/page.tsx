@@ -18,7 +18,7 @@ import { uploadProviderImage } from "../../../../../../lib/uploadProviderImage";
 
 type DiscountType = "fixed" | "percent" | null;
 
-// 🔹 extended to support variant/single behaviour
+// Extended to support variant / single behaviour
 type BundleItem = BundleCandidateItem & {
   quantity: number;
   variantLabel?: string | null;
@@ -235,11 +235,12 @@ export default function EditBundlePage() {
         setCategories((data.categories ?? []).map(String));
         setTags(data.tags ?? []);
 
-        // items (keep variant/single specific fields)
+        // items (keep variant/single specific fields + inventoryId + variantCount)
         setItems(
           (data.items ?? []).map((it) => ({
             ...it,
-            id: it.id || it.productId,
+            // make sure there's a stable id for React keys & remove
+            id: (it as any).id ?? (it as any).inventoryId ?? it.variantId ?? it.productId,
             quantity: it.quantity ?? 1,
             variantLabel: it.variantLabel ?? null,
             choiceCount: it.choiceCount ?? null,
@@ -290,7 +291,7 @@ export default function EditBundlePage() {
   async function handleSave(nextStatus: "draft" | "active") {
     if (!canSave) return;
 
-    // ✅ MULTI-SELECT WELLNESS: keep *all* selected IDs, just normalised and deduped
+    // keep all selected wellness IDs, normalized + deduped
     const cleanWellnessDimensions = Array.from(
       new Set(
         (selectedWellnessIds ?? [])
@@ -324,6 +325,7 @@ export default function EditBundlePage() {
       items: items.map((i, idx) => ({
         productId: i.productId,
         variantId: i.variantId ?? null,
+        inventoryId: (i as any).inventoryId ?? null, // 👈 important for stock deduction
         itemName: i.name,
         itemPriceCents: i.priceCents,
         quantity: i.quantity,
@@ -332,6 +334,9 @@ export default function EditBundlePage() {
         variantLabel: i.variantLabel ?? null,
         choiceCount: i.choiceCount ?? null,
         isMultiple: i.isMultiple ?? null,
+        // optional: you can also send stock / variantCount as snapshot if your API wants it
+        stock: i.stock,
+        variantCount: (i as any).variantCount ?? null,
       })),
     };
 
@@ -367,7 +372,6 @@ export default function EditBundlePage() {
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
 
-      {/* fix: flex-1.items-stretch → flex-1 items-stretch */}
       <div className="flex flex-1 items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Top bar */}
@@ -597,7 +601,7 @@ export default function EditBundlePage() {
 
                 {/* Bundle Items */}
                 <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
-                  <div className="mb-4 flex.items-center justify-between">
+                  <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
                       Products in Bundle
                     </h2>
@@ -657,7 +661,7 @@ export default function EditBundlePage() {
                             </button>
                           </div>
 
-                          {/* VARIANT PRODUCT UI */}
+                          {/* VARIANT PRODUCT UI (multi-choice use-case) */}
                           {item.kind === "variant" && (
                             <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4">
                               <label className="mb-2 block text-xs font-semibold text-gray-700">
@@ -690,7 +694,7 @@ export default function EditBundlePage() {
                                     className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
                                     value={item.choiceCount ?? 1}
                                     min={1}
-                                    max={item.variantCount}
+                                    max={item.variantCount as number | undefined}
                                     disabled={!item.isMultiple}
                                     onChange={(e) =>
                                       setItems((prev) =>
@@ -701,9 +705,9 @@ export default function EditBundlePage() {
                                                 choiceCount: Math.max(
                                                   1,
                                                   Math.min(
-                                                    item.variantCount,
-                                                    Number(e.target.value) ||
-                                                      1
+                                                    (item.variantCount as number) ||
+                                                      1,
+                                                    Number(e.target.value) || 1
                                                   )
                                                 ),
                                               }
@@ -744,7 +748,7 @@ export default function EditBundlePage() {
                             </div>
                           )}
 
-                          {/* SINGLE PRODUCT UI */}
+                          {/* SINGLE PRODUCT / SPECIFIC VARIANT UI */}
                           {item.kind === "single" && item.stock > 0 && (
                             <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
                               {/* Number of units in bundle */}

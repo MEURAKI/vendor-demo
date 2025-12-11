@@ -220,7 +220,7 @@ export default function NewBundlePage() {
       // 2) Prepare items for API
       const itemPayload = items.map((it, idx) => ({
         productId: it.productId ?? null,
-        inventoryId: it.inventoryId ?? it.id ?? null, // 👈 key for stock deduction
+        inventoryId: (it as any).inventoryId ?? null, // 👈 key for stock deduction
         variantId: it.variantId ?? null,
         itemName: it.name,
         itemPriceCents: it.priceCents,
