@@ -44,8 +44,12 @@ type VendorBusiness = {
   shop_status: boolean;
   shop_name: string;
   shop_slug: string;
-  business_category: string;
-  business_categories: string[] | null;
+  business_category: string; // primary label text
+
+  // ✅ new array columns
+  products_business_category: string[] | null;
+  session_business_category: string[] | null;
+
   shop_bio: string;
   contact_email: string;
   phone_country_code: string;
@@ -76,7 +80,7 @@ type VendorBusiness = {
   pickup_postal_code: string | null;
   delivery_days_note: string | null;
 
-  // 🔴 pulled from vendor_business (for completeness)
+  // pulled from vendor_business (for completeness)
   brand_logo_url: string | null;
   policy_url: string | null;
 };
@@ -85,12 +89,8 @@ type TabKey = "general" | "fulfilment" | "promos";
 
 /* ---- Promo code types ---- */
 
-// DB-level scope: who owns the promo
 type PromoScope = "platform" | "vendor";
-
-// DB-level applies_to: what the promo applies to
 type PromoAppliesTo = "all" | "products" | "services";
-
 type DiscountType = "percent" | "fixed";
 
 type PromoCode = {
@@ -114,7 +114,7 @@ type PromoFormState = {
   code: string;
   description: string;
   discount_type: DiscountType;
-  discount_value: string; // keep as string in the form, cast on save
+  discount_value: string;
   active: boolean;
   starts_at: string;
   ends_at: string;
@@ -252,7 +252,10 @@ function ShopSettingsPageInner() {
   const [saving, setSaving] = useState(false);
   const { successToast, errorToast } = useToast();
   const [dimensions, setDimensions] = useState<string[]>([]);
-  const [businessCategories, setBusinessCategories] = useState<string[]>([]);
+
+  // ✅ separate state for the two new columns
+  const [productCategories, setProductCategories] = useState<string[]>([]);
+  const [sessionCategories, setSessionCategories] = useState<string[]>([]);
 
   const urlTab = (searchParams.get("tab") as TabKey) || "general";
   const [activeTab, setActiveTab] = useState<TabKey>(urlTab);
@@ -364,7 +367,7 @@ function ShopSettingsPageInner() {
     }
   }
 
-  /* ---------------- Initial load: profile + vendor_business + promos + docs + payout ---------------- */
+  /* ---------------- Initial load ---------------- */
 
   useEffect(() => {
     (async () => {
@@ -396,7 +399,8 @@ function ShopSettingsPageInner() {
               shop_name,
               shop_slug,
               business_category,
-              business_categories,
+              products_business_category,
+              session_business_category,
               shop_bio,
               contact_email,
               phone_country_code,
@@ -472,7 +476,8 @@ function ShopSettingsPageInner() {
         shop_name: "",
         shop_slug: "",
         business_category: "",
-        business_categories: [],
+        products_business_category: [],
+        session_business_category: [],
         shop_bio: "",
         contact_email: profTyped.email ?? "",
         phone_country_code: "+65",
@@ -508,7 +513,10 @@ function ShopSettingsPageInner() {
       setVb(merged);
       setBioCount(merged.shop_bio?.length || 0);
       setDimensions(merged.dimensions ?? []);
-      setBusinessCategories(merged.business_categories ?? []);
+
+      // ✅ hydrate category states from DB
+      setProductCategories(merged.products_business_category ?? []);
+      setSessionCategories(merged.session_business_category ?? []);
 
       if (promoErr) {
         console.error(promoErr);
@@ -631,7 +639,7 @@ function ShopSettingsPageInner() {
     };
   }, [placesLoaded]);
 
-  /* ------------------------- completeness (shared across settings) ------------------------- */
+  /* ------------------------- completeness ------------------------- */
 
   const completeness = useMemo(() => {
     if (!vb) {
@@ -710,7 +718,15 @@ function ShopSettingsPageInner() {
       shop_name: (src.shop_name || "").trim(),
       shop_slug: (src.shop_slug || "").replace(/[^a-z0-9-]/gi, "").toLowerCase(),
       business_category: (src.business_category || "").trim(),
-      business_categories: businessCategories.length ? businessCategories : null,
+
+      // ✅ save arrays into the new columns
+      products_business_category: productCategories.length
+        ? productCategories
+        : null,
+      session_business_category: sessionCategories.length
+        ? sessionCategories
+        : null,
+
       shop_bio: (src.shop_bio || "").slice(0, 200),
       contact_email: (src.contact_email || "").trim(),
       phone_country_code: src.phone_country_code || "+65",
@@ -736,10 +752,9 @@ function ShopSettingsPageInner() {
       pickup_postal_code: src.pickup_postal_code,
       delivery_days_note: src.delivery_days_note,
 
-      // dimensions as array
+      // dimensions
       dimensions: dimensions.length ? dimensions : null,
 
-      // keep business-level fields
       brand_logo_url: src.brand_logo_url,
       policy_url: src.policy_url,
 
@@ -855,7 +870,6 @@ function ShopSettingsPageInner() {
       return;
     }
 
-    // For percent discounts, enforce 0–100
     if (
       promoForm.discount_type === "percent" &&
       (discountNum <= 0 || discountNum > 100)
@@ -882,7 +896,7 @@ function ShopSettingsPageInner() {
         ? new Date(promoForm.ends_at).toISOString()
         : null,
       max_redemptions: maxRedemptionsNum,
-      scope: "vendor" as PromoScope, // always vendor promos in this portal
+      scope: "vendor" as PromoScope,
       applies_to: promoForm.applies_to,
     };
 
@@ -970,7 +984,7 @@ function ShopSettingsPageInner() {
 
   return (
     <>
-      {/* Google Places script – v2 style (weekly) */}
+      {/* Google Places script */}
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&v=weekly`}
         strategy="afterInteractive"
@@ -988,15 +1002,13 @@ function ShopSettingsPageInner() {
 
       <div className="flex h-screen bg-[#F7F7FB]">
         <Sidebar config={sidebarConfig} />
-
-        {/* 🔴 Pass global completeness alerts so Business/Payouts dots show even here */}
         <SettingsNav alerts={completeness.navAlerts} />
 
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-5xl px-8 py-10 pb-32">
             <h1 className="text-[28px] font-semibold text-gray-900">Shop Settings</h1>
 
-            {/* Tabs (URL-driven) */}
+            {/* Tabs */}
             <div className="mt-6 flex gap-8 border-b border-gray-200 text-sm">
               <button
                 type="button"
@@ -1036,7 +1048,7 @@ function ShopSettingsPageInner() {
               </button>
             </div>
 
-            {/* Verification banner: only when NOT active */}
+            {/* Verification banner */}
             {profile.status !== "active" && (
               <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm text-white">
                 <span className="inline-block h-2 w-2 rounded-full bg-purple-400" />
@@ -1045,7 +1057,7 @@ function ShopSettingsPageInner() {
               </div>
             )}
 
-            {/* GENERAL TAB ------------------------------------------------ */}
+            {/* GENERAL TAB */}
             {activeTab === "general" && (
               <form
                 className="mt-8 space-y-12"
@@ -1090,7 +1102,7 @@ function ShopSettingsPageInner() {
                 </section>
                 <div className="border-t border-gray-200" />
 
-                {/* Name */}
+                {/* Shop Name */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">Shop Name</div>
@@ -1283,7 +1295,7 @@ function ShopSettingsPageInner() {
                   <div className="mt-8 border-t border-gray-200" />
                 </section>
 
-                {/* Business Category (primary text field) */}
+                {/* Primary Business Category (text) */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
@@ -1306,7 +1318,7 @@ function ShopSettingsPageInner() {
                   />
                 </section>
 
-                {/* Business Categories Multi-select */}
+                {/* Business Categories (products + sessions) */}
                 <section className="mt-4">
                   <div className="text-sm font-semibold text-gray-900">
                     Business Categories
@@ -1316,20 +1328,20 @@ function ShopSettingsPageInner() {
                     products, services, and experiences.
                   </p>
 
-                  {/* Products */}
+                  {/* Products -> products_business_category */}
                   <div className="mt-4">
                     <div className="mb-2 text-[11px] font-semibold text-gray-700">
                       Products
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {PRODUCT_CATEGORIES.map((cat) => {
-                        const active = businessCategories.includes(cat);
+                        const active = productCategories.includes(cat);
                         return (
                           <button
                             key={cat}
                             type="button"
                             onClick={() =>
-                              toggleIn(businessCategories, cat, setBusinessCategories)
+                              toggleIn(productCategories, cat, setProductCategories)
                             }
                             className={clsx(
                               "flex w-full items-center justify-center rounded-xl border px-3 py-2 text-[11px] text-center transition",
@@ -1345,20 +1357,20 @@ function ShopSettingsPageInner() {
                     </div>
                   </div>
 
-                  {/* Services */}
+                  {/* Services -> session_business_category */}
                   <div className="mt-6">
                     <div className="mb-2 text-[11px] font-semibold text-gray-700">
                       Services
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {SERVICE_CATEGORIES.map((cat) => {
-                        const active = businessCategories.includes(cat);
+                        const active = sessionCategories.includes(cat);
                         return (
                           <button
                             key={cat}
                             type="button"
                             onClick={() =>
-                              toggleIn(businessCategories, cat, setBusinessCategories)
+                              toggleIn(sessionCategories, cat, setSessionCategories)
                             }
                             className={clsx(
                               "flex w-full items-center justify-center rounded-xl border px-3 py-2 text-[11px] text-center transition",
@@ -1374,20 +1386,20 @@ function ShopSettingsPageInner() {
                     </div>
                   </div>
 
-                  {/* Experiences */}
+                  {/* Experiences -> session_business_category as well */}
                   <div className="mt-6">
                     <div className="mb-2 text-[11px] font-semibold text-gray-700">
                       Experiences
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {EXPERIENCE_CATEGORIES.map((cat) => {
-                        const active = businessCategories.includes(cat);
+                        const active = sessionCategories.includes(cat);
                         return (
                           <button
                             key={cat}
                             type="button"
                             onClick={() =>
-                              toggleIn(businessCategories, cat, setBusinessCategories)
+                              toggleIn(sessionCategories, cat, setSessionCategories)
                             }
                             className={clsx(
                               "flex w-full items-center justify-center rounded-xl border px-3 py-2 text-[11px] text-center transition",
@@ -1569,7 +1581,7 @@ function ShopSettingsPageInner() {
               </form>
             )}
 
-            {/* FULFILMENT TAB -------------------------------------------- */}
+            {/* FULFILMENT TAB */}
             {activeTab === "fulfilment" && (
               <form
                 className="mt-8 space-y-12"
@@ -1796,7 +1808,7 @@ function ShopSettingsPageInner() {
               </form>
             )}
 
-            {/* PROMO CODES TAB -------------------------------------------- */}
+            {/* PROMO CODES TAB */}
             {activeTab === "promos" && (
               <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[1.4fr_minmax(0,1fr)]">
                 {/* Left: list */}
