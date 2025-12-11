@@ -13,12 +13,10 @@ import { supabase } from "../../../../../lib/supabase/client";
 import WellnessCategoryTagsSection, {
   WellnessOption,
 } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
-import { useAuthGuard } from "../../../../../hooks/useAuthGuard";
 import ClipLoader from "react-spinners/ClipLoader";
 
 type DiscountType = "fixed" | "percent" | null;
 
-// 🔹 EXTEND BundleItem to support variant UI
 type BundleItem = BundleCandidateItem & {
   quantity: number;
   variantLabel?: string;
@@ -52,7 +50,7 @@ async function uploadImageToSupabase(
   file: File,
   vendorId: string | null
 ): Promise<string> {
-  const bucket = "product-images"; // or "bundle-images" if you created a separate bucket
+  const bucket = "product-images";
 
   const ext = file.name.split(".").pop() || "jpg";
   const fileName =
@@ -120,6 +118,7 @@ export default function NewBundlePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   /* ---------- Load profile + wellness options ---------- */
 
@@ -128,7 +127,10 @@ export default function NewBundlePage() {
 
     async function loadProfileAndWellness() {
       const { data: auth } = await supabase.auth.getUser();
-      if (!auth?.user) return;
+      if (!auth?.user) {
+        setLoadingProfile(false);
+        return;
+      }
 
       const { data: prof } = await supabase
         .from("profiles")
@@ -147,12 +149,11 @@ export default function NewBundlePage() {
 
       if (wellnessError) {
         console.error("Error loading wellness dimensions", wellnessError);
-        return;
-      }
-
-      if (isMounted && wellnessData) {
+      } else if (isMounted && wellnessData) {
         setWellnessOptions(wellnessData as WellnessOption[]);
       }
+
+      setLoadingProfile(false);
     }
 
     void loadProfileAndWellness();
@@ -168,9 +169,7 @@ export default function NewBundlePage() {
         fullName: profile?.full_name ?? "",
         email: profile?.email ?? "",
         role: "Vendor",
-        status: profile?.onboarding_completed
-          ? "active"
-          : "Incomplete Registration",
+        status: profile?.status ?? "active",
       }),
     [profile]
   );
@@ -221,9 +220,11 @@ export default function NewBundlePage() {
       // 2) Prepare items for API
       const itemPayload = items.map((it, idx) => ({
         productId: it.productId ?? null,
+        inventoryId: it.inventoryId ?? it.id ?? null, // 👈 key for stock deduction
+        variantId: it.variantId ?? null,
         itemName: it.name,
         itemPriceCents: it.priceCents,
-        quantity: it.quantity,
+        quantity: it.quantity, // for "3 black towels" this is 3
         position: idx,
         kind: it.kind,
         variantLabel: it.variantLabel ?? null,
@@ -289,6 +290,14 @@ export default function NewBundlePage() {
 
   /* ---------- UI ---------- */
 
+  if (loadingProfile || !sidebarConfig) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <ClipLoader size={32} color="#6B46C1" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
       {/* Left sidebar */}
@@ -297,7 +306,7 @@ export default function NewBundlePage() {
       {/* Tablet container */}
       <div className="flex flex-1 items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-          {/* Top bar inside tablet – matches other pages */}
+          {/* Top bar inside tablet */}
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-semibold text-[#1B1529]">
@@ -376,7 +385,7 @@ export default function NewBundlePage() {
                     </div>
                   </section>
 
-                  {/* Bundle Settings (price / discount / dates / SKU) */}
+                  {/* Bundle Settings */}
                   <section className="rounded-2xl border bg-[#FBFBFE] p-6">
                     <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
                       Bundle Settings
@@ -439,7 +448,7 @@ export default function NewBundlePage() {
                                 )
                               }
                               className={clsx(
-                                "px-3 py-1.5 rounded-r-2xl",
+                                "px-3.py-1.5 rounded-r-2xl",
                                 discountType === "percent"
                                   ? "bg-[#F5EBFF] text-purple-700"
                                   : "text-gray-600"
@@ -573,92 +582,102 @@ export default function NewBundlePage() {
                             className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4"
                           >
                             {/* Common header */}
-                            <div className="flex items-center gap-3">
-                              <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-[#E5DEFF] text-[11px] font-semibold text-[#4C1D95]">
-                                Product {idx + 1}
-                              </span>
-                              <div>
-                                <p className="font-semibold text-gray-900">
-                                  {item.name}
-                                </p>
-                                <p className="text-[11px] text-gray-500">
-                                  Current Stock Level: {item.stock} · Item Price: $
-                                  {(item.priceCents / 100).toFixed(2)}
-                                </p>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-[#E5DEFF] text-[11px] font-semibold text-[#4C1D95]">
+                                  Product {idx + 1}
+                                </span>
+                                <div>
+                                  <p className="font-semibold text-gray-900">
+                                    {item.name}
+                                  </p>
+                                  {item.stock > 0 ? (
+                                    <p className="text-[11px] text-gray-500">
+                                      Current Stock Level: {item.stock} · Item
+                                      Price: $
+                                      {(item.priceCents / 100).toFixed(2)}
+                                    </p>
+                                  ) : (
+                                    <p className="text-[11px] font-medium text-red-600">
+                                      Out of stock — remove this item to keep
+                                      the bundle sellable.
+                                    </p>
+                                  )}
+                                </div>
                               </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setItems((prev) =>
+                                    prev.filter((it) => it.id !== item.id)
+                                  )
+                                }
+                                className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-500 hover:bg-gray-200 hover:text-black"
+                              >
+                                ×
+                              </button>
                             </div>
 
-                            {/* VARIANT PRODUCT UI (e.g. towel with colours) */}
+                            {/* VARIANT PRODUCT UI */}
                             {item.kind === "variant" && (
-                              <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4 space-y-3">
-                                <div>
-                                  <label className="mb-1 block text-xs font-semibold text-gray-700">
-                                    Customer-facing label for this choice
-                                  </label>
-                                  <p className="mb-2 text-[11px] text-gray-600">
-                                    Example: <span className="italic">“Any 3 towels”</span> or{" "}
-                                    <span className="italic">“Choose 2 colours”</span>.
-                                  </p>
-                                  <input
-                                    type="text"
-                                    placeholder="Any 3 towels"
-                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                                    value={item.variantLabel ?? ""}
-                                    onChange={(e) =>
-                                      setItems((prev) =>
-                                        prev.map((it) =>
-                                          it.id === item.id
-                                            ? {
-                                                ...it,
-                                                variantLabel: e.target.value,
-                                              }
-                                            : it
-                                        )
+                              <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4">
+                                <label className="mb-2 block text-xs font-semibold text-gray-700">
+                                  Variant group label (shown to customers)
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="Choose any 3 towels"
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                                  value={item.variantLabel ?? ""}
+                                  onChange={(e) =>
+                                    setItems((prev) =>
+                                      prev.map((it) =>
+                                        it.id === item.id
+                                          ? {
+                                              ...it,
+                                              variantLabel: e.target.value,
+                                            }
+                                          : it
                                       )
-                                    }
-                                  />
-                                </div>
+                                    )
+                                  }
+                                />
 
-                                <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-                                  <div className="flex flex-col gap-1">
-                                    <label className="text-[11px] font-medium text-gray-700">
-                                      How many variants can the customer pick?
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="number"
-                                        className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-                                        value={item.choiceCount ?? 1}
-                                        min={1}
-                                        max={item.variantCount}
-                                        disabled={!item.isMultiple}
-                                        onChange={(e) =>
-                                          setItems((prev) =>
-                                            prev.map((it) =>
-                                              it.id === item.id
-                                                ? {
-                                                    ...it,
-                                                    choiceCount: Math.max(
-                                                      1,
-                                                      Math.min(
-                                                        item.variantCount,
-                                                        Number(e.target.value) || 1
-                                                      )
-                                                    ),
-                                                  }
-                                                : it
-                                            )
+                                <div className="mt-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+                                      value={item.choiceCount ?? 1}
+                                      min={1}
+                                      max={item.variantCount ?? 1}
+                                      disabled={!item.isMultiple}
+                                      onChange={(e) =>
+                                        setItems((prev) =>
+                                          prev.map((it) =>
+                                            it.id === item.id
+                                              ? {
+                                                  ...it,
+                                                  choiceCount: Math.max(
+                                                    1,
+                                                    Math.min(
+                                                      item.variantCount ?? 1,
+                                                      Number(e.target.value) ||
+                                                        1
+                                                    )
+                                                  ),
+                                                }
+                                              : it
                                           )
-                                        }
-                                      />
-                                      <span className="text-[11px] text-gray-500">
-                                        out of {item.variantCount} available options
-                                      </span>
-                                    </div>
-                                    <p className="text-[10px] text-gray-500">
-                                      Turn on multiple choice if customers can mix &amp; match
-                                      colours / sizes.
-                                    </p>
+                                        )
+                                      }
+                                    />
+
+                                    <span className="text-[11px] text-gray-500">
+                                      / {item.variantCount ?? 1} Available
+                                      Variants
+                                    </span>
                                   </div>
 
                                   <label className="flex items-center gap-2 text-[11px] text-gray-600">
@@ -681,20 +700,14 @@ export default function NewBundlePage() {
                                         )
                                       }
                                     />
-                                    Allow customer to choose variants (multiple choice)
+                                    Select this option if this is a multiple
+                                    choice group.
                                   </label>
                                 </div>
-
-                                <p className="mt-1 text-[10px] text-gray-500">
-                                  Tip: If you want <strong>only one specific variant</strong>{" "}
-                                  in this bundle (e.g. 3× black towels only), add that colour
-                                  as a <strong>single stock item</strong> instead of using
-                                  multiple choice.
-                                </p>
                               </div>
                             )}
 
-                            {/* SINGLE PRODUCT UI (specific inventory item, e.g. Black towel only) */}
+                            {/* SINGLE PRODUCT UI – this is where "3 black towels" lives */}
                             {item.kind === "single" && item.stock > 0 && (
                               <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
                                 {/* Number of units in bundle */}
@@ -710,16 +723,26 @@ export default function NewBundlePage() {
                                     onChange={(e) => {
                                       const qty = Math.max(
                                         1,
-                                        Math.min(item.stock, Number(e.target.value) || 1)
+                                        Math.min(
+                                          item.stock,
+                                          Number(e.target.value) || 1
+                                        )
                                       );
                                       setItems((prev) =>
                                         prev.map((it) =>
-                                          it.id === item.id ? { ...it, quantity: qty } : it
+                                          it.id === item.id
+                                            ? { ...it, quantity: qty }
+                                            : it
                                         )
                                       );
                                     }}
                                     className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
                                   />
+                                  <p className="mt-1 text-[10px] text-gray-500">
+                                    This bundle will always include this exact
+                                    item. Inventory will be deducted from this
+                                    colour/variant only.
+                                  </p>
                                 </div>
 
                                 {/* Stock */}
@@ -741,19 +764,22 @@ export default function NewBundlePage() {
                                   </label>
                                   <input
                                     disabled
-                                    value={`$ ${(item.priceCents / 100).toFixed(2)}`}
+                                    value={`$ ${(item.priceCents / 100).toFixed(
+                                      2
+                                    )}`}
                                     className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
                                   />
                                 </div>
                               </div>
                             )}
 
-                            {item.kind === "single" && (!item.stock || item.stock <= 0) && (
-                              <p className="mt-2 text-[11px] text-red-500">
-                                This product currently has no stock. Please remove it from the
-                                bundle.
-                              </p>
-                            )}
+                            {item.kind === "single" &&
+                              (!item.stock || item.stock <= 0) && (
+                                <p className="mt-2 text-[11px] text-red-500">
+                                  This product currently has no stock. Please
+                                  remove it from the bundle.
+                                </p>
+                              )}
                           </div>
                         ))}
                       </div>
@@ -830,16 +856,10 @@ export default function NewBundlePage() {
         onClose={() => setPickerOpen(false)}
         initialSelected={items}
         onContinue={(picked) => {
-          const byProductId = new Map<string | null, BundleCandidateItem>();
-
-          picked.forEach((p) => {
-            const key = (p as any).productId ?? p.id;
-            if (!byProductId.has(key)) {
-              byProductId.set(key, p);
-            }
-          });
-
-          const deduped = Array.from(byProductId.values());
+          // dedupe by item.id
+          const byId = new Map<string, BundleCandidateItem>();
+          picked.forEach((p) => byId.set(p.id, p));
+          const deduped = Array.from(byId.values());
 
           setItems(
             deduped.map((p) => {

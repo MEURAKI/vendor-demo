@@ -1,369 +1,406 @@
+// components/bundles/BundleProductPickerModal.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import Image from "next/image";
+import React, { useEffect, useState } from "react";
 import clsx from "clsx";
+import { supabase } from "../../lib/supabase/client";
 import type { BundleCandidateItem } from "../../types/bundles.types";
-import ClipLoader from "react-spinners/ClipLoader";
-import { supabase } from "../../lib/supabase/client"; // 👈 add this
 
-const MAX_BUNDLE_ITEMS = 5;
+type ProductRow = {
+  id: string;
+  name: string;
+  is_variant: boolean;
+  price_cents: number | null;
+  inventory_qty: number | null;
+};
 
-interface BundleProductPickerModalProps {
+type VariantRow = {
+  id: string;           // product_variants.id
+  product_id: string;
+  price_cents: number;
+  inventory_qty: number;
+  options_json: Record<string, any>;
+};
+
+type Props = {
   open: boolean;
   onClose: () => void;
-  initialSelected?: BundleCandidateItem[];
+  initialSelected: BundleCandidateItem[];
   onContinue: (items: BundleCandidateItem[]) => void;
-}
+};
 
 export function BundleProductPickerModal({
   open,
   onClose,
-  initialSelected = [],
+  initialSelected,
   onContinue,
-}: BundleProductPickerModalProps) {
-  const [query, setQuery] = useState("");
+}: Props) {
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<BundleCandidateItem[]>([]);
-  const [selected, setSelected] = useState<Record<string, BundleCandidateItem>>(
-    () =>
-      initialSelected.reduce((acc, item) => {
-        acc[item.id] = item;
-        return acc;
-      }, {} as Record<string, BundleCandidateItem>)
-  );
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [variants, setVariants] = useState<VariantRow[]>([]);
+  const [selected, setSelected] = useState<BundleCandidateItem[]>([]);
 
-  // sync when initialSelected changes
   useEffect(() => {
-    setSelected(
-      initialSelected.reduce((acc, item) => {
-        acc[item.id] = item;
-        return acc;
-      }, {} as Record<string, BundleCandidateItem>)
-    );
+    setSelected(initialSelected || []);
   }, [initialSelected]);
 
-  const selectedList = Object.values(selected);
-  const selectedCount = selectedList.length;
-
-  // Fetch products whenever query / open changes
   useEffect(() => {
     if (!open) return;
 
-    let cancelled = false;
+    let mounted = true;
 
-    async function run() {
-      setLoading(true);
+    async function load() {
       try {
-        const url = `/api/bundles/search-products?q=${encodeURIComponent(
-          query
-        )}`;
+        setLoading(true);
 
-        // 👇 get current session token
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
-
-        if (!token) {
-          // not logged in – no results
-          if (!cancelled) {
-            setResults([]);
+        // ✅ Logged-in vendor
+        const { data: auth } = await supabase.auth.getUser();
+        const user = auth?.user;
+        if (!user) {
+          if (mounted) {
+            setProducts([]);
+            setVariants([]);
           }
           return;
         }
 
-        const res = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`, // 🔐 pass token so API can filter by vendor
-          },
-        });
+        // ✅ Load only this vendor's products
+        const { data: prodRows, error: prodErr } = await supabase
+          .from("products")
+          .select("id,name,is_variant,price_cents,inventory_qty")
+          .eq("vendor_id", user.id)
+          .order("name", { ascending: true });
 
-        if (!res.ok) {
-          console.error("Error loading bundle candidates", await res.text());
-          if (!cancelled) setResults([]);
+        if (prodErr) {
+          console.error("Error loading products", prodErr);
+        }
+
+        const productList = (prodRows || []) as ProductRow[];
+        const productIds = productList.map((p) => p.id);
+
+        if (productIds.length === 0) {
+          if (mounted) {
+            setProducts([]);
+            setVariants([]);
+          }
           return;
         }
 
-        const data = await res.json();
-        if (!cancelled) {
-          setResults(data.items ?? []);
+        // ✅ Load variants only for those products
+        const { data: varRows, error: varErr } = await supabase
+          .from("product_variants")
+          .select("id,product_id,price_cents,inventory_qty,options_json")
+          .in("product_id", productIds)
+          .order("product_id", { ascending: true });
+
+        if (varErr) {
+          console.error("Error loading product_variants", varErr);
         }
-      } catch (e) {
-        console.error("Error loading bundle candidates", e);
-        if (!cancelled) setResults([]);
+
+        if (!mounted) return;
+        setProducts(productList);
+        setVariants((varRows || []) as VariantRow[]);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (mounted) setLoading(false);
       }
     }
 
-    const id = setTimeout(run, 200); // tiny debounce
+    void load();
+
     return () => {
-      cancelled = true;
-      clearTimeout(id);
+      mounted = false;
     };
-  }, [query, open]);
+  }, [open]);
 
   if (!open) return null;
 
+  /* ------------------------ Helpers ------------------------ */
 
-
-  function removeChip(id: string) {
-    setSelected((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  }
-
-  function handleContinue() {
-    if (!selectedCount) return;
-    onContinue(selectedList);
-  }
-
-  function toggleItem(item: BundleCandidateItem) {
-  // safety: do not allow zero stock (should already be filtered)
-  if (!item.stock || item.stock <= 0) return;
-
-  setSelected((prev) => {
-    const next = { ...prev };
-    if (next[item.id]) {
-      delete next[item.id];
-    } else {
-      if (Object.keys(next).length >= MAX_BUNDLE_ITEMS) {
-        alert(`You can only add up to ${MAX_BUNDLE_ITEMS} products.`);
-        return prev;
-      }
-      next[item.id] = item; // 👈 cannot duplicate same id
+  // Build a human label for a variant from options_json (e.g. {Color: "Black", Size: "L"} → "Black / L")
+  function getVariantLabel(v: VariantRow): string {
+    try {
+      if (!v.options_json) return "Variant";
+      const values = Object.values(v.options_json).filter(Boolean);
+      if (!values.length) return "Variant";
+      return values.join(" / ");
+    } catch {
+      return "Variant";
     }
-    return next;
-  });
-}
+  }
 
-  const showEmptyState = !query && !results.length && !loading;
+  const toggleVariant = (product: ProductRow, variant: VariantRow) => {
+    const stock = variant.inventory_qty ?? 0;
+    // 🔒 Out of stock: do nothing
+    if (stock <= 0) return;
+
+    const id = variant.id; // unique bundle item id
+    const exists = selected.find((s) => s.id === id);
+
+    if (exists) {
+      setSelected((prev) => prev.filter((s) => s.id !== id));
+      return;
+    }
+
+    const label = getVariantLabel(variant);
+
+    const item: BundleCandidateItem = {
+      id,
+      productId: product.id,
+      variantId: variant.id,
+      inventoryId: variant.id, // 👈 used for stock deduction later
+      name: `${product.name} — ${label}`,
+      kind: "single", // fixed inventory item (e.g. "Black towel")
+      stock: stock,
+      priceCents: variant.price_cents,
+      variantCount: null,
+    };
+
+    setSelected((prev) => [...prev, item]);
+  };
+
+  // For "I don't care which colour, choose any 3 towels"
+  const addAsVariantGroup = (product: ProductRow) => {
+    if (!product.is_variant) return; // multi-choice only makes sense for variant products
+
+    const productVariants = variants.filter((v) => v.product_id === product.id);
+    const variantCount = productVariants.length;
+    const totalStock = productVariants.reduce(
+      (acc, v) => acc + (v.inventory_qty ?? 0),
+      0
+    );
+
+    // 🔒 If no variants or no stock across them, don't allow
+    if (variantCount === 0 || totalStock <= 0) return;
+
+    const id = `prod-${product.id}-variants`;
+
+    const exists = selected.find((s) => s.id === id);
+    if (exists) {
+      setSelected((prev) => prev.filter((s) => s.id !== id));
+      return;
+    }
+
+    const priceCents =
+      variantCount > 0 ? productVariants[0].price_cents : product.price_cents ?? 0;
+
+    const item: BundleCandidateItem = {
+      id,
+      productId: product.id,
+      variantId: null,
+      inventoryId: null,
+      name: `${product.name} (Variants)`,
+      kind: "variant", // multi-choice
+      stock: totalStock,
+      priceCents,
+      variantCount,
+    };
+
+    setSelected((prev) => [...prev, item]);
+  };
+
+  const isVariantSelected = (id: string) =>
+    !!selected.find((s) => s.id === id);
+
+  const isProductVariantGroupSelected = (productId: string) =>
+    !!selected.find((s) => s.kind === "variant" && s.productId === productId);
+
+  /* ------------------------ UI ------------------------ */
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-       <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl">
+      <div className="flex max-h-[80vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-8 py-6">
-          <div>
-            <h2 className="text-2xl font-semibold text-[#6A1BFF]">
-              Create a new bundle
-            </h2>
-            <p className="mt-1 text-xs text-gray-500">
-              Make sure all items are in stock — if any product runs out, the
-              bundle will automatically be marked out of stock.
-            </p>
-          </div>
+        <div className="flex items-center justify-between border-b px-5 py-3">
+          <h2 className="text-sm font-semibold text-gray-900">
+            Add products to bundle
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-xl text-gray-500 hover:bg-gray-200 hover:text-black"
+            className="h-7 w-7 rounded-full bg-gray-100 text-xs text-gray-600 hover:bg-gray-200"
           >
-            ×
+            ✕
           </button>
         </div>
 
-        {/* Search bar */}
-        <div className="px-8 pt-4">
-          <div className="flex items-center rounded-full bg-[#F7F7FB] px-4 py-2">
-            <span className="mr-2 text-sm text-gray-400">🔍</span>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search for product names"
-              className="flex-1 bg-transparent text-sm text-gray-800 focus:outline-none"
-            />
-            {query && (
-              <button
-                type="button"
-                className="text-lg text-gray-400 hover:text-black"
-                onClick={() => setQuery("")}
-              >
-                ×
-              </button>
-            )}
-          </div>
-        </div>
-
         {/* Body */}
-        <div className="flex-1 overflow-auto px-8 py-4 text-xs">
-          {showEmptyState ? (
-            <div className="flex h-full flex-col items-center justify-center gap-4 py-10 text-center">
-              <div className="flex h-32 w-32 items-center justify-center rounded-full bg-[#F7F7FB] text-5xl">
-                {/* <Image
-                  src="/images/search-icon.svg"
-                  alt="Bundle Illustration"
-                  width={80}
-                  height={80}
-                /> */}
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-gray-900">
-                  Search for the items you want to bundle
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Make sure your items are in stock to create an active bundle.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-3xl border border-[#ECECFB] bg-white shadow-sm">
-              <table className="w-full text-xs">
-                <thead className="border-b bg-[#F7F7FB] text-[11px] font-semibold text-gray-500">
-                  <tr>
-                    <th className="w-10 px-4 py-3 text-left">
-                      <input type="checkbox" disabled className="h-3 w-3" />
-                    </th>
-                    <th className="px-4 py-3 text-left">Product Name</th>
-                    <th className="px-4 py-3 text-right">Price</th>
-                    <th className="px-4 py-3 text-right">Stock</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading && (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-6 text-center text-gray-500"
-                      >
-                        <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
+        <div className="flex flex-1 overflow-hidden text-xs">
+          {/* Products + variants list */}
+          <div className="w-2/3 overflow-y-auto border-r p-4">
+            {loading && <p className="text-gray-500">Loading products…</p>}
 
-                      </td>
-                    </tr>
-                  )}
+            {!loading && products.length === 0 && (
+              <p className="text-gray-500">No products found.</p>
+            )}
 
-                  {!loading && results.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-6 text-center text-gray-500"
-                      >
-                        No products found with stock &gt; 0.
-                      </td>
-                    </tr>
-                  )}
+            {!loading &&
+              products.map((p) => {
+                // For variant products → real variants
+                // For single products → treat the product itself as a "single variant" row
+                const productVariants: VariantRow[] = p.is_variant
+                  ? variants.filter((v) => v.product_id === p.id)
+                  : [
+                      {
+                        id: p.id,
+                        product_id: p.id,
+                        price_cents: p.price_cents ?? 0,
+                        inventory_qty: p.inventory_qty ?? 0,
+                        options_json: {}, // label built from product name instead
+                      },
+                    ];
 
-                  {!loading &&
-                    results.map((item) => {
-                      const isSelected = !!selected[item.id];
-                      const outOfStock = !item.stock || item.stock <= 0;
+                const variantCount = productVariants.length;
+                const totalStock = productVariants.reduce(
+                  (acc, v) => acc + (v.inventory_qty ?? 0),
+                  0
+                );
 
-                      return (
-                        <tr
-                          key={item.id}
-                          className="border-b last:border-b-0 hover:bg-[#FBFBFF]"
+                const multiDisabled =
+                  !p.is_variant || variantCount === 0 || totalStock <= 0;
+
+                return (
+                  <div
+                    key={p.id}
+                    className="mb-3 rounded-xl border border-gray-200 bg-gray-50 p-3"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-semibold text-gray-900">
+                          {p.name}
+                        </div>
+                        <div className="text-[11px] text-gray-500">
+                          {p.is_variant
+                            ? `${variantCount} variants · Total stock: ${totalStock}`
+                            : `Single product · Stock: ${
+                                productVariants[0]?.inventory_qty ?? 0
+                              }`}
+                        </div>
+                      </div>
+
+                      {p.is_variant && (
+                        <button
+                          type="button"
+                          onClick={() => !multiDisabled && addAsVariantGroup(p)}
+                          disabled={multiDisabled}
+                          className={clsx(
+                            "rounded-full border px-3 py-1 text-[11px]",
+                            multiDisabled
+                              ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                              : isProductVariantGroupSelected(p.id)
+                              ? "border-purple-600 bg-purple-50 text-purple-700"
+                              : "border-gray-300 bg-white text-gray-700 hover:border-purple-400"
+                          )}
                         >
-                          <td className="px-4 py-3 align-middle">
-                            <button
-                              type="button"
-                              onClick={() => toggleItem(item)}
-                              disabled={outOfStock}
-                              className={clsx(
-                                "flex h-4 w-4 items-center justify-center rounded-sm border",
-                                outOfStock
-                                  ? "cursor-not-allowed border-gray-300 bg-gray-100"
-                                  : isSelected
-                                  ? "border-transparent bg-[#7C3AED]"
-                                  : "border-gray-300 bg-white"
-                              )}
-                            >
-                              {isSelected && (
-                                <span className="text-[10px] text-white">
-                                  ✓
-                                </span>
-                              )}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="relative h-9 w-9 overflow-hidden rounded-xl bg-gray-200">
-                                {item.imageUrl && (
-                                  <Image
-                                    src={item.imageUrl}
-                                    alt={item.name}
-                                    fill
-                                    className="object-cover"
-                                  />
-                                )}
+                          {multiDisabled
+                            ? "No stock for choices"
+                            : isProductVariantGroupSelected(p.id)
+                            ? "Remove multi-choice"
+                            : "Add as multi-choice"}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Variants or single row */}
+                    <div className="space-y-1">
+                      {productVariants.map((v) => {
+                        const vid = v.id;
+                        const checked = isVariantSelected(vid);
+                        const stock = v.inventory_qty ?? 0;
+                        const outOfStock = stock <= 0;
+
+                        // Label:
+                        const label = p.is_variant
+                          ? getVariantLabel(v)
+                          : p.name; // single product → just use product name
+
+                        return (
+                          <label
+                            key={vid}
+                            className={clsx(
+                              "flex cursor-pointer items-center justify-between rounded-lg border px-2 py-1.5",
+                              outOfStock
+                                ? "cursor-not-allowed border-gray-200 bg-gray-100 opacity-60"
+                                : checked
+                                ? "border-purple-600 bg-purple-50"
+                                : "border-gray-200 bg-white hover:border-purple-300"
+                            )}
+                          >
+                            <div>
+                              <div className="text-[11px] font-medium text-gray-900">
+                                {p.is_variant ? label : "Single product"}
                               </div>
-                              <div className="text-xs font-semibold text-gray-900">
-                                {item.name}
-                                {outOfStock && (
-                                  <span className="ml-2 rounded-full bg-[#FEE2E2] px-2 py-0.5 text-[10px] font-semibold text-[#B91C1C]">
-                                    Out of stock
+                              <div className="text-[10px] text-gray-500">
+                                {outOfStock ? (
+                                  <span className="font-semibold text-red-500">
+                                    Out of stock – cannot add
                                   </span>
+                                ) : (
+                                  <>
+                                    Stock: {stock} · $
+                                    {(v.price_cents / 100).toFixed(2)}
+                                  </>
                                 )}
                               </div>
                             </div>
-                          </td>
-                          <td className="px-4 py-3 text-right text-[11px] text-gray-800">
-                            ${(item.priceCents / 100).toFixed(2)}
-                          </td>
-                          <td className="px-4 py-3 text-right text-[11px] text-gray-800">
-                            {item.stock}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                            <input
+                              type="checkbox"
+                              className="h-3 w-3"
+                              checked={checked}
+                              disabled={outOfStock}
+                              onChange={() => toggleVariant(p, v)}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
 
-          {/* Selected chips */}
-          <div className="mt-6">
-            <p className="text-sm font-semibold text-gray-900">
-              You are adding {selectedCount}/{MAX_BUNDLE_ITEMS} products to your
-              bundle
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {selectedList.map((item) => (
-                <span
-                  key={item.id}
-                  className="inline-flex items-center gap-2 rounded-full bg-[#F7F7FB] px-3 py-1 text-[11px] text-gray-800"
+          {/* Selected list */}
+          <div className="w-1/3 p-4">
+            <h3 className="mb-2 text-[11px] font-semibold text-gray-700">
+              Selected items
+            </h3>
+            {selected.length === 0 && (
+              <p className="text-[11px] text-gray-500">
+                Nothing selected yet.
+              </p>
+            )}
+            <ul className="space-y-1">
+              {selected.map((s) => (
+                <li
+                  key={s.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[11px]"
                 >
-                  {item.name}
+                  <span className="line-clamp-1">{s.name}</span>
                   <button
                     type="button"
-                    onClick={() => removeChip(item.id)}
-                    className="text-xs text-gray-500 hover:text-black"
+                    onClick={() =>
+                      setSelected((prev) => prev.filter((x) => x.id !== s.id))
+                    }
+                    className="ml-2 text-gray-500 hover:text-black"
                   >
-                    ×
+                    ✕
                   </button>
-                </span>
+                </li>
               ))}
-              {selectedCount === 0 && (
-                <span className="text-[11px] text-gray-400">
-                  No products selected yet.
-                </span>
-              )}
-            </div>
+            </ul>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end border-t px-8 py-4">
+        <div className="flex items-center justify-between border-t px-5 py-3 text-xs">
+          <span className="text-gray-500">
+            {selected.length} item{selected.length === 1 ? "" : "s"} selected
+          </span>
           <button
             type="button"
-            onClick={onClose}
-            className="mr-3 rounded-full border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700"
+            onClick={() => onContinue(selected)}
+            className="rounded-full bg-black px-5 py-2 text-[11px] font-semibold text-white hover:bg-gray-900"
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!selectedCount}
-            onClick={handleContinue}
-            className={clsx(
-              "rounded-full px-6 py-2 text-xs font-semibold text-white",
-              selectedCount
-                ? "bg-black hover:bg-gray-900"
-                : "cursor-not-allowed bg-gray-300"
-            )}
-          >
-            Continue to Bundle Settings →
+            Add to bundle
           </button>
         </div>
       </div>
