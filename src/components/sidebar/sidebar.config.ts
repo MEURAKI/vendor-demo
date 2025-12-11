@@ -1,19 +1,23 @@
+"use client";
+
 import {
   BarChart3,
   CalendarDays,
   Package,
-  Tag,
   ShoppingBasket,
   Users,
   PiggyBank,
   Boxes,
 } from "lucide-react";
 
+/* -------------------------------------------------- */
+/* ICON MAP                                           */
+/* -------------------------------------------------- */
+
 export const ICONS = {
   BarChart3,
   CalendarDays,
   Package,
-  Tag,
   ShoppingBasket,
   Users,
   PiggyBank,
@@ -52,19 +56,25 @@ export type SidebarConfig = {
   sections: SidebarSection[];
 };
 
-/* Helper to get initials */
+/* -------------------------------------------------- */
+/* HELPER – Initials                                  */
+/* -------------------------------------------------- */
+
 function getInitials(nameOrEmail?: string | null) {
   if (!nameOrEmail) return "U";
-  const name = nameOrEmail.includes("@") ? nameOrEmail.split("@")[0] : nameOrEmail;
+  const name = nameOrEmail.includes("@")
+    ? nameOrEmail.split("@")[0]
+    : nameOrEmail;
+
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-/**
- * ✅ buildSidebarConfig
- * Central builder for your sidebar data.
- */
+/* -------------------------------------------------- */
+/* MAIN CONFIG BUILDER                                */
+/* -------------------------------------------------- */
+
 export function buildSidebarConfig({
   fullName,
   email,
@@ -85,8 +95,11 @@ export function buildSidebarConfig({
       role: role || "Vendor",
       status: status || "Active",
     },
+
     sections: [
-      // 1) Overview
+      /* ---------------------------------------------- */
+      /* 1) Overview                                    */
+      /* ---------------------------------------------- */
       {
         id: "overview",
         label: "Overview",
@@ -95,12 +108,16 @@ export function buildSidebarConfig({
             id: "dashboard",
             label: "Dashboard",
             icon: "BarChart3",
-            items: [{ id: "dash-home", label: "Home", href: "/pages/dashboard" }],
+            items: [
+              { id: "dash-home", label: "Home", href: "/pages/dashboard" },
+            ],
           },
         ],
       },
 
-      // 2) Shop Listings
+      /* ---------------------------------------------- */
+      /* 2) Shop Listings                               */
+      /* ---------------------------------------------- */
       {
         id: "listings",
         label: "Shop Listings",
@@ -112,10 +129,19 @@ export function buildSidebarConfig({
             items: [
               { id: "p-all", label: "All Products", href: "/pages/products" },
               { id: "p-add", label: "Add Product", href: "/pages/products/new" },
-              { id: "p-inv", label: "Inventory", href: "/pages/products/inventory" },
-              { id: "p-bundles", label: "Bundles", href: "/pages/products/bundles" },
+              {
+                id: "p-inv",
+                label: "Inventory",
+                href: "/pages/products/inventory",
+              },
+              {
+                id: "p-bundles",
+                label: "Bundles",
+                href: "/pages/products/bundles",
+              },
             ],
           },
+
           {
             id: "services",
             label: "Services",
@@ -123,14 +149,24 @@ export function buildSidebarConfig({
             items: [
               { id: "s-all", label: "All Services", href: "/pages/services" },
               { id: "s-add", label: "Add Service", href: "/pages/services/new" },
-              { id: "s-providers", label: "Wellness Providers", href: "/pages/services/providers" },
-              { id: "s-spaces", label: "Wellness Spaces", href: "/pages/services/spaces" },
+              {
+                id: "s-providers",
+                label: "Wellness Providers",
+                href: "/pages/services/providers",
+              },
+              {
+                id: "s-spaces",
+                label: "Wellness Spaces",
+                href: "/pages/services/spaces",
+              },
             ],
           },
         ],
       },
 
-      // 3) Orders & Bookings – 👈 NEW SECTION FOR NAVBAR
+      /* ---------------------------------------------- */
+      /* 3) Orders & Bookings                           */
+      /* ---------------------------------------------- */
       {
         id: "orders-bookings",
         label: "Orders & Bookings",
@@ -148,18 +184,24 @@ export function buildSidebarConfig({
             label: "Bookings",
             icon: "CalendarDays",
             items: [
-              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" }
+              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" },
             ],
           },
           {
             id: "customers",
             label: "Customers",
             icon: "Users",
-            items: [{ id: "c-all", label: "Customers", href: "/pages/vendor/customers" }],
+            items: [
+              { id: "c-all", label: "Customers", href: "/pages/vendor/customers" },
+            ],
           },
         ],
       },
-       {
+
+      /* ---------------------------------------------- */
+      /* 4) Finance                                      */
+      /* ---------------------------------------------- */
+      {
         id: "finance",
         label: "Finance",
         groups: [
@@ -173,17 +215,10 @@ export function buildSidebarConfig({
                 label: "Finance Overview",
                 href: "/pages/vendor/finance",
               },
-              // {
-              //   id: "f-payouts",
-              //   label: "Payouts",
-              //   href: "/pages/vendor/finance/payouts",
-              // },
             ],
           },
-        ]
-      }
-
-      // (optional) Finance, Discounts, etc. you can re-enable later
+        ],
+      },
     ],
   };
 }

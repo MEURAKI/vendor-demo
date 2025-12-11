@@ -588,151 +588,172 @@ export default function NewBundlePage() {
                               </div>
                             </div>
 
-                            {/* VARIANT PRODUCT UI */}
+                            {/* VARIANT PRODUCT UI (e.g. towel with colours) */}
                             {item.kind === "variant" && (
-                              <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4">
-                                <label className="mb-2 block text-xs font-semibold text-gray-700">
-                                  Size Variant Name (Displayed on store)
-                                </label>
-
-                                <input
-                                  type="text"
-                                  placeholder="Choose any 2 items"
-                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                                  value={item.variantLabel ?? ""}
-                                  onChange={(e) =>
-                                    setItems((prev) =>
-                                      prev.map((it) =>
-                                        it.id === item.id
-                                          ? {
-                                              ...it,
-                                              variantLabel: e.target.value,
-                                            }
-                                          : it
+                              <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4 space-y-3">
+                                <div>
+                                  <label className="mb-1 block text-xs font-semibold text-gray-700">
+                                    Customer-facing label for this choice
+                                  </label>
+                                  <p className="mb-2 text-[11px] text-gray-600">
+                                    Example: <span className="italic">“Any 3 towels”</span> or{" "}
+                                    <span className="italic">“Choose 2 colours”</span>.
+                                  </p>
+                                  <input
+                                    type="text"
+                                    placeholder="Any 3 towels"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                                    value={item.variantLabel ?? ""}
+                                    onChange={(e) =>
+                                      setItems((prev) =>
+                                        prev.map((it) =>
+                                          it.id === item.id
+                                            ? {
+                                                ...it,
+                                                variantLabel: e.target.value,
+                                              }
+                                            : it
+                                        )
                                       )
-                                    )
-                                  }
-                                />
+                                    }
+                                  />
+                                </div>
 
-                               <div className="mt-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-  <div className="flex items-center gap-2">
-    <input
-      type="number"
-      className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-      value={item.choiceCount ?? 1}
-      min={1}
-      max={item.variantCount}
-      disabled={!item.isMultiple}  // 🔥 Disable when not multiple
-      onChange={(e) =>
-        setItems((prev) =>
-          prev.map((it) =>
-            it.id === item.id
-              ? {
-                  ...it,
-                  choiceCount: Math.max(
-                    1,
-                    Math.min(
-                      item.variantCount,
-                      Number(e.target.value) || 1
-                    )
-                  ),
-                }
-              : it
-          )
-        )
-      }
-    />
+                                <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                                  <div className="flex flex-col gap-1">
+                                    <label className="text-[11px] font-medium text-gray-700">
+                                      How many variants can the customer pick?
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number"
+                                        className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+                                        value={item.choiceCount ?? 1}
+                                        min={1}
+                                        max={item.variantCount}
+                                        disabled={!item.isMultiple}
+                                        onChange={(e) =>
+                                          setItems((prev) =>
+                                            prev.map((it) =>
+                                              it.id === item.id
+                                                ? {
+                                                    ...it,
+                                                    choiceCount: Math.max(
+                                                      1,
+                                                      Math.min(
+                                                        item.variantCount,
+                                                        Number(e.target.value) || 1
+                                                      )
+                                                    ),
+                                                  }
+                                                : it
+                                            )
+                                          )
+                                        }
+                                      />
+                                      <span className="text-[11px] text-gray-500">
+                                        out of {item.variantCount} available options
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-gray-500">
+                                      Turn on multiple choice if customers can mix &amp; match
+                                      colours / sizes.
+                                    </p>
+                                  </div>
 
-    <span className="text-[11px] text-gray-500">
-      / {item.variantCount} Available Variants
-    </span>
-  </div>
+                                  <label className="flex items-center gap-2 text-[11px] text-gray-600">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.isMultiple ?? false}
+                                      onChange={(e) =>
+                                        setItems((prev) =>
+                                          prev.map((it) =>
+                                            it.id === item.id
+                                              ? {
+                                                  ...it,
+                                                  isMultiple: e.target.checked,
+                                                  choiceCount: e.target.checked
+                                                    ? it.choiceCount || 1
+                                                    : 1,
+                                                }
+                                              : it
+                                          )
+                                        )
+                                      }
+                                    />
+                                    Allow customer to choose variants (multiple choice)
+                                  </label>
+                                </div>
 
-  <label className="flex items-center gap-2 text-[11px] text-gray-600">
-    <input
-      type="checkbox"
-      checked={item.isMultiple ?? false}
-      onChange={(e) =>
-        setItems((prev) =>
-          prev.map((it) =>
-            it.id === item.id
-              ? {
-                  ...it,
-                  isMultiple: e.target.checked,
-                  choiceCount: e.target.checked
-                    ? it.choiceCount // keep existing
-                    : 1, // 🔥 Reset to 1 if toggled off
-                }
-              : it
-          )
-        )
-      }
-    />
-    Select option, if this is a multiple choice
-  </label>
-</div>
+                                <p className="mt-1 text-[10px] text-gray-500">
+                                  Tip: If you want <strong>only one specific variant</strong>{" "}
+                                  in this bundle (e.g. 3× black towels only), add that colour
+                                  as a <strong>single stock item</strong> instead of using
+                                  multiple choice.
+                                </p>
                               </div>
                             )}
 
-                            {/* SINGLE PRODUCT UI */}
-                         {item.kind === "single" && item.stock > 0 && (
-  <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
-    {/* Number of units in bundle */}
-    <div className="flex flex-col">
-      <label className="mb-1 text-[11px] text-gray-500">
-        No. of units in bundle
-      </label>
-      <input
-        type="number"
-        min={1}
-        max={item.stock}
-        value={item.quantity}
-        onChange={(e) => {
-          const qty = Math.max(
-            1,
-            Math.min(item.stock, Number(e.target.value) || 1)
-          );
-          setItems((prev) =>
-            prev.map((it) =>
-              it.id === item.id ? { ...it, quantity: qty } : it
-            )
-          );
-        }}
-        className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-      />
-    </div>
+                            {/* SINGLE PRODUCT UI (specific inventory item, e.g. Black towel only) */}
+                            {item.kind === "single" && item.stock > 0 && (
+                              <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+                                {/* Number of units in bundle */}
+                                <div className="flex flex-col">
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    No. of units in bundle
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={item.stock}
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const qty = Math.max(
+                                        1,
+                                        Math.min(item.stock, Number(e.target.value) || 1)
+                                      );
+                                      setItems((prev) =>
+                                        prev.map((it) =>
+                                          it.id === item.id ? { ...it, quantity: qty } : it
+                                        )
+                                      );
+                                    }}
+                                    className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+                                  />
+                                </div>
 
-    {/* Stock */}
-    <div>
-      <label className="mb-1 text-[11px] text-gray-500">
-        Current Stock Level
-      </label>
-      <input
-        disabled
-        value={item.stock}
-        className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
-      />
-    </div>
+                                {/* Stock */}
+                                <div>
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    Current Stock Level
+                                  </label>
+                                  <input
+                                    disabled
+                                    value={item.stock}
+                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+                                  />
+                                </div>
 
-    {/* Price */}
-    <div>
-      <label className="mb-1 text-[11px] text-gray-500">
-        Item Price
-      </label>
-      <input
-        disabled
-        value={`$ ${(item.priceCents / 100).toFixed(2)}`}
-        className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
-      />
-    </div>
-  </div>
-)}
+                                {/* Price */}
+                                <div>
+                                  <label className="mb-1 text-[11px] text-gray-500">
+                                    Item Price
+                                  </label>
+                                  <input
+                                    disabled
+                                    value={`$ ${(item.priceCents / 100).toFixed(2)}`}
+                                    className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+                                  />
+                                </div>
+                              </div>
+                            )}
 
-{item.kind === "single" && (!item.stock || item.stock <= 0) && (
-  <p className="mt-2 text-[11px] text-red-500">
-    This product currently has no stock. Please remove it from the bundle.
-  </p>
-)}
+                            {item.kind === "single" && (!item.stock || item.stock <= 0) && (
+                              <p className="mt-2 text-[11px] text-red-500">
+                                This product currently has no stock. Please remove it from the
+                                bundle.
+                              </p>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -804,37 +825,37 @@ export default function NewBundlePage() {
       </div>
 
       {/* Product picker modal (overlay) */}
-    <BundleProductPickerModal
-  open={pickerOpen}
-  onClose={() => setPickerOpen(false)}
-  initialSelected={items}
-  onContinue={(picked) => {
-    const byProductId = new Map<string | null, BundleCandidateItem>();
+      <BundleProductPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        initialSelected={items}
+        onContinue={(picked) => {
+          const byProductId = new Map<string | null, BundleCandidateItem>();
 
-    picked.forEach((p) => {
-      const key = (p as any).productId ?? p.id;
-      if (!byProductId.has(key)) {
-        byProductId.set(key, p);
-      }
-    });
+          picked.forEach((p) => {
+            const key = (p as any).productId ?? p.id;
+            if (!byProductId.has(key)) {
+              byProductId.set(key, p);
+            }
+          });
 
-    const deduped = Array.from(byProductId.values());
+          const deduped = Array.from(byProductId.values());
 
-    setItems(
-      deduped.map((p) => {
-        const existing = items.find((it) => it.id === p.id);
-        return {
-          ...p,
-          quantity: existing?.quantity ?? 1,
-          variantLabel: existing?.variantLabel ?? "",
-          choiceCount: existing?.choiceCount ?? 1,
-          isMultiple: existing?.isMultiple ?? false,
-        };
-      })
-    );
-    setPickerOpen(false);
-  }}
-/>
+          setItems(
+            deduped.map((p) => {
+              const existing = items.find((it) => it.id === p.id);
+              return {
+                ...p,
+                quantity: existing?.quantity ?? 1,
+                variantLabel: existing?.variantLabel ?? "",
+                choiceCount: existing?.choiceCount ?? 1,
+                isMultiple: existing?.isMultiple ?? false,
+              };
+            })
+          );
+          setPickerOpen(false);
+        }}
+      />
     </div>
   );
 }

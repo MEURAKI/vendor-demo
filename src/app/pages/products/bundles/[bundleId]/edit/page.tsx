@@ -76,10 +76,6 @@ export default function EditBundlePage() {
   const router = useRouter();
   const bundleId = params.bundleId;
 
-  const handleRemoveItem = (id: string) => {
-  setItems((prev) => prev.filter((it) => it.id !== id));
-};
-
   const [loading, setLoading] = useState(true);
 
   // bundle basics
@@ -116,6 +112,10 @@ export default function EditBundlePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  const handleRemoveItem = (id: string) => {
+    setItems((prev) => prev.filter((it) => it.id !== id));
+  };
 
   // ---------- Load vendor (from profile) ----------
   useEffect(() => {
@@ -318,7 +318,7 @@ export default function EditBundlePage() {
       startAt: startDate || null,
       endAt: endDate || null,
       imageUrl: bundleImageUrl,
-      wellnessDimensions: cleanWellnessDimensions, // 👈 sends [1,4,7,...] – multiple values
+      wellnessDimensions: cleanWellnessDimensions,
       categories,
       tags,
       items: items.map((i, idx) => ({
@@ -349,12 +349,26 @@ export default function EditBundlePage() {
     router.push("/pages/products/bundles");
   }
 
+  /* ---------- FULL-SCREEN LOADING STATE ---------- */
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050509]">
+        <ClipLoader
+          size={40}
+          color="#6B46C1"
+          cssOverride={{ animationDuration: "3s" }}
+        />
+      </div>
+    );
+  }
+
   // ---------- UI ----------
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
       <Sidebar config={sidebarConfig} />
 
-      <div className="flex flex-1.items-stretch justify-center px-6 py-4">
+      {/* fix: flex-1.items-stretch → flex-1 items-stretch */}
+      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
         <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
           {/* Top bar */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-5">
@@ -378,18 +392,18 @@ export default function EditBundlePage() {
               <button
                 type="button"
                 onClick={() => handleSave("draft")}
-                disabled={!items.length || loading}
+                disabled={!items.length}
                 className="h-9 rounded-full border border-gray-300 bg-white px-4 text-xs font-medium text-gray-800 disabled:opacity-50"
               >
                 Save as Draft
               </button>
               <button
                 type="button"
-                disabled={!canSave || loading}
+                disabled={!canSave}
                 onClick={() => handleSave("active")}
                 className={clsx(
                   "h-9 rounded-full px-6 text-xs font-semibold text-white",
-                  canSave && !loading
+                  canSave
                     ? "bg-black hover:bg-gray-900"
                     : "cursor-not-allowed bg-gray-300"
                 )}
@@ -400,503 +414,504 @@ export default function EditBundlePage() {
           </div>
 
           {/* Body */}
-          {loading ? (
-            <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
-              <ClipLoader
-                size={40}
-                color="#6B46C1"
-                cssOverride={{ animationDuration: "3s" }}
-              />
-            </div>
-          ) : (
-            <div className="flex-1 overflow-auto p-6">
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
-                {/* LEFT COLUMN */}
-                <div className="space-y-6">
-                  {/* General Information */}
-                  <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
-                    <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                      General Information
-                    </h2>
-                    <div className="space-y-4 text-xs">
-                      <div>
-                        <label className="text-[11px] font-semibold text-gray-700">
-                          Bundle Name
-                        </label>
+          <div className="flex-1 overflow-auto p-6">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+              {/* LEFT COLUMN */}
+              <div className="space-y-6">
+                {/* General Information */}
+                <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
+                  <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
+                    General Information
+                  </h2>
+                  <div className="space-y-4 text-xs">
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-700">
+                        Bundle Name
+                      </label>
+                      <input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-700">
+                        Bundle Description
+                      </label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={4}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                {/* Bundle Settings */}
+                <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
+                  <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
+                    Bundle Settings
+                  </h2>
+                  <div className="grid gap-4 text-xs md:grid-cols-2">
+                    {/* Price */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-700">
+                        Price
+                      </label>
+                      <div className="mt-2 flex items-center gap-1">
+                        <span className="inline-flex h-9 items-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] text-gray-600">
+                          SGD
+                        </span>
                         <input
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-semibold text-gray-700">
-                          Bundle Description
-                        </label>
-                        <textarea
-                          value={description}
-                          onChange={(e) => setDescription(e.target.value)}
-                          rows={4}
-                          className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={price ?? ""}
+                          onChange={(e) =>
+                            setPrice(
+                              e.target.value === ""
+                                ? undefined
+                                : Number(e.target.value)
+                            )
+                          }
+                          className="h-9 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
                         />
                       </div>
                     </div>
-                  </section>
 
-                  {/* Bundle Settings */}
-                  <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
-                    <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                      Bundle Settings
-                    </h2>
-                    <div className="grid gap-4 text-xs md:grid-cols-2">
-                      {/* Price */}
-                      <div>
-                        <label className="text-[11px] font-semibold text-gray-700">
-                          Price
-                        </label>
-                        <div className="mt-2 flex items-center gap-1">
-                          <span className="inline-flex h-9 items-center rounded-xl border border-gray-200 bg-white px-3 text-[11px] text-gray-600">
-                            SGD
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={price ?? ""}
-                            onChange={(e) =>
-                              setPrice(
-                                e.target.value === ""
-                                  ? undefined
-                                  : Number(e.target.value)
-                              )
-                            }
-                            className="h-9 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Discount */}
-                      <div>
-                        <label className="text-[11px] font-semibold text-gray-700">
-                          Discount
-                        </label>
-                        <div className="mt-2 flex gap-1">
-                          <select
-                            value={discountType ?? ""}
-                            onChange={(e) =>
-                              setDiscountType(
-                                (e.target.value || null) as DiscountType
-                              )
-                            }
-                            className="h-9 w-20 rounded-xl border border-gray-200 bg-white px-2 text-[11px] focus:border-purple-500 focus:outline-none"
-                          >
-                            <option value="">None</option>
-                            <option value="fixed">SGD</option>
-                            <option value="percent">%</option>
-                          </select>
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={discountValue ?? ""}
-                            onChange={(e) =>
-                              setDiscountValue(
-                                e.target.value === ""
-                                  ? undefined
-                                  : Number(e.target.value)
-                              )
-                            }
-                            className="h-9 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Start / End dates */}
-                      <div>
-                        <label className="text-[11px] font-semibold text-gray-700">
-                          Bundle Start Date
-                        </label>
+                    {/* Discount */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-700">
+                        Discount
+                      </label>
+                      <div className="mt-2 flex gap-1">
+                        <select
+                          value={discountType ?? ""}
+                          onChange={(e) =>
+                            setDiscountType(
+                              (e.target.value || null) as DiscountType
+                            )
+                          }
+                          className="h-9 w-20 rounded-xl border border-gray-200 bg-white px-2 text-[11px] focus:border-purple-500 focus:outline-none"
+                        >
+                          <option value="">None</option>
+                          <option value="fixed">SGD</option>
+                          <option value="percent">%</option>
+                        </select>
                         <input
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={discountValue ?? ""}
+                          onChange={(e) =>
+                            setDiscountValue(
+                              e.target.value === ""
+                                ? undefined
+                                : Number(e.target.value)
+                            )
+                          }
+                          className="h-9 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                          placeholder="0.00"
                         />
                       </div>
-                      <div>
+                    </div>
+
+                    {/* Start / End dates */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-700">
+                        Bundle Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-700">
+                        Bundle End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* SKU Controls */}
+                    <div className="mt-5 md:col-span-2">
+                      <div className="flex items-center justify-between">
                         <label className="text-[11px] font-semibold text-gray-700">
-                          Bundle End Date
+                          SKU
                         </label>
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
-                        />
+                        <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                          <input
+                            type="checkbox"
+                            className="h-3 w-3"
+                            checked={customSkuEnabled}
+                            onChange={(e) =>
+                              setCustomSkuEnabled(e.target.checked)
+                            }
+                          />
+                          Add custom SKU
+                        </label>
                       </div>
 
-                      {/* SKU Controls */}
-                      <div className="mt-5 md:col-span-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-semibold text-gray-700">
-                            SKU
-                          </label>
-                          <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          value={skuBase}
+                          onChange={(e) =>
+                            setSkuBase(ensureBundlePrefix(e.target.value))
+                          }
+                          className="h-9 flex-1 rounded-2xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
+                        />
+
+                        <div className="flex flex-col items-stretch gap-1 sm:items-end">
+                          {customSkuEnabled && (
                             <input
-                              type="checkbox"
-                              className="h-3 w-3"
-                              checked={customSkuEnabled}
+                              placeholder="Custom suffix"
+                              value={customSkuSuffix}
                               onChange={(e) =>
-                                setCustomSkuEnabled(e.target.checked)
+                                setCustomSkuSuffix(
+                                  e.target.value.toUpperCase()
+                                )
                               }
+                              className="h-7 rounded-2xl border border-gray-200 bg-white px-2 text-[11px] focus:border-purple-500 focus:outline-none sm:w-28"
                             />
-                            Add custom SKU
-                          </label>
-                        </div>
-
-                        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <input
-                            value={skuBase}
-                            onChange={(e) =>
-                              setSkuBase(ensureBundlePrefix(e.target.value))
-                            }
-                            className="h-9 flex-1 rounded-2xl border border-gray-200 bg-white px-3 text-xs focus:border-purple-500 focus:outline-none"
-                          />
-
-                          <div className="flex flex-col items-stretch gap-1 sm:items-end">
-                            {customSkuEnabled && (
-                              <input
-                                placeholder="Custom suffix"
-                                value={customSkuSuffix}
-                                onChange={(e) =>
-                                  setCustomSkuSuffix(
-                                    e.target.value.toUpperCase()
-                                  )
-                                }
-                                className="h-7 rounded-2xl border border-gray-200 bg-white px-2 text-[11px] focus:border-purple-500 focus:outline-none sm:w-28"
-                              />
-                            )}
-                            <div className="inline-flex items-center justify-center rounded-2xl bg-[#F3F3F7] px-4 py-2 text-[11px] text-gray-500">
-                              {displaySku}
-                            </div>
+                          )}
+                          <div className="inline-flex items-center justify-center rounded-2xl bg-[#F3F3F7] px-4 py-2 text-[11px] text-gray-500">
+                            {displaySku}
                           </div>
                         </div>
-                        <p className="mt-1 text-[10px] text-gray-400">
-                          Bundle SKU always starts with{" "}
-                          <strong>BUNDLE</strong>. You can tweak the base or
-                          add a suffix.
-                        </p>
                       </div>
-                    </div>
-                  </section>
-
-                  {/* Bundle Items */}
-                  <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
-                    <div className="mb-4 flex items-center justify-between">
-                      <h2 className="text-sm font-semibold.uppercase tracking-wide text-gray-700">
-                        Products in Bundle
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={() => setPickerOpen(true)}
-                        className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
-                      >
-                        + Add Product
-                      </button>
-                    </div>
-
-                    {items.length === 0 ? (
-                      <p className="text-xs text-gray-500">
-                        Use “Add Product” to choose items for this bundle.
+                      <p className="mt-1 text-[10px] text-gray-400">
+                        Bundle SKU always starts with <strong>BUNDLE</strong>.
+                        You can tweak the base or add a suffix.
                       </p>
-                    ) : (
-                      <div className="space-y-3 text-xs">
-                        {items.map((item, idx) => (
-                          <div
-                            key={item.id}
-                            className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4"
-                          >
-                            {/* Common heading */}
-                            <div className="flex items-start justify-between gap-3">
-  <div className="flex items-center gap-3">
-    <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-[#E5DEFF] text-[11px] font-semibold text-[#4C1D95]">
-      Product {idx + 1}
-    </span>
-    <div>
-      <p className="font-semibold text-gray-900">
-        {item.name}
-      </p>
+                    </div>
+                  </div>
+                </section>
 
-      {item.stock && item.stock > 0 ? (
-        <p className="text-[11px] text-gray-500">
-          Current Stock Level: {item.stock} · Item Price: $
-          {(item.priceCents / 100).toFixed(2)}
-        </p>
-      ) : (
-        <p className="text-[11px] font-medium text-red-600">
-          Out of stock — remove this item to keep the bundle sellable.
-        </p>
-      )}
-    </div>
-  </div>
+                {/* Bundle Items */}
+                <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
+                  <div className="mb-4 flex.items-center justify-between">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
+                      Products in Bundle
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen(true)}
+                      className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
+                    >
+                      + Add Product
+                    </button>
+                  </div>
 
-  {/* ❌ remove this bundle item */}
-  <button
-    type="button"
-    onClick={() => handleRemoveItem(item.id)}
-    className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-500 hover:bg-gray-200 hover:text-black"
-  >
-    ×
-  </button>
-</div>
+                  {items.length === 0 ? (
+                    <p className="text-xs text-gray-500">
+                      Use “Add Product” to choose items for this bundle.
+                    </p>
+                  ) : (
+                    <div className="space-y-3 text-xs">
+                      {items.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4"
+                        >
+                          {/* Common heading */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded-full bg-[#E5DEFF] text-[11px] font-semibold text-[#4C1D95]">
+                                Product {idx + 1}
+                              </span>
+                              <div>
+                                <p className="font-semibold text-gray-900">
+                                  {item.name}
+                                </p>
 
-                            {/* VARIANT PRODUCT UI */}
-                            {item.kind === "variant" && (
-                              <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4">
-                                <label className="mb-2 block text-xs font-semibold text-gray-700">
-                                  Size Variant Name (Displayed on store)
+                                {item.stock && item.stock > 0 ? (
+                                  <p className="text-[11px] text-gray-500">
+                                    Current Stock Level: {item.stock} · Item
+                                    Price: $
+                                    {(item.priceCents / 100).toFixed(2)}
+                                  </p>
+                                ) : (
+                                  <p className="text-[11px] font-medium text-red-600">
+                                    Out of stock — remove this item to keep the
+                                    bundle sellable.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* ❌ remove this bundle item */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-500 hover:bg-gray-200 hover:text-black"
+                            >
+                              ×
+                            </button>
+                          </div>
+
+                          {/* VARIANT PRODUCT UI */}
+                          {item.kind === "variant" && (
+                            <div className="mt-2 w-full rounded-xl border border-purple-200 bg-purple-50 p-4">
+                              <label className="mb-2 block text-xs font-semibold text-gray-700">
+                                Size Variant Name (Displayed on store)
+                              </label>
+
+                              <input
+                                type="text"
+                                placeholder="Choose any 2 items"
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                                value={item.variantLabel ?? ""}
+                                onChange={(e) =>
+                                  setItems((prev) =>
+                                    prev.map((it) =>
+                                      it.id === item.id
+                                        ? {
+                                            ...it,
+                                            variantLabel: e.target.value,
+                                          }
+                                        : it
+                                    )
+                                  )
+                                }
+                              />
+
+                              <div className="mt-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
+                                    value={item.choiceCount ?? 1}
+                                    min={1}
+                                    max={item.variantCount}
+                                    disabled={!item.isMultiple}
+                                    onChange={(e) =>
+                                      setItems((prev) =>
+                                        prev.map((it) =>
+                                          it.id === item.id
+                                            ? {
+                                                ...it,
+                                                choiceCount: Math.max(
+                                                  1,
+                                                  Math.min(
+                                                    item.variantCount,
+                                                    Number(e.target.value) ||
+                                                      1
+                                                  )
+                                                ),
+                                              }
+                                            : it
+                                        )
+                                      )
+                                    }
+                                  />
+
+                                  <span className="text-[11px] text-gray-500">
+                                    / {item.variantCount} Available Variants
+                                  </span>
+                                </div>
+
+                                <label className="flex items-center gap-2 text-[11px] text-gray-600">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.isMultiple ?? false}
+                                    onChange={(e) =>
+                                      setItems((prev) =>
+                                        prev.map((it) =>
+                                          it.id === item.id
+                                            ? {
+                                                ...it,
+                                                isMultiple: e.target.checked,
+                                                choiceCount: e.target.checked
+                                                  ? it.choiceCount
+                                                  : 1,
+                                              }
+                                            : it
+                                        )
+                                      )
+                                    }
+                                  />
+                                  Select option, if this is a multiple choice
                                 </label>
+                              </div>
+                            </div>
+                          )}
 
+                          {/* SINGLE PRODUCT UI */}
+                          {item.kind === "single" && item.stock > 0 && (
+                            <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+                              {/* Number of units in bundle */}
+                              <div className="flex flex-col">
+                                <label className="mb-1 text-[11px] text-gray-500">
+                                  No. of units in bundle
+                                </label>
                                 <input
-                                  type="text"
-                                  placeholder="Choose any 2 items"
-                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                                  value={item.variantLabel ?? ""}
-                                  onChange={(e) =>
+                                  type="number"
+                                  min={1}
+                                  max={item.stock}
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const qty = Math.max(
+                                      1,
+                                      Math.min(
+                                        item.stock,
+                                        Number(e.target.value) || 1
+                                      )
+                                    );
                                     setItems((prev) =>
                                       prev.map((it) =>
                                         it.id === item.id
-                                          ? {
-                                              ...it,
-                                              variantLabel: e.target.value,
-                                            }
+                                          ? { ...it, quantity: qty }
                                           : it
                                       )
-                                    )
-                                  }
+                                    );
+                                  }}
+                                  className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
                                 />
-
-                              <div className="mt-3 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-  <div className="flex items-center gap-2">
-    <input
-      type="number"
-      className="h-8 w-14 rounded-lg border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-      value={item.choiceCount ?? 1}
-      min={1}
-      max={item.variantCount}
-      disabled={!item.isMultiple}  // 🔥 Disable when not multiple
-      onChange={(e) =>
-        setItems((prev) =>
-          prev.map((it) =>
-            it.id === item.id
-              ? {
-                  ...it,
-                  choiceCount: Math.max(
-                    1,
-                    Math.min(
-                      item.variantCount,
-                      Number(e.target.value) || 1
-                    )
-                  ),
-                }
-              : it
-          )
-        )
-      }
-    />
-
-    <span className="text-[11px] text-gray-500">
-      / {item.variantCount} Available Variants
-    </span>
-  </div>
-
-  <label className="flex items-center gap-2 text-[11px] text-gray-600">
-    <input
-      type="checkbox"
-      checked={item.isMultiple ?? false}
-      onChange={(e) =>
-        setItems((prev) =>
-          prev.map((it) =>
-            it.id === item.id
-              ? {
-                  ...it,
-                  isMultiple: e.target.checked,
-                  choiceCount: e.target.checked
-                    ? it.choiceCount // keep existing
-                    : 1, // 🔥 Reset to 1 if toggled off
-                }
-              : it
-          )
-        )
-      }
-    />
-    Select option, if this is a multiple choice
-  </label>
-</div>
                               </div>
+
+                              {/* Stock */}
+                              <div>
+                                <label className="mb-1 text-[11px] text-gray-500">
+                                  Current Stock Level
+                                </label>
+                                <input
+                                  disabled
+                                  value={item.stock}
+                                  className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+                                />
+                              </div>
+
+                              {/* Price */}
+                              <div>
+                                <label className="mb-1 text-[11px] text-gray-500">
+                                  Item Price
+                                </label>
+                                <input
+                                  disabled
+                                  value={`$ ${(item.priceCents / 100).toFixed(
+                                    2
+                                  )}`}
+                                  className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {item.kind === "single" &&
+                            (!item.stock || item.stock <= 0) && (
+                              <p className="mt-2 text-[11px] text-red-500">
+                                This product currently has no stock. Please
+                                remove it from the bundle.
+                              </p>
                             )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
 
-                            {/* SINGLE PRODUCT UI */}
-                       {item.kind === "single" && item.stock > 0 && (
-  <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
-    {/* Number of units in bundle */}
-    <div className="flex flex-col">
-      <label className="mb-1 text-[11px] text-gray-500">
-        No. of units in bundle
-      </label>
-      <input
-        type="number"
-        min={1}
-        max={item.stock}
-        value={item.quantity}
-        onChange={(e) => {
-          const qty = Math.max(
-            1,
-            Math.min(item.stock, Number(e.target.value) || 1)
-          );
-          setItems((prev) =>
-            prev.map((it) =>
-              it.id === item.id ? { ...it, quantity: qty } : it
-            )
-          );
-        }}
-        className="h-8 rounded-xl border border-gray-300 px-2 text-xs focus:border-purple-500 focus:outline-none"
-      />
-    </div>
+              {/* RIGHT COLUMN */}
+              <div className="space-y-6">
+                {/* Product Images */}
+                <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
+                  <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
+                    Product Images
+                  </h2>
 
-    {/* Stock */}
-    <div>
-      <label className="mb-1 text-[11px] text-gray-500">
-        Current Stock Level
-      </label>
-      <input
-        disabled
-        value={item.stock}
-        className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
-      />
-    </div>
-
-    {/* Price */}
-    <div>
-      <label className="mb-1 text-[11px] text-gray-500">
-        Item Price
-      </label>
-      <input
-        disabled
-        value={`$ ${(item.priceCents / 100).toFixed(2)}`}
-        className="h-8 w-full rounded-xl border border-gray-300 bg-gray-100 px-2 text-xs text-gray-700"
-      />
-    </div>
-  </div>
-)}
-
-{item.kind === "single" && (!item.stock || item.stock <= 0) && (
-  <p className="mt-2 text-[11px] text-red-500">
-    This product currently has no stock. Please remove it from the bundle.
-  </p>
-)}
-                          </div>
-                        ))}
+                  <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-200">
+                    {bundleImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={bundleImageUrl}
+                        alt="Bundle"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
+                        Placeholder image
                       </div>
                     )}
-                  </section>
-                </div>
+                  </div>
 
-                {/* RIGHT COLUMN */}
-                <div className="space-y-6">
-                  {/* Product Images */}
-                  <section className="rounded-2xl border border-[#ECECFB] bg-white p-6">
-                    <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                      Product Images
-                    </h2>
+                  <div className="mt-3 flex flex-col items-start justify-between gap-2 text-xs sm:flex-row sm:items-center">
+                    <p className="text-gray-500">
+                      Upload a main bundle image.
+                    </p>
+                    <label className="cursor-pointer rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white">
+                      Upload Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const url = await uploadProviderImage(file);
+                          if (url) setBundleImageUrl(url);
+                        }}
+                      />
+                    </label>
+                  </div>
+                </section>
 
-                    <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gray-200">
-                      {bundleImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={bundleImageUrl}
-                          alt="Bundle"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
-                          Placeholder image
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-3 flex flex-col items-start justify-between gap-2 text-xs sm:flex-row sm:items-center">
-                      <p className="text-gray-500">
-                        Upload a main bundle image.
-                      </p>
-                      <label className="cursor-pointer rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white">
-                        Upload Image
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            const url = await uploadProviderImage(file);
-                            if (url) setBundleImageUrl(url);
-                          }}
-                        />
-                      </label>
-                    </div>
-                  </section>
-
-                  {/* Wellness / Categories / Tags */}
-                  <WellnessCategoryTagsSection
-                    title="Wellness Dimension, Category & Tags"
-                    wellnessOptions={wellnessOptions}
-                    selectedWellnessIds={selectedWellnessIds}
-                    onChangeWellness={setSelectedWellnessIds}
-                    categories={categories}
-                    onChangeCategories={setCategories}
-                    tags={tags}
-                    onChangeTags={setTags}
-                  />
-                </div>
+                {/* Wellness / Categories / Tags */}
+                <WellnessCategoryTagsSection
+                  title="Wellness Dimension, Category & Tags"
+                  wellnessOptions={wellnessOptions}
+                  selectedWellnessIds={selectedWellnessIds}
+                  onChangeWellness={setSelectedWellnessIds}
+                  categories={categories}
+                  onChangeCategories={setCategories}
+                  tags={tags}
+                  onChangeTags={setTags}
+                />
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
       {/* Product picker modal */}
       <BundleProductPickerModal
-  open={pickerOpen}
-  onClose={() => setPickerOpen(false)}
-  initialSelected={items}
-  onContinue={(picked) => {
-    const byProductId = new Map<string | null, BundleCandidateItem>();
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        initialSelected={items}
+        onContinue={(picked) => {
+          const byProductId = new Map<string | null, BundleCandidateItem>();
 
-    picked.forEach((p) => {
-      const key = (p as any).productId ?? p.id;
-      if (!byProductId.has(key)) {
-        byProductId.set(key, p);
-      }
-    });
+          picked.forEach((p) => {
+            const key = (p as any).productId ?? p.id;
+            if (!byProductId.has(key)) {
+              byProductId.set(key, p);
+            }
+          });
 
-    const deduped = Array.from(byProductId.values());
+          const deduped = Array.from(byProductId.values());
 
-    setItems(
-      deduped.map((p) => {
-        const existing = items.find((it) => it.id === p.id);
-        return {
-          ...p,
-          quantity: existing?.quantity ?? 1,
-          variantLabel: existing?.variantLabel ?? "",
-          choiceCount: existing?.choiceCount ?? 1,
-          isMultiple: existing?.isMultiple ?? false,
-        };
-      })
-    );
-    setPickerOpen(false);
-  }}
-/>
+          setItems(
+            deduped.map((p) => {
+              const existing = items.find((it) => it.id === p.id);
+              return {
+                ...p,
+                quantity: existing?.quantity ?? 1,
+                variantLabel: existing?.variantLabel ?? "",
+                choiceCount: existing?.choiceCount ?? 1,
+                isMultiple: existing?.isMultiple ?? false,
+              };
+            })
+          );
+          setPickerOpen(false);
+        }}
+      />
     </div>
   );
 }

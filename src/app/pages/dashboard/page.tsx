@@ -225,9 +225,7 @@ export default function DashboardPage() {
             label: "Orders",
             icon: "Boxes",
             items: [
-              // make these paths match your actual routes
               { id: "o-all", label: "All Orders", href: "/pages/vendor/orders" },
-            
             ],
           },
           {
@@ -235,8 +233,7 @@ export default function DashboardPage() {
             label: "Bookings",
             icon: "CalendarDays",
             items: [
-              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" },
-          
+              { id: "b-all", label: "All Bookings", href: "/pages/vendor/bookings" }
             ],
           },
           {
@@ -247,8 +244,7 @@ export default function DashboardPage() {
           },
         ],
       },
-
-          {
+       {
         id: "finance",
         label: "Finance",
         groups: [
