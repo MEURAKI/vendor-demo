@@ -45,6 +45,7 @@ type VendorBusiness = {
   shop_name: string;
   shop_slug: string;
   business_category: string;
+  business_categories: string[] | null;
   shop_bio: string;
   contact_email: string;
   phone_country_code: string;
@@ -191,6 +192,49 @@ const DIMENSIONS_ALL = [
   "Spiritual",
 ];
 
+/* ---------------------- Business Category Options ---------------------- */
+
+const PRODUCT_CATEGORIES = [
+  "Personal Care & Beauty",
+  "Inner Wellness Boosters",
+  "Beverages & Blends",
+  "Fitness Gear",
+  "Fashion & Accessories",
+  "Home & Living",
+  "Conscious Foods",
+  "Kids & Family Care",
+  "Gifting & Kits",
+  "Spiritual Tools",
+  "Workplace Wellness",
+  "Pet Wellness",
+];
+
+const SERVICE_CATEGORIES = [
+  "Fitness & Training",
+  "Skin & Beauty",
+  "Massage & Bodywork",
+  "Nutrition Coaching",
+  "Lifestyle & Wellbeing",
+  "Therapies & Care",
+  "Mental Health",
+  "Life Coaching",
+  "Traditional Healing",
+  "Energy Healing",
+  "Creative Arts Therapy",
+  "Family & Parenting Support",
+];
+
+const EXPERIENCE_CATEGORIES = [
+  "Workshops & Classes",
+  "Retreat Activities (In-city)",
+  "Community Circles",
+  "Outdoor & Nature Experiences",
+  "Arts, Music & Movement",
+  "Conscious Culinary Experiences",
+  "Family & Youth Programs",
+  "Festivals & Pop-Ups",
+];
+
 /* ---------------------- INNER PAGE (with hooks) ---------------------- */
 
 function ShopSettingsPageInner() {
@@ -208,6 +252,7 @@ function ShopSettingsPageInner() {
   const [saving, setSaving] = useState(false);
   const { successToast, errorToast } = useToast();
   const [dimensions, setDimensions] = useState<string[]>([]);
+  const [businessCategories, setBusinessCategories] = useState<string[]>([]);
 
   const urlTab = (searchParams.get("tab") as TabKey) || "general";
   const [activeTab, setActiveTab] = useState<TabKey>(urlTab);
@@ -351,6 +396,7 @@ function ShopSettingsPageInner() {
               shop_name,
               shop_slug,
               business_category,
+              business_categories,
               shop_bio,
               contact_email,
               phone_country_code,
@@ -426,6 +472,7 @@ function ShopSettingsPageInner() {
         shop_name: "",
         shop_slug: "",
         business_category: "",
+        business_categories: [],
         shop_bio: "",
         contact_email: profTyped.email ?? "",
         phone_country_code: "+65",
@@ -461,6 +508,7 @@ function ShopSettingsPageInner() {
       setVb(merged);
       setBioCount(merged.shop_bio?.length || 0);
       setDimensions(merged.dimensions ?? []);
+      setBusinessCategories(merged.business_categories ?? []);
 
       if (promoErr) {
         console.error(promoErr);
@@ -662,6 +710,7 @@ function ShopSettingsPageInner() {
       shop_name: (src.shop_name || "").trim(),
       shop_slug: (src.shop_slug || "").replace(/[^a-z0-9-]/gi, "").toLowerCase(),
       business_category: (src.business_category || "").trim(),
+      business_categories: businessCategories.length ? businessCategories : null,
       shop_bio: (src.shop_bio || "").slice(0, 200),
       contact_email: (src.contact_email || "").trim(),
       phone_country_code: src.phone_country_code || "+65",
@@ -1231,16 +1280,19 @@ function ShopSettingsPageInner() {
                     })}
                   </div>
 
-                  <div className="mt-8 border-gray-200" />
+                  <div className="mt-8 border-t border-gray-200" />
                 </section>
 
-                {/* Business Category */}
+                {/* Business Category (primary text field) */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">
-                      Business Category
+                      Primary Business Category
                     </div>
-                    <p className="mt-1 text-xs text-gray-500">Primary focus area.</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Short label for your main category (optional if you use the
+                      selectors below).
+                    </p>
                   </div>
                   <input
                     className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-900 focus:border-purple-500 focus:ring-purple-500"
@@ -1253,7 +1305,106 @@ function ShopSettingsPageInner() {
                     placeholder="Wellness, Skincare, Nutrition"
                   />
                 </section>
-                <div className="border-t border-gray-200" />
+
+                {/* Business Categories Multi-select */}
+                <section className="mt-4">
+                  <div className="text-sm font-semibold text-gray-900">
+                    Business Categories
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select one or more categories that your store belongs to across
+                    products, services, and experiences.
+                  </p>
+
+                  {/* Products */}
+                  <div className="mt-4">
+                    <div className="mb-2 text-[11px] font-semibold text-gray-700">
+                      Products
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {PRODUCT_CATEGORIES.map((cat) => {
+                        const active = businessCategories.includes(cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() =>
+                              toggleIn(businessCategories, cat, setBusinessCategories)
+                            }
+                            className={clsx(
+                              "flex w-full items-center justify-center rounded-xl border px-3 py-2 text-[11px] text-center transition",
+                              active
+                                ? "bg-[#EFEDFF] border-[#5B33FF] text-[#1B1529]"
+                                : "bg-white border-gray-200 text-gray-700 hover:border-gray-400"
+                            )}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Services */}
+                  <div className="mt-6">
+                    <div className="mb-2 text-[11px] font-semibold text-gray-700">
+                      Services
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {SERVICE_CATEGORIES.map((cat) => {
+                        const active = businessCategories.includes(cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() =>
+                              toggleIn(businessCategories, cat, setBusinessCategories)
+                            }
+                            className={clsx(
+                              "flex w-full items-center justify-center rounded-xl border px-3 py-2 text-[11px] text-center transition",
+                              active
+                                ? "bg-[#EFEDFF] border-[#5B33FF] text-[#1B1529]"
+                                : "bg-white border-gray-200 text-gray-700 hover:border-gray-400"
+                            )}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Experiences */}
+                  <div className="mt-6">
+                    <div className="mb-2 text-[11px] font-semibold text-gray-700">
+                      Experiences
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {EXPERIENCE_CATEGORIES.map((cat) => {
+                        const active = businessCategories.includes(cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() =>
+                              toggleIn(businessCategories, cat, setBusinessCategories)
+                            }
+                            className={clsx(
+                              "flex w-full items-center justify-center rounded-xl border px-3 py-2 text-[11px] text-center transition",
+                              active
+                                ? "bg-[#EFEDFF] border-[#5B33FF] text-[#1B1529]"
+                                : "bg-white border-gray-200 text-gray-700 hover:border-gray-400"
+                            )}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-8 border-t border-gray-200" />
+                </section>
 
                 {/* Shop Description / Bio */}
                 <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
