@@ -932,7 +932,7 @@ export default function NewServicePage() {
                               </p>
                             </div>
 
-                            <label className="flex items-center gap-2 text-[11px] text-gray-700">
+                            {/* <label className="flex items-center gap-2 text-[11px] text-gray-700">
                               <input
                                 type="checkbox"
                                 checked={loc.hasFixedSchedule}
@@ -944,11 +944,11 @@ export default function NewServicePage() {
                                 className="h-4 w-4 rounded border-gray-300"
                               />
                               <span>Yes, I have selected dates</span>
-                            </label>
+                            </label> */}
                           </div>
 
                           {/* Fixed schedule */}
-                          {loc.hasFixedSchedule ? (
+                          {/* {loc.hasFixedSchedule ? (
                             <>
                               <div className="mt-3 space-y-3">
                                 <h5 className="text-[11px] font-semibold text-gray-800">
@@ -1034,7 +1034,7 @@ export default function NewServicePage() {
                                 </button>
                               </div>
                             </>
-                          ) : (
+                          ) : ( */}
                             <>
                               <div className="mt-4 grid gap-3 md:grid-cols-2">
                                 <div>
@@ -1231,7 +1231,7 @@ export default function NewServicePage() {
                                 </button>
                               </div>
                             </>
-                          )}
+                          {/* )} */}
                         </div>
                       </div>
                     ))}
