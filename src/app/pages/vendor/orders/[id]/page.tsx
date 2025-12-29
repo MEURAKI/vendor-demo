@@ -56,12 +56,11 @@ type Order = {
   created_at: string;
   updated_at: string;
 
-  // NEW – internal notes column on orders
+  // internal notes column on orders
   internal_note?: string | null;
 };
 
 type OrderItemLineType = "product" | "bundle" | "service";
-
 type ItemFulfilmentStatus = "pending" | "processing" | "packed";
 
 type OrderItem = {
@@ -228,8 +227,8 @@ function buildTimeline(order: Order, fulfilment: OrderFulfilment | null): Timeli
       date: fulfilment?.pickup_ready_at
         ? formatDateTime(fulfilment.pickup_ready_at)
         : done
-        ? formatDateTime(order.updated_at)
-        : "—",
+          ? formatDateTime(order.updated_at)
+          : "—",
       done,
     });
   } else {
@@ -241,8 +240,8 @@ function buildTimeline(order: Order, fulfilment: OrderFulfilment | null): Timeli
       date: fulfilment?.shipped_at
         ? formatDateTime(fulfilment.shipped_at)
         : shippedDone
-        ? formatDateTime(order.updated_at)
-        : "—",
+          ? formatDateTime(order.updated_at)
+          : "—",
       done: shippedDone,
     });
   }
@@ -265,8 +264,8 @@ function buildTimeline(order: Order, fulfilment: OrderFulfilment | null): Timeli
       fulfilment?.delivered_at || fulfilment?.pickup_completed_at
         ? formatDateTime(fulfilment.delivered_at || fulfilment.pickup_completed_at!)
         : finalDone
-        ? formatDateTime(order.updated_at)
-        : eta || "—",
+          ? formatDateTime(order.updated_at)
+          : eta || "—",
     done: finalDone,
   });
 
@@ -307,7 +306,7 @@ export default function OrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [itemsModalOpen, setItemsModalOpen] = useState(false);
 
-  // NEW – internal notes
+  // internal notes
   const [internalNote, setInternalNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
@@ -330,6 +329,61 @@ export default function OrderDetailPage() {
 
   // ref for "What to pack" scrolling
   const whatToPackRef = useRef<HTMLDivElement | null>(null);
+
+  // =============== AUTO-FULFILL HELPERS (NEW) ===============
+  function allProductItemsPacked(nextItems: OrderItem[]) {
+    const productLines = nextItems.filter((i) => i.line_type === "product");
+    if (productLines.length === 0) return false; // don't auto-fulfill if no product items
+    return productLines.every((i) => i.item_fulfilment_status === "packed");
+  }
+
+  async function autoFulfillIfReady(nextItems: OrderItem[]) {
+    if (!order) return;
+    if (order.status === "delivered" || order.status === "cancelled") return;
+
+    // only auto-fulfill from "placed" → "fulfilled" (don't override shipped etc)
+    if (order.status !== "placed") return;
+
+    if (!allProductItemsPacked(nextItems)) return;
+
+    const nowIso = new Date().toISOString();
+
+    // Update orders.status
+    const { data: updatedOrder, error: orderErr } = await supabase
+      .from("orders")
+      .update({ status: "fulfilled", updated_at: nowIso })
+      .eq("id", order.id)
+      .select("*")
+      .maybeSingle();
+
+    if (orderErr || !updatedOrder) {
+      setError("Failed to auto-update order to fulfilled.");
+      return;
+    }
+
+    setOrder(updatedOrder as Order);
+
+    // Log activity
+    const { data: activityInsert, error: activityErr } = await supabase
+      .from("order_activities")
+      .insert({
+        order_id: order.id,
+        vendor_id: order.vendor_id,
+        type: "fulfilled",
+        description: "Auto-fulfilled (all items packed)",
+        meta: { auto: true },
+      })
+      .select("*")
+      .single();
+
+    if (!activityErr && activityInsert) {
+      setActivityLogs((prev) => [activityInsert as OrderActivity, ...prev]);
+    }
+
+    // Send fulfilled email (optional but usually desired)
+    await sendStatusEmail(order.id, "fulfilled");
+  }
+  // =========================================================
 
   // Load profile + order data
   useEffect(() => {
@@ -384,7 +438,7 @@ export default function OrderDetailPage() {
       }
 
       setOrder(typedOrder);
-      setInternalNote(typedOrder.internal_note ?? ""); // NEW
+      setInternalNote(typedOrder.internal_note ?? "");
 
       // Load product-only items via API
       const itemsRes = await fetch(`/api/vendor/orders/${orderId}/product-items`, {
@@ -518,7 +572,7 @@ export default function OrderDetailPage() {
     }
   }
 
-  // NEW – single black button behaviour
+  // single black button behaviour
   async function handleToggleShipmentEdit() {
     if (!order || order.status === "delivered") return;
 
@@ -587,13 +641,12 @@ export default function OrderDetailPage() {
           payload.delivered_at = nowIso;
         }
 
-        const { data: updatedFulfilmentData, error: fulfilmentUpdateError } =
-          await supabase
-            .from("order_shipments")
-            .update(payload)
-            .eq("id", fulfilment.id)
-            .select("*")
-            .maybeSingle();
+        const { data: updatedFulfilmentData, error: fulfilmentUpdateError } = await supabase
+          .from("order_shipments")
+          .update(payload)
+          .eq("id", fulfilment.id)
+          .select("*")
+          .maybeSingle();
 
         if (!fulfilmentUpdateError && updatedFulfilmentData) {
           setFulfilment(updatedFulfilmentData as OrderFulfilment);
@@ -688,6 +741,7 @@ export default function OrderDetailPage() {
     }
   }
 
+  // =============== ITEM STATUS UPDATE (AUTO-FULFILL ADDED) ===============
   async function updateItemStatus(itemId: string, newStatus: ItemFulfilmentStatus) {
     if (!order || order.status === "delivered") return;
     setSavingItemId(itemId);
@@ -703,11 +757,12 @@ export default function OrderDetailPage() {
         return;
       }
 
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === itemId ? { ...item, item_fulfilment_status: newStatus } : item
-        )
+      // Build next items array deterministically
+      const nextItems = items.map((item) =>
+        item.id === itemId ? { ...item, item_fulfilment_status: newStatus } : item
       );
+
+      setItems(nextItems);
 
       const description = `Updated item status to "${newStatus}"`;
 
@@ -726,10 +781,14 @@ export default function OrderDetailPage() {
       if (!activityInsertError && activityInsert) {
         setActivityLogs((prev) => [activityInsert as OrderActivity, ...prev]);
       }
+
+      // ✅ NEW: auto-fulfill if all product items are packed
+      await autoFulfillIfReady(nextItems);
     } finally {
       setSavingItemId(null);
     }
   }
+  // =====================================================================
 
   async function bulkUpdateAllItems(newStatus: ItemFulfilmentStatus) {
     if (!items.length || order?.status === "delivered") return;
@@ -746,17 +805,14 @@ export default function OrderDetailPage() {
     setEmailFeedback(null);
 
     try {
-      const { error: fnError } = await supabase.functions.invoke(
-        "send-session-link-email",
-        {
-          body: {
-            order_id: order.id,
-            customer_email: order.contact_email,
-            customer_name: order.contact_name,
-            session_link: sessionLink.trim(),
-          },
-        }
-      );
+      const { error: fnError } = await supabase.functions.invoke("send-session-link-email", {
+        body: {
+          order_id: order.id,
+          customer_email: order.contact_email,
+          customer_name: order.contact_name,
+          session_link: sessionLink.trim(),
+        },
+      });
 
       if (fnError) {
         setError("Failed to send session email.");
@@ -803,7 +859,7 @@ export default function OrderDetailPage() {
     window.open(url, "_blank");
   }
 
-  // NEW – save internal note
+  // save internal note
   async function handleSaveInternalNote() {
     if (!order) return;
     setSavingNote(true);
@@ -863,17 +919,15 @@ export default function OrderDetailPage() {
     fulfilment?.status === "shipped" || order.status === "shipped"
       ? "Shipped"
       : fulfilment?.status === "ready_for_pickup"
-      ? "Ready for pickup"
-      : order.status.charAt(0).toUpperCase() + order.status.slice(1);
+        ? "Ready for pickup"
+        : order.status.charAt(0).toUpperCase() + order.status.slice(1);
 
   const customerName = order.contact_name || "Unknown customer";
   const customerEmail = order.contact_email || "—";
   const customerPhone = order.contact_phone || "—";
 
   const shippingLines =
-    order.shipping_address_line1 ||
-    order.shipping_city ||
-    order.shipping_postal_code
+    order.shipping_address_line1 || order.shipping_city || order.shipping_postal_code
       ? [
           order.shipping_address_line1,
           order.shipping_address_line2,
@@ -882,14 +936,12 @@ export default function OrderDetailPage() {
         ].filter(Boolean)
       : null;
 
-  const noteText =
-    fulfilment?.notes || "No customer or fulfilment notes have been added.";
+  const noteText = fulfilment?.notes || "No customer or fulfilment notes have been added.";
 
   const paymentLabel =
     order.payment_status === "paid"
       ? "Paid"
-      : order.payment_status.charAt(0).toUpperCase() +
-        order.payment_status.slice(1);
+      : order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1);
 
   const isDelivered = order.status === "delivered";
 
@@ -901,9 +953,7 @@ export default function OrderDetailPage() {
   });
   if (fulfilment?.shipped_at) {
     fallbackActivities.push({
-      label: `Shipped${
-        fulfilment.shipping_provider ? ` with ${fulfilment.shipping_provider}` : ""
-      }`,
+      label: `Shipped${fulfilment.shipping_provider ? ` with ${fulfilment.shipping_provider}` : ""}`,
       at: fulfilment.shipped_at,
     });
   }
@@ -932,9 +982,7 @@ export default function OrderDetailPage() {
           label: a.description,
           at: a.created_at,
         }))
-      : fallbackActivities.sort(
-          (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()
-        );
+      : fallbackActivities.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   const productLines = items.filter((i) => i.line_type === "product");
   const serviceLines = items.filter((i) => i.line_type === "service");
@@ -957,21 +1005,20 @@ export default function OrderDetailPage() {
   const firstNotDoneIndex = steps.findIndex((s) => !s.done);
   const currentStepIndex = firstNotDoneIndex === -1 ? steps.length - 1 : firstNotDoneIndex;
 
-  // NEW – single thick progress bar behind the steps
-  const progressPercent =
-    steps.length > 1 ? (currentStepIndex / (steps.length - 1)) * 100 : 0;
+  // single thick progress bar behind the steps
+  const progressPercent = steps.length > 1 ? (currentStepIndex / (steps.length - 1)) * 100 : 0;
 
   // status select color
   const statusBgClass =
     order.status === "delivered"
       ? "bg-emerald-100 text-emerald-800 border-emerald-300"
       : order.status === "shipped"
-      ? "bg-indigo-100 text-indigo-800 border-indigo-300"
-      : order.status === "fulfilled"
-      ? "bg-violet-100 text-violet-800 border-violet-300"
-      : order.status === "cancelled"
-      ? "bg-rose-100 text-rose-700 border-rose-300"
-      : "bg-slate-100 text-slate-700 border-slate-300";
+        ? "bg-indigo-100 text-indigo-800 border-indigo-300"
+        : order.status === "fulfilled"
+          ? "bg-violet-100 text-violet-800 border-violet-300"
+          : order.status === "cancelled"
+            ? "bg-rose-100 text-rose-700 border-rose-300"
+            : "bg-slate-100 text-slate-700 border-slate-300";
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
@@ -1032,11 +1079,7 @@ export default function OrderDetailPage() {
                     disabled={saving || isDelivered}
                     onClick={handleMarkFinal}
                   >
-                    {saving
-                      ? "Saving…"
-                      : isPickup
-                      ? "Mark as picked up"
-                      : "Mark as delivered"}
+                    {saving ? "Saving…" : isPickup ? "Mark as picked up" : "Mark as delivered"}
                   </button>
 
                   <div className="relative">
@@ -1083,7 +1126,7 @@ export default function OrderDetailPage() {
               )}
 
               {/* Progress bar / timeline */}
-              <div className="mb-6 rounded-3xl bg-white p-5 shadow-sm">
+                 <div className="mb-6 rounded-3xl bg-white p-5 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
                     Fulfilment status
@@ -1110,18 +1153,13 @@ export default function OrderDetailPage() {
                     const circleClass = isCurrent
                       ? "bg-black text-white"
                       : isDone
-                      ? "bg-[#7B61FF] text-white"
-                      : "bg-slate-200 text-slate-500";
+                        ? "bg-[#7B61FF] text-white"
+                        : "bg-slate-200 text-slate-500";
 
                     return (
-                      <div
-                        key={step.label}
-                        className="relative z-10 flex flex-1 flex-col items-center"
-                      >
+                      <div key={step.label} className="relative z-10 flex flex-1 flex-col items-center">
                         <div className={`${circleBase} ${circleClass}`}>{isDone ? "✓" : idx + 1}</div>
-                        <div className="mt-1 text-xs font-medium text-slate-700">
-                          {step.label}
-                        </div>
+                        <div className="mt-1 text-xs font-medium text-slate-700">{step.label}</div>
                         <div className="text-[11px] text-slate-400">{step.date}</div>
                       </div>
                     );
@@ -1135,9 +1173,7 @@ export default function OrderDetailPage() {
                 <div className="space-y-5">
                   {/* Customer card */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                      Customer
-                    </h2>
+                    <h2 className="mb-3 text-sm font-semibold text-slate-900">Customer</h2>
                     <p className="text-sm font-medium text-slate-900">{customerName}</p>
                     <p className="text-sm text-slate-500">{customerEmail}</p>
                     <p className="mt-1 text-sm text-slate-500">{customerPhone}</p>
@@ -1165,9 +1201,7 @@ export default function OrderDetailPage() {
                   {/* Delivery & fulfilment */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <h2 className="text-sm font-semibold text-slate-900">
-                        Delivery &amp; fulfilment
-                      </h2>
+                      <h2 className="text-sm font-semibold text-slate-900">Delivery &amp; fulfilment</h2>
 
                       <div className="flex items-center gap-2">
                         {hasOnlineService && order.contact_email && (
@@ -1262,44 +1296,35 @@ export default function OrderDetailPage() {
                         <>
                           <p>
                             <span className="font-medium">Pickup from:</span>{" "}
-                            {order.pickup_location_name ||
-                              order.pickup_address ||
-                              "Pickup details not set"}
+                            {order.pickup_location_name || order.pickup_address || "Pickup details not set"}
                           </p>
-                          {order.pickup_reference && (
-                            <p>Reference: {order.pickup_reference}</p>
-                          )}
+                          {order.pickup_reference && <p>Reference: {order.pickup_reference}</p>}
                         </>
                       )}
                     </div>
 
                     {/* Tracking quick view */}
-                    {!isPickup &&
-                      (trackingNumberInput || trackingUrlInput) && (
-                        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-400">
-                              Tracking preview
-                            </p>
-                            <p className="text-slate-700">{trackingNumberInput}</p>
-                          </div>
-                          {trackingUrlInput && (
-                            <button
-                              className="text-xs font-medium text-slate-900 underline-offset-4 hover:underline"
-                              onClick={() => window.open(trackingUrlInput, "_blank")}
-                            >
-                              Open tracking page
-                            </button>
-                          )}
+                    {!isPickup && (trackingNumberInput || trackingUrlInput) && (
+                      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-slate-400">Tracking preview</p>
+                          <p className="text-slate-700">{trackingNumberInput}</p>
                         </div>
-                      )}
+                        {trackingUrlInput && (
+                          <button
+                            className="text-xs font-medium text-slate-900 underline-offset-4 hover:underline"
+                            onClick={() => window.open(trackingUrlInput, "_blank")}
+                          >
+                            Open tracking page
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     {/* Address */}
                     {!isPickup && shippingLines && (
                       <div className="mt-4">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Ship to
-                        </p>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Ship to</p>
                         <p className="mt-1 text-sm text-slate-700">
                           {customerName}
                           <br />
@@ -1316,9 +1341,7 @@ export default function OrderDetailPage() {
 
                   {/* Payment & totals */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
-                    <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                      Payment &amp; totals
-                    </h2>
+                    <h2 className="mb-3 text-sm font-semibold text-slate-900">Payment &amp; totals</h2>
 
                     <dl className="space-y-2 text-sm text-slate-700">
                       <div className="flex justify-between">
@@ -1331,9 +1354,7 @@ export default function OrderDetailPage() {
                       </div>
                       {order.discount_cents > 0 && (
                         <div className="flex justify-between">
-                          <dt>
-                            Promo {order.promo_code ? `(${order.promo_code})` : ""}
-                          </dt>
+                          <dt>Promo {order.promo_code ? `(${order.promo_code})` : ""}</dt>
                           <dd>– {formatCurrencyFromCents(order.discount_cents)}</dd>
                         </div>
                       )}
@@ -1362,8 +1383,7 @@ export default function OrderDetailPage() {
                           {isPickup ? "What to prepare" : "What to pack"}
                         </h2>
                         <p className="mt-1 text.[11px] text-slate-500">
-                          {productLines.length} item
-                          {productLines.length === 1 ? "" : "s"} in this order
+                          {productLines.length} item{productLines.length === 1 ? "" : "s"} in this order
                         </p>
                       </div>
 
@@ -1399,10 +1419,7 @@ export default function OrderDetailPage() {
 
                         const sku = line.sku_snapshot || "No SKU";
                         const customSku =
-                          optionsRaw?.custom_sku ||
-                          optionsRaw?.customSku ||
-                          optionsRaw?.CustomSKU ||
-                          "";
+                          optionsRaw?.custom_sku || optionsRaw?.customSku || optionsRaw?.CustomSKU || "";
 
                         return (
                           <div
@@ -1416,9 +1433,7 @@ export default function OrderDetailPage() {
                                 checked={isPacked}
                                 disabled={isDelivered || savingItemId === line.id}
                                 onChange={(e) => {
-                                  const next: ItemFulfilmentStatus = e.target.checked
-                                    ? "packed"
-                                    : "pending";
+                                  const next: ItemFulfilmentStatus = e.target.checked ? "packed" : "pending";
                                   updateItemStatus(line.id, next);
                                 }}
                               />
@@ -1427,7 +1442,6 @@ export default function OrderDetailPage() {
                                   {line.name_snapshot} × {line.quantity}
                                 </p>
                                 <p className="text-xs text-slate-500">{optionsText}</p>
-                                {/* NEW: SKU + Custom SKU */}
                                 <p className="text-xs text-slate-500">
                                   SKU: {sku}
                                   {customSku && <> · Custom SKU: {customSku}</>}
@@ -1455,9 +1469,7 @@ export default function OrderDetailPage() {
 
                   {/* Customer / fulfilment note */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-                    <h2 className="mb-2 text-sm font-semibold text-slate-900">
-                      Customer / fulfilment note
-                    </h2>
+                    <h2 className="mb-2 text-sm font-semibold text-slate-900">Customer / fulfilment note</h2>
                     <p className="text-sm text-slate-600 whitespace-pre-line">{noteText}</p>
                   </div>
 
@@ -1477,20 +1489,16 @@ export default function OrderDetailPage() {
                               <span className="mt-[3px] h-1.5 w-1.5 rounded-full bg-slate-400" />
                               <span>{a.label}</span>
                             </div>
-                            <span className="text-[11px] text-slate-400">
-                              {formatDateTime(a.at)}
-                            </span>
+                            <span className="text-[11px] text-slate-400">{formatDateTime(a.at)}</span>
                           </li>
                         ))}
                       </ul>
                     )}
                   </div>
 
-                  {/* Internal notes (now saved) */}
+                  {/* Internal notes */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-                    <h2 className="mb-2 text-sm font-semibold text-slate-900">
-                      Internal notes
-                    </h2>
+                    <h2 className="mb-2 text-sm font-semibold text-slate-900">Internal notes</h2>
                     <p className="mb-2 text-xs text-slate-500">
                       Add private notes about this order (visible only to you and your team).
                     </p>
@@ -1519,16 +1527,14 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      {/* Items modal (for detailed fulfilment per line) */}
+      {/* Items modal */}
       {itemsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-xl">
             {/* Modal header */}
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Items to pack · Order {code}
-                </h2>
+                <h2 className="text-sm font-semibold text-slate-900">Items to pack · Order {code}</h2>
                 <p className="text-xs text-slate-500">
                   {totalItems} item{totalItems === 1 ? "" : "s"} in this order
                 </p>
@@ -1579,25 +1585,17 @@ export default function OrderDetailPage() {
                       <tr key={item.id} className="border-b border-slate-100 last:border-0">
                         <td className="px-6 py-3 text-slate-800">
                           <div className="font-medium">{item.name_snapshot}</div>
-                          <div className="text-xs text-slate-400">
-                            {item.line_type.toUpperCase()}
-                          </div>
+                          <div className="text-xs text-slate-400">{item.line_type.toUpperCase()}</div>
                         </td>
                         <td className="px-6 py-3 text-slate-600">{optionsText}</td>
                         <td className="px-6 py-3 text-slate-800">{item.quantity}</td>
-                        <td className="px-6 py-3 text-slate-800">
-                          {formatCurrencyFromCents(item.unit_price_cents)}
-                        </td>
-                        <td className="px-6 py-3 text-slate-800">
-                          {formatCurrencyFromCents(item.line_subtotal_cents)}
-                        </td>
+                        <td className="px-6 py-3 text-slate-800">{formatCurrencyFromCents(item.unit_price_cents)}</td>
+                        <td className="px-6 py-3 text-slate-800">{formatCurrencyFromCents(item.line_subtotal_cents)}</td>
                         <td className="px-6 py-3">
                           <select
                             disabled={savingItemId === item.id || isDelivered}
                             value={item.item_fulfilment_status}
-                            onChange={(e) =>
-                              updateItemStatus(item.id, e.target.value as ItemFulfilmentStatus)
-                            }
+                            onChange={(e) => updateItemStatus(item.id, e.target.value as ItemFulfilmentStatus)}
                             className={`rounded-full px-3 py-1 text-xs font-medium border border-slate-200 ${
                               itemStatusClasses[item.item_fulfilment_status]
                             } disabled:opacity-60`}
@@ -1613,10 +1611,7 @@ export default function OrderDetailPage() {
 
                   {items.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={6}
-                        className="px-6 py-6 text-center text-sm text-slate-500"
-                      >
+                      <td colSpan={6} className="px-6 py-6 text-center text-sm text-slate-500">
                         No items found for this order.
                       </td>
                     </tr>
@@ -1628,8 +1623,7 @@ export default function OrderDetailPage() {
             {/* Modal footer */}
             <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3 text-xs text-slate-500">
               <span>
-                Choose fulfilment status per line, or use “Mark all items as packed” from
-                More actions.
+                Choose fulfilment status per line, or use “Mark all items as packed” from More actions.
               </span>
               <button
                 type="button"
@@ -1647,20 +1641,14 @@ export default function OrderDetailPage() {
       {emailModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">
-              Send online session link
-            </h2>
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">Send online session link</h2>
             <p className="mb-3 text-xs text-slate-500">
               This email will be sent to{" "}
-              <span className="font-medium">
-                {order.contact_name || "your customer"}
-              </span>{" "}
-              at <span className="font-mono">{order.contact_email || "—"}</span>.
+              <span className="font-medium">{order.contact_name || "your customer"}</span> at{" "}
+              <span className="font-mono">{order.contact_email || "—"}</span>.
             </p>
 
-            <label className="mb-1 block text-xs font-medium text-slate-700">
-              Session / meeting link
-            </label>
+            <label className="mb-1 block text-xs font-medium text-slate-700">Session / meeting link</label>
             <input
               className="mb-3 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
               placeholder="https://… (Zoom, Google Meet, etc)"
@@ -1684,11 +1672,7 @@ export default function OrderDetailPage() {
               </button>
               <button
                 type="button"
-                disabled={
-                  sendingEmail ||
-                  !order.contact_email ||
-                  sessionLink.trim().length === 0
-                }
+                disabled={sendingEmail || !order.contact_email || sessionLink.trim().length === 0}
                 onClick={handleSendSessionEmail}
                 className="rounded-full bg-[#7B61FF] px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
               >

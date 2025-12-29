@@ -43,6 +43,7 @@ type OrderRow = {
   createdAt: string;
   itemsCount: number;
   fulfilmentMethod: string | null;
+  public_order_code?: string;
 };
 
 // NEW: tabs type
@@ -160,6 +161,7 @@ export default function DeliveryOrdersPage() {
           createdAt: o.created_at ?? o.createdAt ?? "",
           itemsCount: o.items_count ?? o.itemsCount ?? 0,
           fulfilmentMethod: o.fulfilment_method ?? o.fulfilmentMethod ?? null,
+          public_order_code: o.public_order_code ?? undefined,
         })
       );
 
@@ -207,7 +209,8 @@ export default function DeliveryOrdersPage() {
       const matchesSearch =
         !term ||
         o.orderNumber.toLowerCase().includes(term) ||
-        o.customerName.toLowerCase().includes(term);
+        o.customerName.toLowerCase().includes(term)||
+        o.public_order_code?.toLowerCase().includes(term);
 
       const createdDate = new Date(o.createdAt);
       let matchesDate = true;
@@ -321,7 +324,7 @@ export default function DeliveryOrdersPage() {
               <div className="flex items-start gap-3">
                 <div className="flex flex-col">
                   <h1 className="text-lg font-semibold text-[#1B1529] md:text-xl">
-                    Orders
+                    Product Orders 
                   </h1>
 
                   {/* Tabs: All | Delivery | Pickup */}
@@ -564,7 +567,7 @@ export default function DeliveryOrdersPage() {
                             </td>
 
                             <td className="px-3 py-3 font-semibold text-gray-900">
-                              {o.orderNumber}
+                              {o.public_order_code} 
                             </td>
 
                             <td className="px-3 py-3 text-[11px] text-gray-700">
