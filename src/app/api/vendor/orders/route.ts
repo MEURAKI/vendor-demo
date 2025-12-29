@@ -38,7 +38,7 @@ export async function GET() {
     `
     )
     .eq("vendor_id", user.id)
-    .eq("order_items.line_type", "product")
+    .in("order_items.line_type", ["product", "bundle"])
     .order("created_at", { ascending: false });
 
   if (error) {

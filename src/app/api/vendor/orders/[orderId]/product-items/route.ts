@@ -41,7 +41,7 @@ export async function GET(
     .from("order_items")
     .select("*")
     .eq("order_id", orderId)
-    .eq("line_type", "product")
+    .in("line_type", ["product", "bundle"])
     .order("created_at", { ascending: true });
 
   if (itemsError) {

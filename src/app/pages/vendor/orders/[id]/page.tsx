@@ -58,6 +58,7 @@ type Order = {
 
   // internal notes column on orders
   internal_note?: string | null;
+  vendor_promo_product_discount_cents?: number | null;
 };
 
 type OrderItemLineType = "product" | "bundle" | "service";
@@ -270,6 +271,79 @@ function buildTimeline(order: Order, fulfilment: OrderFulfilment | null): Timeli
   });
 
   return steps;
+}
+
+function safeParseOptions(optionsSnapshot: any): any {
+  let opts: any = optionsSnapshot || {};
+  if (opts && typeof opts === "string") {
+    try {
+      opts = JSON.parse(opts);
+    } catch {
+      opts = {};
+    }
+  }
+  return opts && typeof opts === "object" ? opts : {};
+}
+
+function formatOptionsText(optionsSnapshot: any): { optionsText: string; customSku?: string } {
+  const optionsRaw = safeParseOptions(optionsSnapshot);
+
+  const customSku =
+    optionsRaw?.custom_sku || optionsRaw?.customSku || optionsRaw?.CustomSKU || "";
+
+  const optionsText =
+    optionsRaw && Object.keys(optionsRaw).length
+      ? Object.entries(optionsRaw)
+          .filter(([k]) => !["selectedOptions", "selectedOptionsDisplay", "bundleItemsSummary"].includes(k))
+          .map(([k, v]) => `${k}: ${String(v)}`)
+          .join(" · ")
+      : "No options";
+
+  return { optionsText, customSku: customSku || undefined };
+}
+
+function extractBundleContents(optionsSnapshot: any): string[] {
+  const opts = safeParseOptions(optionsSnapshot);
+
+  // Prefer the clean summary list if present
+  const summary = opts?.bundleItemsSummary;
+  if (Array.isArray(summary) && summary.length) {
+    return summary.map((x: any) => x?.productName).filter(Boolean);
+  }
+
+  // Fall back to selectedOptionsDisplay
+  const sod = opts?.selectedOptionsDisplay;
+  if (sod && typeof sod === "object") {
+    const lines: string[] = [];
+
+    for (const key of Object.keys(sod)) {
+      const item = sod[key];
+      const itemName = item?.itemName;
+      const slots = item?.slots;
+
+      if (itemName && slots && typeof slots === "object") {
+        for (const slotKey of Object.keys(slots)) {
+          const groups = slots[slotKey]?.groups;
+
+          if (groups && typeof groups === "object") {
+            const parts = Object.values(groups)
+              .map((g: any) => g?.valueLabel)
+              .filter(Boolean);
+
+            lines.push(parts.length ? `${itemName} — ${parts.join(", ")}` : itemName);
+          } else {
+            lines.push(itemName);
+          }
+        }
+      } else if (itemName) {
+        lines.push(itemName);
+      }
+    }
+
+    if (lines.length) return lines;
+  }
+
+  return [];
 }
 
 // Fire-and-forget call to your Mandrill-backed API
@@ -984,8 +1058,9 @@ export default function OrderDetailPage() {
         }))
       : fallbackActivities.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
-  const productLines = items.filter((i) => i.line_type === "product");
-  const serviceLines = items.filter((i) => i.line_type === "service");
+  const packLines = items.filter((i) => i.line_type === "product" || i.line_type === "bundle");
+const productLines = items.filter((i) => i.line_type === "product"); // keep for auto-fulfill logic + other usage
+const serviceLines = items.filter((i) => i.line_type === "service");
 
   const hasOnlineService = serviceLines.some((line) => {
     let opts = line.options_snapshot;
@@ -1354,8 +1429,8 @@ export default function OrderDetailPage() {
                       </div>
                       {order.discount_cents > 0 && (
                         <div className="flex justify-between">
-                          <dt>Promo {order.promo_code ? `(${order.promo_code})` : ""}</dt>
-                          <dd>– {formatCurrencyFromCents(order.discount_cents)}</dd>
+                          <dt>Promo {order.vendor_promo_product_discount_cents ? `(${order.vendor_promo_product_discount_cents})` : ""}</dt>
+                          <dd>– {formatCurrencyFromCents(order.vendor_promo_product_discount_cents || 0)}</dd>
                         </div>
                       )}
                       <div className="mt-2 flex justify-between border-t border-slate-100 pt-3 text-base font-semibold">
@@ -1382,9 +1457,9 @@ export default function OrderDetailPage() {
                         <h2 className="text-sm font-semibold text-slate-900">
                           {isPickup ? "What to prepare" : "What to pack"}
                         </h2>
-                        <p className="mt-1 text.[11px] text-slate-500">
-                          {productLines.length} item{productLines.length === 1 ? "" : "s"} in this order
-                        </p>
+                       <p className="mt-1 text.[11px] text-slate-500">
+  {packLines.length} item{packLines.length === 1 ? "" : "s"} in this order
+</p>
                       </div>
 
                       <button
@@ -1396,75 +1471,86 @@ export default function OrderDetailPage() {
                       </button>
                     </div>
 
-                    <div className="space-y-3">
-                      {productLines.map((line) => {
-                        const isPacked = line.item_fulfilment_status === "packed";
+                   <div className="space-y-3">
+  {packLines.map((line) => {
+    const isPacked = line.item_fulfilment_status === "packed";
 
-                        // Safely parse options (for custom SKU)
-                        let optionsRaw: any = line.options_snapshot || {};
-                        if (optionsRaw && typeof optionsRaw === "string") {
-                          try {
-                            optionsRaw = JSON.parse(optionsRaw);
-                          } catch {
-                            optionsRaw = {};
-                          }
-                        }
+    const optionsRaw = safeParseOptions(line.options_snapshot);
 
-                        const optionsText =
-                          optionsRaw && Object.keys(optionsRaw).length
-                            ? Object.entries(optionsRaw)
-                                .map(([k, v]) => `${k}: ${String(v)}`)
-                                .join(" · ")
-                            : "No options";
+    const subtitle = (line as any).subtitle_snapshot as string | null | undefined;
+    const { optionsText, customSku } = formatOptionsText(optionsRaw);
 
-                        const sku = line.sku_snapshot || "No SKU";
-                        const customSku =
-                          optionsRaw?.custom_sku || optionsRaw?.customSku || optionsRaw?.CustomSKU || "";
+    const sku = line.sku_snapshot || "No SKU";
 
-                        return (
-                          <div
-                            key={line.id}
-                            className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-200 hover:bg-slate-50/80"
-                          >
-                            <div className="flex items-start gap-3">
-                              <input
-                                type="checkbox"
-                                className="mt-1 h-4 w-4 rounded border-slate-300 text-[#7B61FF] focus:ring-[#7B61FF]"
-                                checked={isPacked}
-                                disabled={isDelivered || savingItemId === line.id}
-                                onChange={(e) => {
-                                  const next: ItemFulfilmentStatus = e.target.checked ? "packed" : "pending";
-                                  updateItemStatus(line.id, next);
-                                }}
-                              />
-                              <div className="space-y-1">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {line.name_snapshot} × {line.quantity}
-                                </p>
-                                <p className="text-xs text-slate-500">{optionsText}</p>
-                                <p className="text-xs text-slate-500">
-                                  SKU: {sku}
-                                  {customSku && <> · Custom SKU: {customSku}</>}
-                                </p>
-                                <p className="text-xs font-medium text-slate-400">
-                                  {formatCurrencyFromCents(line.unit_price_cents)}
-                                </p>
-                              </div>
-                            </div>
+    const bundleContents =
+      line.line_type === "bundle" ? extractBundleContents(optionsRaw) : [];
 
-                            <span className="inline-flex items-center rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-                              {lineTypeBadge(line.line_type)}
-                            </span>
-                          </div>
-                        );
-                      })}
+    return (
+      <div
+        key={line.id}
+        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-200 hover:bg-slate-50/80"
+      >
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-slate-300 text-[#7B61FF] focus:ring-[#7B61FF]"
+            checked={isPacked}
+            disabled={isDelivered || savingItemId === line.id}
+            onChange={(e) => {
+              const next: ItemFulfilmentStatus = e.target.checked ? "packed" : "pending";
+              updateItemStatus(line.id, next);
+            }}
+          />
 
-                      {productLines.length === 0 && (
-                        <p className="rounded-2xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
-                          No items found for this order.
-                        </p>
-                      )}
-                    </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-900">
+              {line.name_snapshot} × {line.quantity}
+            </p>
+
+            {line.line_type === "bundle" ? (
+              <div className="text-xs text-slate-600">
+                <div className="text-xs text-slate-500">Bundle includes:</div>
+
+                {bundleContents.length ? (
+                  <ul className="mt-1 list-disc pl-5">
+                    {bundleContents.map((x, idx) => (
+                      <li key={idx}>{x}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-1 text-slate-500">Bundle items not available.</div>
+                )}
+
+                {subtitle && <div className="mt-1 text-slate-500">{subtitle}</div>}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">{subtitle || optionsText}</p>
+            )}
+
+            <p className="text-xs text-slate-500">
+              SKU: {sku}
+              {customSku && <> · Custom SKU: {customSku}</>}
+            </p>
+
+            <p className="text-xs font-medium text-slate-400">
+              {formatCurrencyFromCents(line.unit_price_cents)}
+            </p>
+          </div>
+        </div>
+
+        <span className="inline-flex items-center rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+          {lineTypeBadge(line.line_type)}
+        </span>
+      </div>
+    );
+  })}
+
+  {packLines.length === 0 && (
+    <p className="rounded-2xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+      No items found for this order.
+    </p>
+  )}
+</div>
                   </div>
 
                   {/* Customer / fulfilment note */}
@@ -1574,12 +1660,19 @@ export default function OrderDetailPage() {
                           })()
                         : item.options_snapshot || {};
 
+                        const bundleContents = item.line_type === "bundle" ? extractBundleContents(optionsRaw) : [];
+
+
                     const optionsText =
-                      optionsRaw && Object.keys(optionsRaw).length > 0
-                        ? Object.entries(optionsRaw)
-                            .map(([k, v]) => `${k}: ${String(v)}`)
-                            .join(" · ")
-                        : "—";
+  item.line_type === "bundle"
+    ? (bundleContents.length
+        ? `Bundle includes: ${bundleContents.join(" · ")}`
+        : "Bundle items not available.")
+    : (optionsRaw && Object.keys(optionsRaw).length > 0
+        ? Object.entries(optionsRaw)
+            .map(([k, v]) => `${k}: ${String(v)}`)
+            .join(" · ")
+        : "—");
 
                     return (
                       <tr key={item.id} className="border-b border-slate-100 last:border-0">
