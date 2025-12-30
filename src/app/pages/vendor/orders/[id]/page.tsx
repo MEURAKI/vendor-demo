@@ -33,32 +33,51 @@ type Order = {
   vendor_id: string;
   status: OrderStatus;
   fulfilment_method: "standard_delivery" | "express_delivery" | "pickup";
+
+  // customer-facing totals (existing)
   subtotal_cents: number;
   shipping_cents: number;
   discount_cents: number;
   total_cents: number;
+
   promo_code: string | null;
   promo_description: string | null;
+
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+
   shipping_address_line1: string | null;
   shipping_address_line2: string | null;
   shipping_city: string | null;
   shipping_postal_code: string | null;
   shipping_country: string | null;
+
   pickup_location_name: string | null;
   pickup_address: string | null;
   pickup_reference: string | null;
+
   shipping_provider: string | null;
   tracking_number: string | null;
+
   payment_status: "pending" | "paid" | "refunded" | "failed";
   created_at: string;
   updated_at: string;
 
   // internal notes column on orders
   internal_note?: string | null;
+
+  // existing promo field you already have
   vendor_promo_product_discount_cents?: number | null;
+
+  // ===== Barrefit (Products) mapped fields =====
+  product_gross_subtotal_cents?: number | null; // Gross Product Subtotal
+  product_discount_cents?: number | null; // Product Discounts
+  bundle_discount_cents?: number | null; // Bundle Discounts
+  product_commission_base_cents?: number | null; // Commission Base (Prod)
+  product_platform_commission_cents?: number | null; // Platform Commission (8%)
+  platform_promo_product_discount_cents?: number | null; // optional platform promo split
+  product_final_earnings_cents?: number | null; // Vendor Net Product Payout
 };
 
 type OrderItemLineType = "product" | "bundle" | "service";
@@ -220,8 +239,7 @@ function buildTimeline(order: Order, fulfilment: OrderFulfilment | null): Timeli
   // 3. Shipped / Ready for pickup
   if (isPickup) {
     const done =
-      !!fulfilment?.pickup_ready_at ||
-      ["fulfilled", "shipped", "delivered"].includes(order.status);
+      !!fulfilment?.pickup_ready_at || ["fulfilled", "shipped", "delivered"].includes(order.status);
 
     steps.push({
       label: "Ready for pickup",
@@ -249,9 +267,7 @@ function buildTimeline(order: Order, fulfilment: OrderFulfilment | null): Timeli
 
   // 4. Delivered / Picked up
   const finalDone =
-    order.status === "delivered" ||
-    !!fulfilment?.delivered_at ||
-    !!fulfilment?.pickup_completed_at;
+    order.status === "delivered" || !!fulfilment?.delivered_at || !!fulfilment?.pickup_completed_at;
 
   const eta =
     fulfilment?.estimated_delivery_date &&
@@ -288,13 +304,15 @@ function safeParseOptions(optionsSnapshot: any): any {
 function formatOptionsText(optionsSnapshot: any): { optionsText: string; customSku?: string } {
   const optionsRaw = safeParseOptions(optionsSnapshot);
 
-  const customSku =
-    optionsRaw?.custom_sku || optionsRaw?.customSku || optionsRaw?.CustomSKU || "";
+  const customSku = optionsRaw?.custom_sku || optionsRaw?.customSku || optionsRaw?.CustomSKU || "";
 
   const optionsText =
     optionsRaw && Object.keys(optionsRaw).length
       ? Object.entries(optionsRaw)
-          .filter(([k]) => !["selectedOptions", "selectedOptionsDisplay", "bundleItemsSummary"].includes(k))
+          .filter(
+            ([k]) =>
+              !["selectedOptions", "selectedOptionsDisplay", "bundleItemsSummary"].includes(k)
+          )
           .map(([k, v]) => `${k}: ${String(v)}`)
           .join(" · ")
       : "No options";
@@ -1019,6 +1037,17 @@ export default function OrderDetailPage() {
 
   const isDelivered = order.status === "delivered";
 
+  // ===== Barrefit (Products) breakdown values =====
+  const grossProductSubtotal = order.product_gross_subtotal_cents ?? 0;
+  const productBundleDiscounts =
+    (order.product_discount_cents ?? 0) + (order.bundle_discount_cents ?? 0);
+  const commissionBase = order.product_commission_base_cents ?? 0;
+  const platformCommission = order.product_platform_commission_cents ?? 0;
+  const vendorPromoStacked = order.vendor_promo_product_discount_cents ?? 0;
+  const platformPromoSplit = order.platform_promo_product_discount_cents ?? 0; // optional display
+  const deliveryFee = order.shipping_cents ?? 0;
+  const vendorNetProductPayout = order.product_final_earnings_cents ?? 0;
+
   // Fallback activities (no explicit logs yet)
   const fallbackActivities: { label: string; at: string }[] = [];
   fallbackActivities.push({
@@ -1059,8 +1088,8 @@ export default function OrderDetailPage() {
       : fallbackActivities.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   const packLines = items.filter((i) => i.line_type === "product" || i.line_type === "bundle");
-const productLines = items.filter((i) => i.line_type === "product"); // keep for auto-fulfill logic + other usage
-const serviceLines = items.filter((i) => i.line_type === "service");
+  const productLines = items.filter((i) => i.line_type === "product"); // keep for auto-fulfill logic + other usage
+  const serviceLines = items.filter((i) => i.line_type === "service");
 
   const hasOnlineService = serviceLines.some((line) => {
     let opts = line.options_snapshot;
@@ -1201,7 +1230,7 @@ const serviceLines = items.filter((i) => i.line_type === "service");
               )}
 
               {/* Progress bar / timeline */}
-                 <div className="mb-6 rounded-3xl bg-white p-5 shadow-sm">
+              <div className="mb-6 rounded-3xl bg-white p-5 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
                     Fulfilment status
@@ -1232,7 +1261,10 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                         : "bg-slate-200 text-slate-500";
 
                     return (
-                      <div key={step.label} className="relative z-10 flex flex-1 flex-col items-center">
+                      <div
+                        key={step.label}
+                        className="relative z-10 flex flex-1 flex-col items-center"
+                      >
                         <div className={`${circleBase} ${circleClass}`}>{isDone ? "✓" : idx + 1}</div>
                         <div className="mt-1 text-xs font-medium text-slate-700">{step.label}</div>
                         <div className="text-[11px] text-slate-400">{step.date}</div>
@@ -1276,7 +1308,9 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                   {/* Delivery & fulfilment */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <h2 className="text-sm font-semibold text-slate-900">Delivery &amp; fulfilment</h2>
+                      <h2 className="text-sm font-semibold text-slate-900">
+                        Delivery &amp; fulfilment
+                      </h2>
 
                       <div className="flex items-center gap-2">
                         {hasOnlineService && order.contact_email && (
@@ -1371,7 +1405,9 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                         <>
                           <p>
                             <span className="font-medium">Pickup from:</span>{" "}
-                            {order.pickup_location_name || order.pickup_address || "Pickup details not set"}
+                            {order.pickup_location_name ||
+                              order.pickup_address ||
+                              "Pickup details not set"}
                           </p>
                           {order.pickup_reference && <p>Reference: {order.pickup_reference}</p>}
                         </>
@@ -1382,7 +1418,9 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                     {!isPickup && (trackingNumberInput || trackingUrlInput) && (
                       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
                         <div>
-                          <p className="text-xs uppercase tracking-wide text-slate-400">Tracking preview</p>
+                          <p className="text-xs uppercase tracking-wide text-slate-400">
+                            Tracking preview
+                          </p>
                           <p className="text-slate-700">{trackingNumberInput}</p>
                         </div>
                         {trackingUrlInput && (
@@ -1418,24 +1456,58 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                   <div className="rounded-3xl bg-white p-5 shadow-sm">
                     <h2 className="mb-3 text-sm font-semibold text-slate-900">Payment &amp; totals</h2>
 
+                    {/* ✅ Barrefit (Products) breakdown */}
                     <dl className="space-y-2 text-sm text-slate-700">
                       <div className="flex justify-between">
-                        <dt>Subtotal</dt>
-                        <dd>{formatCurrencyFromCents(order.subtotal_cents)}</dd>
+                        <dt>Gross product subtotal</dt>
+                        <dd>{formatCurrencyFromCents(grossProductSubtotal)}</dd>
                       </div>
-                      <div className="flex justify-between">
-                        <dt>{isPickup ? "Service / pickup fee" : "Shipping"}</dt>
-                        <dd>{formatCurrencyFromCents(order.shipping_cents)}</dd>
-                      </div>
-                      {order.discount_cents > 0 && (
+
+                      {productBundleDiscounts > 0 && (
                         <div className="flex justify-between">
-                          <dt>Promo {order.vendor_promo_product_discount_cents ? `(${order.vendor_promo_product_discount_cents})` : ""}</dt>
-                          <dd>– {formatCurrencyFromCents(order.vendor_promo_product_discount_cents || 0)}</dd>
+                          <dt>Product / bundle discounts</dt>
+                          <dd>– {formatCurrencyFromCents(productBundleDiscounts)}</dd>
                         </div>
                       )}
+
+                      <div className="flex justify-between">
+                        <dt>Commission base (prod)</dt>
+                        <dd>{formatCurrencyFromCents(commissionBase)}</dd>
+                      </div>
+
+                      {platformCommission > 0 && (
+                        <div className="flex justify-between">
+                          <dt>Platform commission (8%)</dt>
+                          <dd>– {formatCurrencyFromCents(platformCommission)}</dd>
+                        </div>
+                      )}
+
+                      {vendorPromoStacked > 0 && (
+                        <div className="flex justify-between">
+                          <dt>Vendor promo (stacked)</dt>
+                          <dd>– {formatCurrencyFromCents(vendorPromoStacked)}</dd>
+                        </div>
+                      )}
+
+                      {platformPromoSplit > 0 && (
+                        <div className="flex justify-between">
+                          <dt className="text-slate-500">Platform promo split</dt>
+                          <dd className="text-slate-500">
+                            – {formatCurrencyFromCents(platformPromoSplit)}
+                          </dd>
+                        </div>
+                      )}
+
+                      {deliveryFee > 0 && (
+                        <div className="flex justify-between">
+                          <dt>Delivery fee</dt>
+                          <dd>{formatCurrencyFromCents(deliveryFee)}</dd>
+                        </div>
+                      )}
+
                       <div className="mt-2 flex justify-between border-t border-slate-100 pt-3 text-base font-semibold">
-                        <dt>Total</dt>
-                        <dd>{formatCurrencyFromCents(order.total_cents)}</dd>
+                        <dt>Vendor net product payout</dt>
+                        <dd>{formatCurrencyFromCents(vendorNetProductPayout)}</dd>
                       </div>
                     </dl>
 
@@ -1457,9 +1529,9 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                         <h2 className="text-sm font-semibold text-slate-900">
                           {isPickup ? "What to prepare" : "What to pack"}
                         </h2>
-                       <p className="mt-1 text.[11px] text-slate-500">
-  {packLines.length} item{packLines.length === 1 ? "" : "s"} in this order
-</p>
+                        <p className="mt-1 text.[11px] text-slate-500">
+                          {packLines.length} item{packLines.length === 1 ? "" : "s"} in this order
+                        </p>
                       </div>
 
                       <button
@@ -1471,91 +1543,93 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                       </button>
                     </div>
 
-                   <div className="space-y-3">
-  {packLines.map((line) => {
-    const isPacked = line.item_fulfilment_status === "packed";
+                    <div className="space-y-3">
+                      {packLines.map((line) => {
+                        const isPacked = line.item_fulfilment_status === "packed";
 
-    const optionsRaw = safeParseOptions(line.options_snapshot);
+                        const optionsRaw = safeParseOptions(line.options_snapshot);
 
-    const subtitle = (line as any).subtitle_snapshot as string | null | undefined;
-    const { optionsText, customSku } = formatOptionsText(optionsRaw);
+                        const subtitle = (line as any).subtitle_snapshot as string | null | undefined;
+                        const { optionsText, customSku } = formatOptionsText(optionsRaw);
 
-    const sku = line.sku_snapshot || "No SKU";
+                        const sku = line.sku_snapshot || "No SKU";
 
-    const bundleContents =
-      line.line_type === "bundle" ? extractBundleContents(optionsRaw) : [];
+                        const bundleContents =
+                          line.line_type === "bundle" ? extractBundleContents(optionsRaw) : [];
 
-    return (
-      <div
-        key={line.id}
-        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-200 hover:bg-slate-50/80"
-      >
-        <div className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-slate-300 text-[#7B61FF] focus:ring-[#7B61FF]"
-            checked={isPacked}
-            disabled={isDelivered || savingItemId === line.id}
-            onChange={(e) => {
-              const next: ItemFulfilmentStatus = e.target.checked ? "packed" : "pending";
-              updateItemStatus(line.id, next);
-            }}
-          />
+                        return (
+                          <div
+                            key={line.id}
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 transition-colors hover:border-slate-200 hover:bg-slate-50/80"
+                          >
+                            <div className="flex items-start gap-3">
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 rounded border-slate-300 text-[#7B61FF] focus:ring-[#7B61FF]"
+                                checked={isPacked}
+                                disabled={isDelivered || savingItemId === line.id}
+                                onChange={(e) => {
+                                  const next: ItemFulfilmentStatus = e.target.checked ? "packed" : "pending";
+                                  updateItemStatus(line.id, next);
+                                }}
+                              />
 
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-900">
-              {line.name_snapshot} × {line.quantity}
-            </p>
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {line.name_snapshot} × {line.quantity}
+                                </p>
 
-            {line.line_type === "bundle" ? (
-              <div className="text-xs text-slate-600">
-                <div className="text-xs text-slate-500">Bundle includes:</div>
+                                {line.line_type === "bundle" ? (
+                                  <div className="text-xs text-slate-600">
+                                    <div className="text-xs text-slate-500">Bundle includes:</div>
 
-                {bundleContents.length ? (
-                  <ul className="mt-1 list-disc pl-5">
-                    {bundleContents.map((x, idx) => (
-                      <li key={idx}>{x}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="mt-1 text-slate-500">Bundle items not available.</div>
-                )}
+                                    {bundleContents.length ? (
+                                      <ul className="mt-1 list-disc pl-5">
+                                        {bundleContents.map((x, idx) => (
+                                          <li key={idx}>{x}</li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <div className="mt-1 text-slate-500">Bundle items not available.</div>
+                                    )}
 
-                {subtitle && <div className="mt-1 text-slate-500">{subtitle}</div>}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500">{subtitle || optionsText}</p>
-            )}
+                                    {subtitle && <div className="mt-1 text-slate-500">{subtitle}</div>}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-slate-500">{subtitle || optionsText}</p>
+                                )}
 
-            <p className="text-xs text-slate-500">
-              SKU: {sku}
-              {customSku && <> · Custom SKU: {customSku}</>}
-            </p>
+                                <p className="text-xs text-slate-500">
+                                  SKU: {sku}
+                                  {customSku && <> · Custom SKU: {customSku}</>}
+                                </p>
 
-            <p className="text-xs font-medium text-slate-400">
-              {formatCurrencyFromCents(line.unit_price_cents)}
-            </p>
-          </div>
-        </div>
+                                <p className="text-xs font-medium text-slate-400">
+                                  {formatCurrencyFromCents(line.unit_price_cents)}
+                                </p>
+                              </div>
+                            </div>
 
-        <span className="inline-flex items-center rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-          {lineTypeBadge(line.line_type)}
-        </span>
-      </div>
-    );
-  })}
+                            <span className="inline-flex items-center rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                              {lineTypeBadge(line.line_type)}
+                            </span>
+                          </div>
+                        );
+                      })}
 
-  {packLines.length === 0 && (
-    <p className="rounded-2xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
-      No items found for this order.
-    </p>
-  )}
-</div>
+                      {packLines.length === 0 && (
+                        <p className="rounded-2xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+                          No items found for this order.
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Customer / fulfilment note */}
                   <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-                    <h2 className="mb-2 text-sm font-semibold text-slate-900">Customer / fulfilment note</h2>
+                    <h2 className="mb-2 text-sm font-semibold text-slate-900">
+                      Customer / fulfilment note
+                    </h2>
                     <p className="text-sm text-slate-600 whitespace-pre-line">{noteText}</p>
                   </div>
 
@@ -1660,19 +1734,19 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                           })()
                         : item.options_snapshot || {};
 
-                        const bundleContents = item.line_type === "bundle" ? extractBundleContents(optionsRaw) : [];
-
+                    const bundleContents =
+                      item.line_type === "bundle" ? extractBundleContents(optionsRaw) : [];
 
                     const optionsText =
-  item.line_type === "bundle"
-    ? (bundleContents.length
-        ? `Bundle includes: ${bundleContents.join(" · ")}`
-        : "Bundle items not available.")
-    : (optionsRaw && Object.keys(optionsRaw).length > 0
-        ? Object.entries(optionsRaw)
-            .map(([k, v]) => `${k}: ${String(v)}`)
-            .join(" · ")
-        : "—");
+                      item.line_type === "bundle"
+                        ? bundleContents.length
+                          ? `Bundle includes: ${bundleContents.join(" · ")}`
+                          : "Bundle items not available."
+                        : optionsRaw && Object.keys(optionsRaw).length > 0
+                          ? Object.entries(optionsRaw)
+                              .map(([k, v]) => `${k}: ${String(v)}`)
+                              .join(" · ")
+                          : "—";
 
                     return (
                       <tr key={item.id} className="border-b border-slate-100 last:border-0">
@@ -1682,13 +1756,19 @@ const serviceLines = items.filter((i) => i.line_type === "service");
                         </td>
                         <td className="px-6 py-3 text-slate-600">{optionsText}</td>
                         <td className="px-6 py-3 text-slate-800">{item.quantity}</td>
-                        <td className="px-6 py-3 text-slate-800">{formatCurrencyFromCents(item.unit_price_cents)}</td>
-                        <td className="px-6 py-3 text-slate-800">{formatCurrencyFromCents(item.line_subtotal_cents)}</td>
+                        <td className="px-6 py-3 text-slate-800">
+                          {formatCurrencyFromCents(item.unit_price_cents)}
+                        </td>
+                        <td className="px-6 py-3 text-slate-800">
+                          {formatCurrencyFromCents(item.line_subtotal_cents)}
+                        </td>
                         <td className="px-6 py-3">
                           <select
                             disabled={savingItemId === item.id || isDelivered}
                             value={item.item_fulfilment_status}
-                            onChange={(e) => updateItemStatus(item.id, e.target.value as ItemFulfilmentStatus)}
+                            onChange={(e) =>
+                              updateItemStatus(item.id, e.target.value as ItemFulfilmentStatus)
+                            }
                             className={`rounded-full px-3 py-1 text-xs font-medium border border-slate-200 ${
                               itemStatusClasses[item.item_fulfilment_status]
                             } disabled:opacity-60`}
@@ -1741,7 +1821,9 @@ const serviceLines = items.filter((i) => i.line_type === "service");
               <span className="font-mono">{order.contact_email || "—"}</span>.
             </p>
 
-            <label className="mb-1 block text-xs font-medium text-slate-700">Session / meeting link</label>
+            <label className="mb-1 block text-xs font-medium text-slate-700">
+              Session / meeting link
+            </label>
             <input
               className="mb-3 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
               placeholder="https://… (Zoom, Google Meet, etc)"
