@@ -108,6 +108,18 @@ type LoadedService = {
   }>;
 };
 
+function toLocalDateTimeString(isoString: string): string {
+  if (!isoString) return "";
+  // Remove timezone info for datetime-local input
+  return isoString.slice(0, 16); // Gets "2026-01-24T16:10"
+}
+
+function toISOString(localDateTime: string): string {
+  if (!localDateTime) return "";
+  // Add seconds and timezone
+  return localDateTime + ":00+00:00";
+}
+
 function uuid() {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -319,6 +331,7 @@ export default function EditServicePage() {
             : [{ id: uuid(), title: "Section 1", body: "" }]
         );
 
+        console.log("Loaded location settings:", data.locationSettings);
         const locs: LocationSettingsState[] =
           (data.locationSettings ?? []).map((loc) => ({
             id: uuid(),
@@ -991,7 +1004,7 @@ export default function EditServicePage() {
                                 </p>
                               </div>
 
-                              {/* <label className="flex items-center gap-2 text-[11px] text-gray-700">
+                               <label className="flex items-center gap-2 text-[11px] text-gray-700">
                                 <input
                                   type="checkbox"
                                   checked={loc.hasFixedSchedule}
@@ -1003,78 +1016,74 @@ export default function EditServicePage() {
                                   className="h-4 w-4 rounded border-gray-300"
                                 />
                                 <span>Yes, I have selected dates</span>
-                              </label> */}
+                              </label> 
                             </div>
 
-                            {/* {loc.hasFixedSchedule ? (
+                            {loc.hasFixedSchedule ? (
                               <>
                                 <div className="mt-3 space-y-3">
                                   <h5 className="text-[11px] font-semibold text-gray-800">
                                     Date &amp; Time Slots
                                   </h5>
 
-                                  {loc.timeSlots.map((slot) => (
-                                    <div
-                                      key={slot.id}
-                                      className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-                                    >
-                                      <div>
-                                        <label className="text-[10px] text-gray-600">
-                                          Start Date &amp; Time
-                                        </label>
-                                        <input
-                                          type="datetime-local"
-                                          value={slot.start}
-                                          onChange={(e) =>
-                                            updateLocation(loc.locationType, {
-                                              timeSlots: loc.timeSlots.map(
-                                                (s) =>
-                                                  s.id === slot.id
-                                                    ? { ...s, start: e.target.value }
-                                                    : s
-                                              ),
-                                            })
-                                          }
-                                          className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
-                                        />
-                                      </div>
+                                {loc.timeSlots.map((slot) => (
+  <div
+    key={slot.id}
+    className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+  >
+    <div>
+      <label className="text-[10px] text-gray-600">
+        Start Date &amp; Time
+      </label>
+      <input
+        type="datetime-local"
+        value={toLocalDateTimeString(slot.start)} // ← CHANGED
+        onChange={(e) =>
+          updateLocation(loc.locationType, {
+            timeSlots: loc.timeSlots.map((s) =>
+              s.id === slot.id
+                ? { ...s, start: toISOString(e.target.value) } // ← CHANGED
+                : s
+            ),
+          })
+        }
+        className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
+      />
+    </div>
 
-                                      <div>
-                                        <label className="text-[10px] text-gray-600">
-                                          End Date &amp; Time
-                                        </label>
-                                        <input
-                                          type="datetime-local"
-                                          value={slot.end}
-                                          onChange={(e) =>
-                                            updateLocation(loc.locationType, {
-                                              timeSlots: loc.timeSlots.map(
-                                                (s) =>
-                                                  s.id === slot.id
-                                                    ? { ...s, end: e.target.value }
-                                                    : s
-                                              ),
-                                            })
-                                          }
-                                          className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
-                                        />
-                                      </div>
+    <div>
+      <label className="text-[10px] text-gray-600">
+        End Date &amp; Time
+      </label>
+      <input
+        type="datetime-local"
+        value={toLocalDateTimeString(slot.end)} // ← CHANGED
+        onChange={(e) =>
+          updateLocation(loc.locationType, {
+            timeSlots: loc.timeSlots.map((s) =>
+              s.id === slot.id
+                ? { ...s, end: toISOString(e.target.value) } // ← CHANGED
+                : s
+            ),
+          })
+        }
+        className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
+      />
+    </div>
 
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          updateLocation(loc.locationType, {
-                                            timeSlots: loc.timeSlots.filter(
-                                              (s) => s.id !== slot.id
-                                            ),
-                                          })
-                                        }
-                                        className="mt-6 h-9 rounded-full border border-gray-300 px-3 text-xs"
-                                      >
-                                        ✕
-                                      </button>
-                                    </div>
-                                  ))}
+    <button
+      type="button"
+      onClick={() =>
+        updateLocation(loc.locationType, {
+          timeSlots: loc.timeSlots.filter((s) => s.id !== slot.id),
+        })
+      }
+      className="mt-6 h-9 rounded-full border border-gray-300 px-3 text-xs"
+    >
+      ✕
+    </button>
+  </div>
+))}
 
                                   <button
                                     type="button"
@@ -1092,7 +1101,7 @@ export default function EditServicePage() {
                                   </button>
                                 </div>
                               </>
-                            ) : ( */}
+                            ) : (
                               <>
                                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                                   <div>
@@ -1296,7 +1305,7 @@ export default function EditServicePage() {
                                   </button>
                                 </div>
                               </>
-                            {/* // )} */}
+                            )}
                           </div>
                         </div>
                       ))}
