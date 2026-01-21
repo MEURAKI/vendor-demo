@@ -960,8 +960,8 @@ export default function ServicesPage() {
   <Sidebar
     config={sidebarConfig}
     initialCollapsed={true}          // 👈 collapsed on mobile
-    variant="default"
-    disableFlyoutOnCollapsed={true}  // 👈 prevents overlay flyout
+    // variant="default"
+    // disableFlyoutOnCollapsed={true}  // 👈 prevents overlay flyout
   />
 </div>
 
