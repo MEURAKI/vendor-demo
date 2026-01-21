@@ -949,7 +949,7 @@ export default function EditServicePage() {
           className={clsx(
             "px-3 py-1.5 rounded-l-2xl",
             loc.discountType === "fixed"
-              ? "bg-[#F5EBFF] text-purple-700"
+              ? "bg-[#F5EBFF]"
               : "text-gray-600"
           )}
         >
@@ -965,7 +965,7 @@ export default function EditServicePage() {
           className={clsx(
             "px-3 py-1.5 rounded-r-2xl",
             loc.discountType === "percent"
-              ? "bg-[#F5EBFF] text-purple-700"
+              ? "bg-[#F5EBFF]"
               : "text-gray-600"
           )}
         >
