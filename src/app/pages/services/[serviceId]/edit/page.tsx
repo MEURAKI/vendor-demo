@@ -933,7 +933,7 @@ export default function EditServicePage() {
   </div>
 
   {/* ROW 2 — Discount */}
-  <div>
+<div>
     <label className="text-[11px] font-semibold text-gray-800">
       Discount
     </label>
@@ -947,10 +947,10 @@ export default function EditServicePage() {
             })
           }
           className={clsx(
-            "px-3 py-1.5 rounded-l-2xl",
+            "px-3 py-1.5 rounded-l-2xl transition-colors",
             loc.discountType === "fixed"
-              ? "bg-[#F5EBFF]"
-              : "text-gray-600"
+              ? "bg-purple-600 text-white"
+              : "text-gray-600 hover:bg-gray-50"
           )}
         >
           SGD
@@ -963,10 +963,10 @@ export default function EditServicePage() {
             })
           }
           className={clsx(
-            "px-3 py-1.5 rounded-r-2xl",
+            "px-3 py-1.5 rounded-r-2xl transition-colors",
             loc.discountType === "percent"
-              ? "bg-[#F5EBFF]"
-              : "text-gray-600"
+              ? "bg-purple-600 text-white"
+              : "text-gray-600 hover:bg-gray-50"
           )}
         >
           %
