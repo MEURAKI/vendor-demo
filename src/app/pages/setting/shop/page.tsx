@@ -83,10 +83,11 @@ type VendorBusiness = {
   // pulled from vendor_business (for completeness)
   brand_logo_url: string | null;
   policy_url: string | null;
+
+  session_operating_hours: SessionOperatingHour[] | null;
 };
 
-type TabKey = "general" | "fulfilment" | "promos";
-
+type TabKey = "general" | "fulfilment" | "promos" | "sessions";
 /* ---- Promo code types ---- */
 
 type PromoScope = "platform" | "vendor";
@@ -121,6 +122,33 @@ type PromoFormState = {
   max_redemptions: string;
   applies_to: PromoAppliesTo;
 };
+
+type DayName =
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday"
+  | "Saturday"
+  | "Sunday";
+
+type SessionOperatingHour = {
+  day: DayName;
+  enabled: boolean;
+  start: string; // "HH:mm"
+  end: string;   // "HH:mm"
+};
+
+const DAYS: DayName[] = [
+  "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday",
+];
+
+const DEFAULT_SESSION_HOURS: SessionOperatingHour[] = DAYS.map((d) => ({
+  day: d,
+  enabled: false,
+  start: "08:00",
+  end: "22:00",
+}));
 
 const DEFAULT_APPLIES_TO: PromoAppliesTo = "all";
 
@@ -288,6 +316,10 @@ function ShopSettingsPageInner() {
     applies_to: DEFAULT_APPLIES_TO,
   });
 
+  const [sessionHours, setSessionHours] = useState<SessionOperatingHour[]>(
+  DEFAULT_SESSION_HOURS
+);
+
   const toggleIn = (
     arr: string[],
     value: string,
@@ -424,7 +456,8 @@ function ShopSettingsPageInner() {
               delivery_days_note,
               dimensions,
               brand_logo_url,
-              policy_url
+              policy_url,
+              session_operating_hours
             `
           )
           .eq("id", user.id)
@@ -505,6 +538,8 @@ function ShopSettingsPageInner() {
 
         brand_logo_url: null,
         policy_url: null,
+
+session_operating_hours: DEFAULT_SESSION_HOURS,
       };
 
       const merged: VendorBusiness = { ...defaults, ...(vbRow || {}) };
@@ -513,6 +548,12 @@ function ShopSettingsPageInner() {
       setVb(merged);
       setBioCount(merged.shop_bio?.length || 0);
       setDimensions(merged.dimensions ?? []);
+
+      setSessionHours(
+  merged.session_operating_hours?.length
+    ? merged.session_operating_hours
+    : DEFAULT_SESSION_HOURS
+);
 
       // ✅ hydrate category states from DB
       setProductCategories(merged.products_business_category ?? []);
@@ -758,6 +799,8 @@ function ShopSettingsPageInner() {
       brand_logo_url: src.brand_logo_url,
       policy_url: src.policy_url,
 
+      session_operating_hours: sessionHours?.length ? sessionHours : null,
+
       updated_at: new Date().toISOString(),
     };
   }
@@ -801,20 +844,28 @@ function ShopSettingsPageInner() {
     if (error) {
       console.error(error);
       errorToast({
-        title: "Error",
-        description:
-          tab === "general"
-            ? "Failed to save shop settings."
-            : "Failed to save fulfilment details.",
-      });
+  title: "Error",
+  description:
+    tab === "general"
+      ? "Failed to save shop settings."
+      : tab === "fulfilment"
+      ? "Failed to save fulfilment details."
+      : tab === "sessions"
+      ? "Failed to save session hours."
+      : "Failed to save.",
+});
     } else {
-      successToast({
-        title: "Success",
-        description:
-          tab === "general"
-            ? "Shop settings saved."
-            : "Fulfilment details saved successfully.",
-      });
+     successToast({
+  title: "Success",
+  description:
+    tab === "general"
+      ? "Shop settings saved."
+      : tab === "fulfilment"
+      ? "Fulfilment details saved successfully."
+      : tab === "sessions"
+      ? "Session hours saved successfully."
+      : "Saved.",
+});
     }
   }
 
@@ -1045,6 +1096,18 @@ function ShopSettingsPageInner() {
                 ].join(" ")}
               >
                 Promo Codes
+              </button>
+                <button
+                type="button"
+                onClick={() => switchTab("sessions")}
+                className={[
+                  "pb-3",
+                  activeTab === "sessions"
+                    ? "border-b-2 border-gray-900 font-semibold text-gray-900"
+                    : "text-gray-600 hover:text-gray-900",
+                ].join(" ")}
+              >
+                Sessions
               </button>
             </div>
 
@@ -2087,6 +2150,101 @@ function ShopSettingsPageInner() {
                 </section>
               </div>
             )}
+
+            {/* SESSIONS TAB */}
+{activeTab === "sessions" && (
+  <form
+    className="mt-8 space-y-8"
+    onSubmit={(e) => {
+      e.preventDefault();
+      save("sessions");
+    }}
+  >
+    <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <div>
+        <div className="text-sm font-semibold text-gray-900">
+          Session Operating Hours
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          Select which days you run sessions and set time ranges (e.g. Sunday 08:00–22:00).
+        </p>
+      </div>
+
+      <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
+        {sessionHours.map((row, idx) => (
+          <div
+            key={row.day}
+            className="flex flex-col gap-2 rounded-xl border border-gray-100 p-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={row.enabled}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setSessionHours((prev) =>
+                    prev.map((r, i) => (i === idx ? { ...r, enabled } : r))
+                  );
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <div className="text-sm font-medium text-gray-900">{row.day}</div>
+              {!row.enabled && (
+                <span className="text-[11px] text-gray-500">(Closed)</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="time"
+                disabled={!row.enabled}
+                value={row.start}
+                onChange={(e) => {
+                  const start = e.target.value;
+                  setSessionHours((prev) =>
+                    prev.map((r, i) => (i === idx ? { ...r, start } : r))
+                  );
+                }}
+                className="h-9 w-28 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900 disabled:bg-gray-50"
+              />
+              <span className="text-xs text-gray-500">to</span>
+              <input
+                type="time"
+                disabled={!row.enabled}
+                value={row.end}
+                onChange={(e) => {
+                  const end = e.target.value;
+                  setSessionHours((prev) =>
+                    prev.map((r, i) => (i === idx ? { ...r, end } : r))
+                  );
+                }}
+                className="h-9 w-28 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900 disabled:bg-gray-50"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <div className="mt-10 flex justify-end">
+      <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
+        <a
+          href="/pages/setting/shop"
+          className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          Go back without saving
+        </a>
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  </form>
+)}
           </div>
         </main>
       </div>

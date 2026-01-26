@@ -37,6 +37,10 @@ type TimeSlot = {
   id: string;
   start: string;
   end: string;
+  price?: number; // Individual price per slot
+  discountType: DiscountType; // Individual discount per slot
+  discountValue?: number;
+  discountCap?: number;
 };
 
 type SessionOption = {
@@ -52,13 +56,24 @@ type WellnessDimension = {
   slug: string;
 };
 
+// Recurring schedule rule
+type RecurringRule = {
+  id: string;
+  daysOfWeek: number[]; // 0 = Sunday, 1 = Monday, etc.
+  startTime: string; // HH:mm format
+  endTime: string;
+  startDate: string; // YYYY-MM-DD
+  endDate?: string; // Optional end date for the recurrence
+  providerId?: string; // Optional: which provider this applies to
+};
+
 type LocationSettingsState = {
   id: string;
   locationType: LocationType;
   sku: string;
   maxParticipants?: number;
-  price?: number;
-  discountType: DiscountType;
+  price?: number; // Base price (used when no fixed schedule)
+  discountType: DiscountType; // Base discount (used when no fixed schedule)
   discountValue?: number;
   discountCap?: number;
   hasFixedSchedule: boolean;
@@ -67,6 +82,7 @@ type LocationSettingsState = {
   expiryDurationValue?: number;
   timeSlots: TimeSlot[];
   sessionOptions: SessionOption[];
+  recurringRules: RecurringRule[]; // NEW: recurring schedule rules
 };
 
 function uuid() {
@@ -190,7 +206,6 @@ export default function NewServicePage() {
   );
   const [selectedWellnessIds, setSelectedWellnessIds] = useState<string[]>([]);
 
-
   // per-location settings
   const [locationSettings, setLocationSettings] =
     useState<LocationSettingsState[]>([
@@ -209,6 +224,7 @@ export default function NewServicePage() {
         expiryDurationValue: undefined,
         timeSlots: [],
         sessionOptions: [],
+        recurringRules: [],
       },
     ]);
   const [activeLocationTab, setActiveLocationTab] =
@@ -366,6 +382,7 @@ export default function NewServicePage() {
             expiryDurationValue: undefined,
             timeSlots: [],
             sessionOptions: [],
+            recurringRules: [],
           });
         }
       });
@@ -457,11 +474,23 @@ export default function NewServicePage() {
         timeSlots: loc.timeSlots.map((s) => ({
           start: s.start,
           end: s.end,
+          price: s.price,
+          discountType: s.discountType,
+          discountValue: s.discountValue,
+          discountCap: s.discountCap,
         })),
         sessionOptions: loc.sessionOptions.map((p) => ({
           label: p.label,
           sessionsCount: p.sessionsCount,
           price: p.price,
+        })),
+        recurringRules: loc.recurringRules.map((r) => ({
+          daysOfWeek: r.daysOfWeek,
+          startTime: r.startTime,
+          endTime: r.endTime,
+          startDate: r.startDate,
+          endDate: r.endDate,
+          providerId: r.providerId,
         })),
       })),
     };
@@ -801,124 +830,146 @@ export default function NewServicePage() {
                             : "In-Person Service Settings"}
                         </h3>
 
-                       <div className="grid gap-4 text-xs md:grid-cols-2">
-                       
-                         {/* ROW 1 — SKU */}
-                         <div>
-                           <label className="text-[11px] font-semibold text-gray-800">SKU</label>
-                           <input
-                             value={loc.sku}
-                             onChange={(e) =>
-                               updateLocation(loc.locationType, { sku: e.target.value })
-                             }
-                             className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-                           />
-                         </div>
-                       
-                         {/* ROW 1 — Max Participants */}
-                         <div>
-                           <label className="text-[11px] font-semibold text-gray-800">
-                             Max Participants
-                           </label>
-                           <div className="mt-2 flex items-center gap-1">
-                             <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
-                               QTY
-                             </span>
-                             <input
-                               type="number"
-                               min={1}
-                               value={loc.maxParticipants ?? ""}
-                               onChange={(e) =>
-                                 updateLocation(loc.locationType, {
-                                   maxParticipants:
-                                     e.target.value === "" ? undefined : Number(e.target.value),
-                                 })
-                               }
-                               className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-                             />
-                           </div>
-                         </div>
-                       
-                         {/* ROW 2 — Price */}
-                         <div>
-                           <label className="text-[11px] font-semibold text-gray-800">Price</label>
-                           <div className="mt-2 flex items-center gap-1">
-                             <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
-                               SGD
-                             </span>
-                             <input
-                               type="number"
-                               min={0}
-                               step="0.01"
-                               value={loc.price ?? ""}
-                               onChange={(e) =>
-                                 updateLocation(loc.locationType, {
-                                   price: e.target.value === "" ? undefined : Number(e.target.value),
-                                 })
-                               }
-                               className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-                             />
-                           </div>
-                         </div>
-                       
-                         {/* ROW 2 — Discount */}
-                         <div>
-                           <label className="text-[11px] font-semibold text-gray-800">
-                             Discount
-                           </label>
-                           <div className="mt-2 flex flex-wrap items-center gap-1">
-                             <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px] shrink-0">
-                               <button
-                                 type="button"
-                                 onClick={() =>
-                                   updateLocation(loc.locationType, {
-                                     discountType: loc.discountType === "fixed" ? null : "fixed",
-                                   })
-                                 }
-                                 className={clsx(
-                                   "px-3 py-1.5 rounded-l-2xl",
-                                   loc.discountType === "fixed"
-                                     ? "bg-[#F5EBFF] text-purple-700"
-                                     : "text-gray-600"
-                                 )}
-                               >
-                                 SGD
-                               </button>
-                               <button
-                                 type="button"
-                                 onClick={() =>
-                                   updateLocation(loc.locationType, {
-                                     discountType: loc.discountType === "percent" ? null : "percent",
-                                   })
-                                 }
-                                 className={clsx(
-                                   "px-3 py-1.5 rounded-r-2xl",
-                                   loc.discountType === "percent"
-                                     ? "bg-[#F5EBFF] text-purple-700"
-                                     : "text-gray-600"
-                                 )}
-                               >
-                                 %
-                               </button>
-                             </div>
-                       
-                             <input
-                               type="number"
-                               min={0}
-                               step="0.01"
-                               value={loc.discountValue ?? ""}
-                               onChange={(e) =>
-                                 updateLocation(loc.locationType, {
-                                   discountValue:
-                                     e.target.value === "" ? undefined : Number(e.target.value),
-                                 })
-                               }
-                               className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-                             />
-                           </div>
-                         </div>
-                       
-                       </div>
+                        <div className="grid gap-4 text-xs md:grid-cols-2">
+                          {/* ROW 1 — SKU */}
+                          <div>
+                            <label className="text-[11px] font-semibold text-gray-800">
+                              SKU
+                            </label>
+                            <input
+                              value={loc.sku}
+                              onChange={(e) =>
+                                updateLocation(loc.locationType, {
+                                  sku: e.target.value,
+                                })
+                              }
+                              className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                            />
+                          </div>
+
+                          {/* ROW 1 — Max Participants */}
+                          <div>
+                            <label className="text-[11px] font-semibold text-gray-800">
+                              Max Participants
+                            </label>
+                            <div className="mt-2 flex items-center gap-1">
+                              <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
+                                QTY
+                              </span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={loc.maxParticipants ?? ""}
+                                onChange={(e) =>
+                                  updateLocation(loc.locationType, {
+                                    maxParticipants:
+                                      e.target.value === ""
+                                        ? undefined
+                                        : Number(e.target.value),
+                                  })
+                                }
+                                className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Only show base price/discount if NO fixed schedule */}
+                          {!loc.hasFixedSchedule && (
+                            <>
+                              {/* ROW 2 — Price */}
+                              <div>
+                                <label className="text-[11px] font-semibold text-gray-800">
+                                  Price
+                                </label>
+                                <div className="mt-2 flex items-center gap-1">
+                                  <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
+                                    SGD
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={loc.price ?? ""}
+                                    onChange={(e) =>
+                                      updateLocation(loc.locationType, {
+                                        price:
+                                          e.target.value === ""
+                                            ? undefined
+                                            : Number(e.target.value),
+                                      })
+                                    }
+                                    className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* ROW 2 — Discount */}
+                              <div>
+                                <label className="text-[11px] font-semibold text-gray-800">
+                                  Discount
+                                </label>
+                                <div className="mt-2 flex flex-wrap items-center gap-1">
+                                  <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px] shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        updateLocation(loc.locationType, {
+                                          discountType:
+                                            loc.discountType === "fixed"
+                                              ? null
+                                              : "fixed",
+                                        })
+                                      }
+                                      className={clsx(
+                                        "px-3 py-1.5 rounded-l-2xl transition-colors",
+                                        loc.discountType === "fixed"
+                                          ? "bg-purple-600 text-white"
+                                          : "text-gray-600 hover:bg-gray-50"
+                                      )}
+                                    >
+                                      SGD
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        updateLocation(loc.locationType, {
+                                          discountType:
+                                            loc.discountType === "percent"
+                                              ? null
+                                              : "percent",
+                                        })
+                                      }
+                                      className={clsx(
+                                        "px-3 py-1.5 rounded-r-2xl transition-colors",
+                                        loc.discountType === "percent"
+                                          ? "bg-purple-600 text-white"
+                                          : "text-gray-600 hover:bg-gray-50"
+                                      )}
+                                    >
+                                      %
+                                    </button>
+                                  </div>
+
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={loc.discountValue ?? ""}
+                                    onChange={(e) =>
+                                      updateLocation(loc.locationType, {
+                                        discountValue:
+                                          e.target.value === ""
+                                            ? undefined
+                                            : Number(e.target.value),
+                                      })
+                                    }
+                                    className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
 
                         {/* Availability Card */}
                         <div className="mt-6 rounded-2xl bg-[#FBFBFE] p-4 text-xs">
@@ -950,71 +1001,490 @@ export default function NewServicePage() {
                           {/* Fixed schedule */}
                           {loc.hasFixedSchedule ? (
                             <>
+                              {/* RECURRING RULES SECTION */}
+                              <div className="mb-6 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                  <h5 className="text-sm font-semibold text-purple-900">
+                                    Recurring Schedule Rules
+                                  </h5>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateLocation(loc.locationType, {
+                                        recurringRules: [
+                                          ...loc.recurringRules,
+                                          {
+                                            id: uuid(),
+                                            daysOfWeek: [],
+                                            startTime: "09:00",
+                                            endTime: "10:00",
+                                            startDate: new Date()
+                                              .toISOString()
+                                              .split("T")[0],
+                                            endDate: undefined,
+                                            providerId: undefined,
+                                          },
+                                        ],
+                                      })
+                                    }
+                                    className="rounded-full bg-purple-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-purple-700"
+                                  >
+                                    + Add Rule
+                                  </button>
+                                </div>
+
+                                <p className="mb-3 text-[10px] text-purple-700">
+                                  Set up recurring time slots (e.g., every
+                                  Monday & Wednesday at 9am). These will block
+                                  dates when creating individual sessions below.
+                                </p>
+
+                                <div className="space-y-3">
+                                  {loc.recurringRules.map((rule) => (
+                                    <div
+                                      key={rule.id}
+                                      className="rounded-xl border border-purple-200 bg-white p-3"
+                                    >
+                                      <div className="grid gap-3 md:grid-cols-2">
+                                        {/* Days of week */}
+                                        <div className="md:col-span-2">
+                                          <label className="text-[10px] font-semibold text-gray-700">
+                                            Days of Week
+                                          </label>
+                                          <div className="mt-1 flex flex-wrap gap-1">
+                                            {[
+                                              "Sun",
+                                              "Mon",
+                                              "Tue",
+                                              "Wed",
+                                              "Thu",
+                                              "Fri",
+                                              "Sat",
+                                            ].map((day, idx) => (
+                                              <button
+                                                key={day}
+                                                type="button"
+                                                onClick={() => {
+                                                  const newDays =
+                                                    rule.daysOfWeek.includes(
+                                                      idx
+                                                    )
+                                                      ? rule.daysOfWeek.filter(
+                                                          (d) => d !== idx
+                                                        )
+                                                      : [
+                                                          ...rule.daysOfWeek,
+                                                          idx,
+                                                        ].sort((a, b) => a - b);
+                                                  updateLocation(
+                                                    loc.locationType,
+                                                    {
+                                                      recurringRules:
+                                                        loc.recurringRules.map(
+                                                          (r) =>
+                                                            r.id === rule.id
+                                                              ? {
+                                                                  ...r,
+                                                                  daysOfWeek:
+                                                                    newDays,
+                                                                }
+                                                              : r
+                                                        ),
+                                                    }
+                                                  );
+                                                }}
+                                                className={clsx(
+                                                  "rounded-lg px-2 py-1 text-[10px] font-medium transition-colors",
+                                                  rule.daysOfWeek.includes(idx)
+                                                    ? "bg-purple-600 text-white"
+                                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                                )}
+                                              >
+                                                {day}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+
+                                        {/* Start time */}
+                                        <div>
+                                          <label className="text-[10px] font-semibold text-gray-700">
+                                            Start Time
+                                          </label>
+                                          <input
+                                            type="time"
+                                            value={rule.startTime}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                recurringRules:
+                                                  loc.recurringRules.map((r) =>
+                                                    r.id === rule.id
+                                                      ? {
+                                                          ...r,
+                                                          startTime:
+                                                            e.target.value,
+                                                        }
+                                                      : r
+                                                  ),
+                                              })
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                          />
+                                        </div>
+
+                                        {/* End time */}
+                                        <div>
+                                          <label className="text-[10px] font-semibold text-gray-700">
+                                            End Time
+                                          </label>
+                                          <input
+                                            type="time"
+                                            value={rule.endTime}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                recurringRules:
+                                                  loc.recurringRules.map((r) =>
+                                                    r.id === rule.id
+                                                      ? {
+                                                          ...r,
+                                                          endTime:
+                                                            e.target.value,
+                                                        }
+                                                      : r
+                                                  ),
+                                              })
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                          />
+                                        </div>
+
+                                        {/* Start date */}
+                                        <div>
+                                          <label className="text-[10px] font-semibold text-gray-700">
+                                            Start Date
+                                          </label>
+                                          <input
+                                            type="date"
+                                            value={rule.startDate}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                recurringRules:
+                                                  loc.recurringRules.map((r) =>
+                                                    r.id === rule.id
+                                                      ? {
+                                                          ...r,
+                                                          startDate:
+                                                            e.target.value,
+                                                        }
+                                                      : r
+                                                  ),
+                                              })
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                          />
+                                        </div>
+
+                                        {/* End date (optional) */}
+                                        <div>
+                                          <label className="text-[10px] font-semibold text-gray-700">
+                                            End Date (Optional)
+                                          </label>
+                                          <input
+                                            type="date"
+                                            value={rule.endDate ?? ""}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                recurringRules:
+                                                  loc.recurringRules.map((r) =>
+                                                    r.id === rule.id
+                                                      ? {
+                                                          ...r,
+                                                          endDate:
+                                                            e.target.value || undefined,
+                                                        }
+                                                      : r
+                                                  ),
+                                              })
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                          />
+                                        </div>
+
+                                        {/* Provider (optional) */}
+                                        <div className="md:col-span-2">
+                                          <label className="text-[10px] font-semibold text-gray-700">
+                                            Provider (Optional)
+                                          </label>
+                                          <select
+                                            value={rule.providerId ?? ""}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                recurringRules:
+                                                  loc.recurringRules.map((r) =>
+                                                    r.id === rule.id
+                                                      ? {
+                                                          ...r,
+                                                          providerId:
+                                                            e.target.value ||
+                                                            undefined,
+                                                        }
+                                                      : r
+                                                  ),
+                                              })
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                          >
+                                            <option value="">
+                                              Any Provider
+                                            </option>
+                                            {allProviders.map((p) => (
+                                              <option key={p.id} value={p.id}>
+                                                {p.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updateLocation(loc.locationType, {
+                                            recurringRules:
+                                              loc.recurringRules.filter(
+                                                (r) => r.id !== rule.id
+                                              ),
+                                          })
+                                        }
+                                        className="mt-2 text-[10px] text-red-600 hover:text-red-700"
+                                      >
+                                        Remove Rule
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* INDIVIDUAL TIME SLOTS */}
                               <div className="mt-3 space-y-3">
                                 <h5 className="text-[11px] font-semibold text-gray-800">
-                                  Date & Time Slots
+                                  Individual Sessions (with per-session pricing
+                                  & discounts)
                                 </h5>
 
-                                {loc.timeSlots.map((slot) => (
+                                {loc.timeSlots.map((slot, slotIdx) => (
                                   <div
                                     key={slot.id}
-                                    className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                                    className="rounded-2xl border border-gray-200 bg-white p-4"
                                   >
-                                    <div>
-                                      <label className="text-[10px] text-gray-600">
-                                        Start Date & Time
-                                      </label>
-                                      <input
-                                        type="datetime-local"
-                                        value={slot.start}
-                                        onChange={(e) =>
+                                    <div className="mb-2 flex items-center justify-between">
+                                      <span className="text-[11px] font-semibold text-purple-700">
+                                        Session {slotIdx + 1}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
                                           updateLocation(loc.locationType, {
-                                            timeSlots: loc.timeSlots.map(
-                                              (s) =>
-                                                s.id === slot.id
-                                                  ? { ...s, start: e.target.value }
-                                                  : s
+                                            timeSlots: loc.timeSlots.filter(
+                                              (s) => s.id !== slot.id
                                             ),
                                           })
                                         }
-                                        className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
-                                      />
+                                        className="text-xs text-red-600 hover:text-red-700"
+                                      >
+                                        Remove
+                                      </button>
                                     </div>
 
-                                    <div>
-                                      <label className="text-[10px] text-gray-600">
-                                        End Date & Time
-                                      </label>
-                                      <input
-                                        type="datetime-local"
-                                        value={slot.end}
-                                        onChange={(e) =>
-                                          updateLocation(loc.locationType, {
-                                            timeSlots: loc.timeSlots.map(
-                                              (s) =>
-                                                s.id === slot.id
-                                                  ? { ...s, end: e.target.value }
-                                                  : s
-                                            ),
-                                          })
-                                        }
-                                        className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
-                                      />
-                                    </div>
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                      {/* Start Date & Time */}
+                                      <div>
+                                        <label className="text-[10px] text-gray-600">
+                                          Start Date & Time
+                                        </label>
+                                        <input
+                                          type="datetime-local"
+                                          value={slot.start}
+                                          onChange={(e) =>
+                                            updateLocation(loc.locationType, {
+                                              timeSlots: loc.timeSlots.map(
+                                                (s) =>
+                                                  s.id === slot.id
+                                                    ? {
+                                                        ...s,
+                                                        start: e.target.value,
+                                                      }
+                                                    : s
+                                              ),
+                                            })
+                                          }
+                                          className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
+                                        />
+                                      </div>
 
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        updateLocation(loc.locationType, {
-                                          timeSlots: loc.timeSlots.filter(
-                                            (s) => s.id !== slot.id
-                                          ),
-                                        })
-                                      }
-                                      className="mt-6 h-9 rounded-full border border-gray-300 px-3 text-xs"
-                                    >
-                                      ✕
-                                    </button>
+                                      {/* End Date & Time */}
+                                      <div>
+                                        <label className="text-[10px] text-gray-600">
+                                          End Date & Time
+                                        </label>
+                                        <input
+                                          type="datetime-local"
+                                          value={slot.end}
+                                          onChange={(e) =>
+                                            updateLocation(loc.locationType, {
+                                              timeSlots: loc.timeSlots.map(
+                                                (s) =>
+                                                  s.id === slot.id
+                                                    ? {
+                                                        ...s,
+                                                        end: e.target.value,
+                                                      }
+                                                    : s
+                                              ),
+                                            })
+                                          }
+                                          className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
+                                        />
+                                      </div>
+
+                                      {/* Price for this slot */}
+                                      <div>
+                                        <label className="text-[10px] font-semibold text-gray-700">
+                                          Session Price
+                                        </label>
+                                        <div className="mt-1 flex items-center gap-1">
+                                          <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
+                                            SGD
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={slot.price ?? ""}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                timeSlots: loc.timeSlots.map(
+                                                  (s) =>
+                                                    s.id === slot.id
+                                                      ? {
+                                                          ...s,
+                                                          price:
+                                                            e.target.value ===
+                                                            ""
+                                                              ? undefined
+                                                              : Number(
+                                                                  e.target.value
+                                                                ),
+                                                        }
+                                                      : s
+                                                ),
+                                              })
+                                            }
+                                            className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Discount for this slot */}
+                                      <div>
+                                        <label className="text-[10px] font-semibold text-gray-700">
+                                          Session Discount
+                                        </label>
+                                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                                          <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px] shrink-0">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    timeSlots:
+                                                      loc.timeSlots.map((s) =>
+                                                        s.id === slot.id
+                                                          ? {
+                                                              ...s,
+                                                              discountType:
+                                                                s.discountType ===
+                                                                "fixed"
+                                                                  ? null
+                                                                  : "fixed",
+                                                            }
+                                                          : s
+                                                      ),
+                                                  }
+                                                )
+                                              }
+                                              className={clsx(
+                                                "px-3 py-1.5 rounded-l-2xl transition-colors",
+                                                slot.discountType === "fixed"
+                                                  ? "bg-purple-600 text-white"
+                                                  : "text-gray-600 hover:bg-gray-50"
+                                              )}
+                                            >
+                                              SGD
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    timeSlots:
+                                                      loc.timeSlots.map((s) =>
+                                                        s.id === slot.id
+                                                          ? {
+                                                              ...s,
+                                                              discountType:
+                                                                s.discountType ===
+                                                                "percent"
+                                                                  ? null
+                                                                  : "percent",
+                                                            }
+                                                          : s
+                                                      ),
+                                                  }
+                                                )
+                                              }
+                                              className={clsx(
+                                                "px-3 py-1.5 rounded-r-2xl transition-colors",
+                                                slot.discountType === "percent"
+                                                  ? "bg-purple-600 text-white"
+                                                  : "text-gray-600 hover:bg-gray-50"
+                                              )}
+                                            >
+                                              %
+                                            </button>
+                                          </div>
+
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            value={slot.discountValue ?? ""}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                timeSlots: loc.timeSlots.map(
+                                                  (s) =>
+                                                    s.id === slot.id
+                                                      ? {
+                                                          ...s,
+                                                          discountValue:
+                                                            e.target.value ===
+                                                            ""
+                                                              ? undefined
+                                                              : Number(
+                                                                  e.target.value
+                                                                ),
+                                                        }
+                                                      : s
+                                                ),
+                                              })
+                                            }
+                                            className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
                                 ))}
 
@@ -1024,13 +1494,21 @@ export default function NewServicePage() {
                                     updateLocation(loc.locationType, {
                                       timeSlots: [
                                         ...loc.timeSlots,
-                                        { id: uuid(), start: "", end: "" },
+                                        {
+                                          id: uuid(),
+                                          start: "",
+                                          end: "",
+                                          price: undefined,
+                                          discountType: null,
+                                          discountValue: undefined,
+                                          discountCap: undefined,
+                                        },
                                       ],
                                     })
                                   }
                                   className="mt-2 inline-flex items-center rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white"
                                 >
-                                  + Add Time Slot
+                                  + Add Session
                                 </button>
                               </div>
                             </>
@@ -1231,7 +1709,7 @@ export default function NewServicePage() {
                                 </button>
                               </div>
                             </>
-                           )}
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1242,71 +1720,74 @@ export default function NewServicePage() {
               {/* RIGHT COLUMN – images + taxonomy */}
               <div className="space-y-6">
                 {/* Service Images */}
-               <section className="rounded-3xl border border-[#ECECFB] bg-white p-5">
-  <h2 className="mb-3 text-sm font-semibold text-gray-900">
-    Service Images
-  </h2>
+                <section className="rounded-3xl border border-[#ECECFB] bg-white p-5">
+                  <h2 className="mb-3 text-sm font-semibold text-gray-900">
+                    Service Images
+                  </h2>
 
-  {/* Main (cover) image */}
-  <div className="overflow-hidden rounded-3xl bg-gray-200 relative">
-    {coverImageUrl ? (
-      <img
-        src={coverImageUrl}
-        alt="Service cover"
-        className="h-56 w-full object-cover"
-      />
-    ) : (
-      <div className="flex h-56 items-center justify-center text-xs text-gray-500">
-        Upload a main service image
-      </div>
-    )}
-  </div>
+                  {/* Main (cover) image */}
+                  <div className="overflow-hidden rounded-3xl bg-gray-200 relative">
+                    {coverImageUrl ? (
+                      <img
+                        src={coverImageUrl}
+                        alt="Service cover"
+                        className="h-56 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-56 items-center justify-center text-xs text-gray-500">
+                        Upload a main service image
+                      </div>
+                    )}
+                  </div>
 
-  {/* Image thumbnails */}
- <div className="mt-3 flex gap-2">
-  {images.slice(0, 5).map((url, idx) => (
-    <div
-      key={url}
-      className="relative h-14 w-14 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
-    >
-      <img
-        src={url}
-        alt=""
-        className="h-full w-full object-cover"
-      />
+                  {/* Image thumbnails */}
+                  <div className="mt-3 flex gap-2">
+                    {images.slice(0, 5).map((url, idx) => (
+                      <div
+                        key={url}
+                        className="relative h-14 w-14 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
+                      >
+                        <img
+                          src={url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
 
-      {/* Delete button */}
-      <button
-        type="button"
-        onClick={() => {
-          setImages((prev) => prev.filter((img) => img !== url));
-        }}
-        className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold leading-none text-white shadow-md hover:bg-red-700"
-        aria-label="Remove image"
-      >
-        ✕
-      </button>
-    </div>
-  ))}
+                        {/* Delete button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImages((prev) =>
+                              prev.filter((img) => img !== url)
+                            );
+                          }}
+                          className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold leading-none text-white shadow-md hover:bg-red-700"
+                          aria-label="Remove image"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
 
-  {images.length < 6 && (
-    <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">
-      +
-      <input
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={(e) => handleImageUpload(e.target.files)}
-      />
-    </label>
-  )}
-</div>
+                    {images.length < 6 && (
+                      <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">
+                        +
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => handleImageUpload(e.target.files)}
+                        />
+                      </label>
+                    )}
+                  </div>
 
-  <p className="mt-2 text-[10px] text-gray-500">
-    Upload a high-resolution cover image and up to 5 gallery images.
-  </p>
-</section>
+                  <p className="mt-2 text-[10px] text-gray-500">
+                    Upload a high-resolution cover image and up to 5 gallery
+                    images.
+                  </p>
+                </section>
 
                 {/* Wellness / Categories / Tags */}
                 <div ref={categorySectionRef}>
