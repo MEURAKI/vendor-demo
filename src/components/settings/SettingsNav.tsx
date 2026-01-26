@@ -35,6 +35,7 @@ const groups: { label: string; items: NavItem[] }[] = [
       { href: "/pages/setting/shop", label: "General", tabKey: "general" },
       { href: "/pages/setting/shop", label: "Fulfilment & Delivery", tabKey: "fulfilment" },
       { href: "/pages/setting/shop", label: "Promo Code", tabKey: "promos" },
+      { href: "/pages/setting/shop", label: "Session Hours", tabKey: "sessions" },
     ],
   },
   {

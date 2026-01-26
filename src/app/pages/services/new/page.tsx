@@ -92,6 +92,40 @@ function uuid() {
   return Math.random().toString(36).slice(2);
 }
 
+type LineItemDiscountType = "percent" | "fixed";
+
+type LineItemPromotion = {
+  id: string;
+  name: string;                 // e.g. "Valentine’s Day"
+  description?: string;
+  active: boolean;
+
+  discountType: LineItemDiscountType;
+  discountValue: number;        // e.g. 15 (%), or 10 (SGD)
+
+  startsAt?: string;            // ISO string
+  endsAt?: string;              // ISO string
+
+  // optional filters:
+  appliesTo?: "all" | "options" | "sessions"; // options=anytime, sessions=fixed slots
+  optionIds?: string[];         // apply only to specific sessionOptions
+  slotIds?: string[];           // apply only to specific timeSlots
+  providerId?: string;          // apply to specific provider
+};
+
+function validatePromo(p: LineItemPromotion) {
+  if (p.discountType === "percent" && (p.discountValue <= 0 || p.discountValue > 100)) {
+    return "Percent discount must be 1–100.";
+  }
+  if (p.discountType === "fixed" && p.discountValue <= 0) {
+    return "Fixed discount must be greater than 0.";
+  }
+  if (p.startsAt && p.endsAt && p.endsAt < p.startsAt) {
+    return "End time must be after start time.";
+  }
+  return null;
+}
+
 function ChipsInput({
   items,
   onChange,
