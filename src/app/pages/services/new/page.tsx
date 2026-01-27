@@ -14,6 +14,9 @@ import WellnessCategoryTagsSection, {
 import AppModal from "../../../../components/common/AppModal";
 import { useAuthGuard } from "../../../../hooks/useAuthGuard";
 import ClipLoader from "react-spinners/ClipLoader";
+import SessionScheduler from "../../../../components/sessions/sessionScheduler";
+import { normalizeSessionHours, SessionOperatingHour } from "../../../../types/session.types";
+
 
 type DiscountType = "fixed" | "percent" | null;
 type LocationType = "online" | "in_person";
@@ -265,6 +268,28 @@ export default function NewServicePage() {
     useState<LocationType>("in_person");
 
   const [saving, setSaving] = useState(false);
+
+  // In your page component or initial data fetch
+const [sessionOperatingHours, setSessionOperatingHours] = useState<SessionOperatingHour[]>([]);
+
+useEffect(() => {
+  async function loadOperatingHours() {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+
+    const { data: vbRow } = await supabase
+      .from("vendor_business")
+      .select("session_operating_hours")
+      .eq("id", auth.user.id)
+      .maybeSingle();
+
+    if (vbRow?.session_operating_hours) {
+      setSessionOperatingHours(normalizeSessionHours(vbRow.session_operating_hours));
+    }
+  }
+
+  loadOperatingHours();
+}, []);
 
   useEffect(() => {
     let mounted = true;
@@ -908,101 +933,65 @@ async function handleSave(status: ServiceStatus) {
                           </div>
 
                           {/* Only show base price/discount if NO fixed schedule */}
-                          {!loc.hasFixedSchedule && (
-                            <>
-                              {/* ROW 2 — Price */}
-                              <div>
-                                <label className="text-[11px] font-semibold text-gray-800">
-                                  Price
-                                </label>
-                                <div className="mt-2 flex items-center gap-1">
-                                  <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
-                                    SGD
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    step="0.01"
-                                    value={loc.price ?? ""}
-                                    onChange={(e) =>
-                                      updateLocation(loc.locationType, {
-                                        price:
-                                          e.target.value === ""
-                                            ? undefined
-                                            : Number(e.target.value),
-                                      })
-                                    }
-                                    className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-                                  />
-                                </div>
-                              </div>
+                         {loc.hasFixedSchedule && (
+  <>
+    {sessionOperatingHours.length === 0 || 
+     !sessionOperatingHours.some(h => h.enabled) ? (
+      <div className="rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 p-6">
+        <div className="flex items-start gap-3">
+          <svg className="h-6 w-6 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <h4 className="text-sm font-semibold text-amber-900">
+              Configure Operating Hours First
+            </h4>
+            <p className="mt-1 text-xs text-amber-800">
+              You need to set up your session operating hours in Shop Settings before you can schedule individual sessions.
+            </p>
+            <a
+              href="/pages/setting/shop?tab=sessions"
+              className="mt-3 inline-flex items-center rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700"
+            >
+              Go to Shop Settings →
+            </a>
+          </div>
+        </div>
+      </div>
+    ) : (
+      <>
+        {/* Recurring rules */}
+        <div className="mb-6 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+          {/* ... your recurring rules code ... */}
+        </div>
 
-                              {/* ROW 2 — Discount */}
-                              <div>
-                                <label className="text-[11px] font-semibold text-gray-800">
-                                  Discount
-                                </label>
-                                <div className="mt-2 flex flex-wrap items-center gap-1">
-                                  <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px] shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        updateLocation(loc.locationType, {
-                                          discountType:
-                                            loc.discountType === "fixed"
-                                              ? null
-                                              : "fixed",
-                                        })
-                                      }
-                                      className={clsx(
-                                        "px-3 py-1.5 rounded-l-2xl transition-colors",
-                                        loc.discountType === "fixed"
-                                          ? "bg-purple-600 text-white"
-                                          : "text-gray-600 hover:bg-gray-50"
-                                      )}
-                                    >
-                                      SGD
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        updateLocation(loc.locationType, {
-                                          discountType:
-                                            loc.discountType === "percent"
-                                              ? null
-                                              : "percent",
-                                        })
-                                      }
-                                      className={clsx(
-                                        "px-3 py-1.5 rounded-r-2xl transition-colors",
-                                        loc.discountType === "percent"
-                                          ? "bg-purple-600 text-white"
-                                          : "text-gray-600 hover:bg-gray-50"
-                                      )}
-                                    >
-                                      %
-                                    </button>
-                                  </div>
-
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    step="0.01"
-                                    value={loc.discountValue ?? ""}
-                                    onChange={(e) =>
-                                      updateLocation(loc.locationType, {
-                                        discountValue:
-                                          e.target.value === ""
-                                            ? undefined
-                                            : Number(e.target.value),
-                                      })
-                                    }
-                                    className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-                                  />
-                                </div>
-                              </div>
-                            </>
-                          )}
+        {/* Session scheduler */}
+       <SessionScheduler
+  sessionOperatingHours={sessionOperatingHours}
+  recurringRules={loc.recurringRules}
+  timeSlots={loc.timeSlots}
+  onAddTimeSlot={(slot) => {
+    updateLocation(loc.locationType, {
+      timeSlots: [...loc.timeSlots, slot],
+    });
+  }}
+  onUpdateTimeSlot={(id, updates) => {
+    updateLocation(loc.locationType, {
+      timeSlots: loc.timeSlots.map((s) =>
+        s.id === id ? { ...s, ...updates } : s
+      ),
+    });
+  }}
+  onRemoveTimeSlot={(id) => {
+    updateLocation(loc.locationType, {
+      timeSlots: loc.timeSlots.filter((s) => s.id !== id),
+    });
+  }}
+/>
+      </>
+    )}
+  </>
+)}
                         </div>
 
                         {/* Availability Card */}

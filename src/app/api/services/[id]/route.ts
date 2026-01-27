@@ -268,7 +268,6 @@ export async function PUT(
 
   if (locationSettings?.length) {
     for (const loc of locationSettings) {
-      console.log("Processing location:", loc.locationType, loc);
       
       // ✅ Save recurringRules to JSON column
       const { data: locRow, error: locErr } = await supabase
