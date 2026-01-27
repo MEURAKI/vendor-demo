@@ -132,22 +132,32 @@ type DayName =
   | "Saturday"
   | "Sunday";
 
-type SessionOperatingHour = {
-  day: DayName;
-  enabled: boolean;
+type SessionTimeRange = {
+  id: string;
   start: string; // "HH:mm"
   end: string;   // "HH:mm"
 };
 
+type SessionOperatingHour = {
+  day: DayName;
+  enabled: boolean;
+  ranges: SessionTimeRange[]; // ✅ multiple ranges per day
+};
 const DAYS: DayName[] = [
   "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday",
 ];
 
+function uuid() {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2);
+}
+
 const DEFAULT_SESSION_HOURS: SessionOperatingHour[] = DAYS.map((d) => ({
   day: d,
   enabled: false,
-  start: "08:00",
-  end: "22:00",
+  ranges: [{ id: uuid(), start: "08:00", end: "22:00" }], // ✅ default 1 range
 }));
 
 const DEFAULT_APPLIES_TO: PromoAppliesTo = "all";
@@ -170,7 +180,7 @@ type DocRow = {
 type PayoutLite = {
   vendor_id: string;
   account_number?: string | null;
-  account_holder_name?: string | null;
+  bank_holder_name?: string | null;
 };
 
 /* ---------------------- Simple Pill component ---------------------- */
@@ -196,6 +206,79 @@ function DimensionPill({ label, selected, onToggle }: DimensionPillProps) {
       {label}
     </button>
   );
+}
+
+function normalizeSessionHours(input: any): SessionOperatingHour[] {
+  // if null/undefined/not array -> fallback
+  if (!Array.isArray(input) || input.length === 0) return DEFAULT_SESSION_HOURS;
+
+  return DAYS.map((day) => {
+    const found = input.find((x: any) => x?.day === day) ?? {};
+
+    // NEW format already (ranges array)
+    if (Array.isArray(found.ranges)) {
+      return {
+        day,
+        enabled: !!found.enabled,
+        ranges:
+          found.ranges.length > 0
+            ? found.ranges.map((r: any) => ({
+                id: r?.id ?? uuid(),
+                start: r?.start ?? "08:00",
+                end: r?.end ?? "22:00",
+              }))
+            : [{ id: uuid(), start: "08:00", end: "22:00" }],
+      };
+    }
+
+    // OLD format (start/end at top-level)
+    if (typeof found.start === "string" && typeof found.end === "string") {
+      return {
+        day,
+        enabled: !!found.enabled,
+        ranges: [{ id: uuid(), start: found.start, end: found.end }],
+      };
+    }
+
+    // default for missing day
+    return {
+      day,
+      enabled: false,
+      ranges: [{ id: uuid(), start: "08:00", end: "22:00" }],
+    };
+  });
+}
+
+function toMinutes(hhmm: string) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function validateRanges(ranges: { start: string; end: string }[]) {
+  const errs: string[] = [];
+
+  const normalized = (ranges ?? [])
+    .filter((r) => !!r.start && !!r.end)
+    .map((r) => ({
+      start: r.start,
+      end: r.end,
+      s: toMinutes(r.start),
+      e: toMinutes(r.end),
+    }))
+    .sort((a, b) => a.s - b.s);
+
+  for (const r of normalized) {
+    if (r.e <= r.s) errs.push("End time must be after start time.");
+  }
+
+  for (let i = 1; i < normalized.length; i++) {
+    if (normalized[i].s < normalized[i - 1].e) {
+      errs.push("Time ranges cannot overlap.");
+      break;
+    }
+  }
+
+  return errs;
 }
 
 const DIMENSION_ICON_MAP: Record<string, string> = {
@@ -316,9 +399,26 @@ function ShopSettingsPageInner() {
     applies_to: DEFAULT_APPLIES_TO,
   });
 
-  const [sessionHours, setSessionHours] = useState<SessionOperatingHour[]>(
+const [sessionHours, setSessionHours] = useState<SessionOperatingHour[]>(
   DEFAULT_SESSION_HOURS
 );
+
+
+const sessionHoursErrorsByDay = useMemo(() => {
+  const out: Record<string, string[]> = {};
+  for (const row of sessionHours) {
+    if (!row.enabled) {
+      out[row.day] = [];
+      continue;
+    }
+    out[row.day] = validateRanges(row.ranges ?? []);
+  }
+  return out;
+}, [sessionHours]);
+
+const sessionHoursErrors = useMemo(() => {
+  return Object.values(sessionHoursErrorsByDay).flat();
+}, [sessionHoursErrorsByDay]);
 
   const toggleIn = (
     arr: string[],
@@ -549,11 +649,7 @@ session_operating_hours: DEFAULT_SESSION_HOURS,
       setBioCount(merged.shop_bio?.length || 0);
       setDimensions(merged.dimensions ?? []);
 
-      setSessionHours(
-  merged.session_operating_hours?.length
-    ? merged.session_operating_hours
-    : DEFAULT_SESSION_HOURS
-);
+      setSessionHours(normalizeSessionHours(merged.session_operating_hours));
 
       // ✅ hydrate category states from DB
       setProductCategories(merged.products_business_category ?? []);
@@ -714,7 +810,7 @@ session_operating_hours: DEFAULT_SESSION_HOURS,
       ).length > 0;
 
     const hasPayout =
-      !!payout?.account_number || !!payout?.account_holder_name;
+  !!payout?.account_number || !!payout?.bank_holder_name;
 
     const missing = {
       logo: !hasLogo,
@@ -799,8 +895,18 @@ session_operating_hours: DEFAULT_SESSION_HOURS,
       brand_logo_url: src.brand_logo_url,
       policy_url: src.policy_url,
 
-      session_operating_hours: sessionHours?.length ? sessionHours : null,
-
+session_operating_hours: sessionHours?.length
+  ? sessionHours.map((d) => ({
+      day: d.day,
+      enabled: !!d.enabled,
+      ranges: (d.ranges ?? []).map((r) => ({
+        id: r.id ?? uuid(),
+        start: r.start ?? "08:00",
+        end: r.end ?? "22:00",
+      })),
+    }))
+  : null,
+  
       updated_at: new Date().toISOString(),
     };
   }
@@ -2157,75 +2263,205 @@ session_operating_hours: DEFAULT_SESSION_HOURS,
     className="mt-8 space-y-8"
     onSubmit={(e) => {
       e.preventDefault();
+      // Prevent saving if invalid
+      if (sessionHoursErrors.length > 0) return;
       save("sessions");
     }}
   >
-    <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+    {/* ✅ FULL-WIDTH layout: heading on top, cards use all space */}
+    <section className="space-y-4">
       <div>
         <div className="text-sm font-semibold text-gray-900">
           Session Operating Hours
         </div>
         <p className="mt-1 text-xs text-gray-500">
-          Select which days you run sessions and set time ranges (e.g. Sunday 08:00–22:00).
+          Select which days you run sessions and add multiple time ranges to omit breaks
+          (e.g. 10:00–12:00 and 14:00–17:00).
         </p>
       </div>
 
       <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
-        {sessionHours.map((row, idx) => (
-          <div
-            key={row.day}
-            className="flex flex-col gap-2 rounded-xl border border-gray-100 p-3 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={row.enabled}
-                onChange={(e) => {
-                  const enabled = e.target.checked;
-                  setSessionHours((prev) =>
-                    prev.map((r, i) => (i === idx ? { ...r, enabled } : r))
-                  );
-                }}
-                className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-              />
-              <div className="text-sm font-medium text-gray-900">{row.day}</div>
-              {!row.enabled && (
-                <span className="text-[11px] text-gray-500">(Closed)</span>
+        {sessionHours.map((row, idx) => {
+          const ranges = row.ranges ?? []; // ✅ avoid undefined.map crash
+
+          return (
+            <div
+              key={row.day}
+              className="flex flex-col gap-3 rounded-xl border border-gray-100 p-3"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={row.enabled}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+
+                      setSessionHours((prev) =>
+                        prev.map((r, i) => {
+                          if (i !== idx) return r;
+
+                          const safeRanges = r.ranges ?? [];
+
+                          // If enabling and there are no ranges, add one
+                          if (enabled && safeRanges.length === 0) {
+                            return {
+                              ...r,
+                              enabled: true,
+                              ranges: [{ id: uuid(), start: "10:00", end: "12:00" }],
+                            };
+                          }
+
+                          // If disabling, keep ranges but mark disabled (or wipe if you prefer)
+                          return {
+                            ...r,
+                            enabled,
+                            ranges: safeRanges,
+                          };
+                        })
+                      );
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+
+                  <div className="text-sm font-medium text-gray-900">
+                    {row.day}
+                  </div>
+
+                  {!row.enabled && (
+                    <span className="text-[11px] text-gray-500">(Closed)</span>
+                  )}
+                </div>
+
+                {row.enabled && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSessionHours((prev) =>
+                        prev.map((r, i) => {
+                          if (i !== idx) return r;
+                          const safeRanges = r.ranges ?? [];
+                          return {
+                            ...r,
+                            ranges: [
+                              ...safeRanges,
+                              { id: uuid(), start: "14:00", end: "17:00" },
+                            ],
+                          };
+                        })
+                      )
+                    }
+                    className="rounded-full bg-black px-3 py-1.5 text-[11px] font-semibold text-white"
+                  >
+                    + Add time range
+                  </button>
+                )}
+              </div>
+
+              {/* Ranges */}
+              {row.enabled && (
+                <div className="space-y-2">
+                  {(ranges ?? []).map((range) => (
+                    <div
+                      key={range.id}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2"
+                    >
+                      <input
+                        type="time"
+                        value={range.start}
+                        onChange={(e) => {
+                          const start = e.target.value;
+
+                          setSessionHours((prev) =>
+                            prev.map((r, i) => {
+                              if (i !== idx) return r;
+                              const safeRanges = r.ranges ?? [];
+                              return {
+                                ...r,
+                                ranges: safeRanges.map((x) =>
+                                  x.id === range.id ? { ...x, start } : x
+                                ),
+                              };
+                            })
+                          );
+                        }}
+                        className="h-9 w-28 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900"
+                      />
+
+                      <span className="text-xs text-gray-500">to</span>
+
+                      <input
+                        type="time"
+                        value={range.end}
+                        onChange={(e) => {
+                          const end = e.target.value;
+
+                          setSessionHours((prev) =>
+                            prev.map((r, i) => {
+                              if (i !== idx) return r;
+                              const safeRanges = r.ranges ?? [];
+                              return {
+                                ...r,
+                                ranges: safeRanges.map((x) =>
+                                  x.id === range.id ? { ...x, end } : x
+                                ),
+                              };
+                            })
+                          );
+                        }}
+                        className="h-9 w-28 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSessionHours((prev) =>
+                            prev.map((r, i) => {
+                              if (i !== idx) return r;
+
+                              const safeRanges = r.ranges ?? [];
+                              const nextRanges = safeRanges.filter(
+                                (x) => x.id !== range.id
+                              );
+
+                              // if removing last range, auto-close
+                              return {
+                                ...r,
+                                ranges: nextRanges,
+                                enabled: nextRanges.length > 0 ? r.enabled : false,
+                              };
+                            })
+                          )
+                        }
+                        className="h-9 rounded-full border border-gray-300 px-3 text-xs text-gray-500"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Inline day-specific errors */}
+                  {sessionHoursErrorsByDay[row.day]?.length > 0 && (
+                    <div className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                      {sessionHoursErrorsByDay[row.day].map((msg) => (
+                        <div key={msg}>• {msg}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-gray-500">
+                    Tip: add multiple ranges to omit breaks (e.g. 10:00–12:00 and
+                    14:00–17:00).
+                  </p>
+                </div>
               )}
             </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="time"
-                disabled={!row.enabled}
-                value={row.start}
-                onChange={(e) => {
-                  const start = e.target.value;
-                  setSessionHours((prev) =>
-                    prev.map((r, i) => (i === idx ? { ...r, start } : r))
-                  );
-                }}
-                className="h-9 w-28 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900 disabled:bg-gray-50"
-              />
-              <span className="text-xs text-gray-500">to</span>
-              <input
-                type="time"
-                disabled={!row.enabled}
-                value={row.end}
-                onChange={(e) => {
-                  const end = e.target.value;
-                  setSessionHours((prev) =>
-                    prev.map((r, i) => (i === idx ? { ...r, end } : r))
-                  );
-                }}
-                className="h-9 w-28 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900 disabled:bg-gray-50"
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
 
+    {/* Save bar */}
     <div className="mt-10 flex justify-end">
       <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
         <a
@@ -2234,12 +2470,13 @@ session_operating_hours: DEFAULT_SESSION_HOURS,
         >
           Go back without saving
         </a>
+
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || sessionHoursErrors.length > 0}
           className="rounded-full bg-black px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-900 disabled:opacity-60"
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Saving…" : sessionHoursErrors.length > 0 ? "Fix errors to Save" : "Save"}
         </button>
       </div>
     </div>
