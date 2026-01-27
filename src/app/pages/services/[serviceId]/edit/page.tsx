@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 
 import Sidebar from "../../../../../components/sidebar/Sidebar";
 import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
@@ -43,6 +44,10 @@ type TimeSlot = {
   id: string;
   start: string;
   end: string;
+  price?: number;
+  discountType: DiscountType;
+  discountValue?: number;
+  discountCap?: number;
 };
 
 type SessionOption = {
@@ -50,6 +55,16 @@ type SessionOption = {
   label: string;
   sessionsCount: number;
   price: number;
+};
+
+type RecurringRule = {
+  id: string;
+  daysOfWeek: number[];
+  startTime: string;
+  endTime: string;
+  startDate: string;
+  endDate?: string;
+  providerId?: string;
 };
 
 type LocationSettingsState = {
@@ -67,6 +82,7 @@ type LocationSettingsState = {
   expiryDurationValue?: number;
   timeSlots: TimeSlot[];
   sessionOptions: SessionOption[];
+  recurringRules: RecurringRule[];
 };
 
 type WellnessDimension = {
@@ -103,8 +119,23 @@ type LoadedService = {
     expiryType: "anytime" | "duration";
     expiryDurationUnit?: "days" | "weeks" | "months";
     expiryDurationValue?: number;
-    timeSlots: { start: string; end: string }[];
+    timeSlots: {
+      start: string;
+      end: string;
+      price?: number;
+      discountType?: DiscountType;
+      discountValue?: number;
+      discountCap?: number;
+    }[];
     sessionOptions: { label: string; sessionsCount: number; price: number }[];
+    recurringRules?: {
+      daysOfWeek: number[];
+      startTime: string;
+      endTime: string;
+      startDate: string;
+      endDate?: string;
+      providerId?: string;
+    }[];
   }>;
 };
 
@@ -332,32 +363,50 @@ export default function EditServicePage() {
         );
 
         console.log("Loaded location settings:", data.locationSettings);
-        const locs: LocationSettingsState[] =
-          (data.locationSettings ?? []).map((loc) => ({
+        const locs: LocationSettingsState[] = (data.locationSettings ?? []).map(
+          (loc) => ({
             id: uuid(),
             locationType: loc.locationType,
             sku: loc.sku ?? "",
             maxParticipants: loc.maxParticipants,
             price: loc.price,
-            discountType: loc.discountType,
+            discountType: loc.discountType ?? null,
             discountValue: loc.discountValue,
             discountCap: loc.discountCap,
             hasFixedSchedule: !!loc.hasFixedSchedule,
+
+            recurringRules: (loc.recurringRules ?? []).map((r) => ({
+              id: uuid(),
+              daysOfWeek: r.daysOfWeek ?? [],
+              startTime: r.startTime ?? "09:00",
+              endTime: r.endTime ?? "10:00",
+              startDate: r.startDate ?? new Date().toISOString().split("T")[0],
+              endDate: r.endDate ?? undefined,
+              providerId: r.providerId ?? undefined,
+            })),
+
             expiryType: loc.expiryType ?? "anytime",
             expiryDurationUnit: loc.expiryDurationUnit,
             expiryDurationValue: loc.expiryDurationValue,
+
             timeSlots: (loc.timeSlots ?? []).map((s) => ({
               id: uuid(),
-              start: s.start,
-              end: s.end,
+              start: s.start ?? "",
+              end: s.end ?? "",
+              price: s.price,
+              discountType: s.discountType ?? null,
+              discountValue: s.discountValue,
+              discountCap: s.discountCap,
             })),
-            sessionOptions: (loc.sessionOptions ?? []).map((o, idx2) => ({
+
+            sessionOptions: (loc.sessionOptions ?? []).map((o, idx) => ({
               id: uuid(),
-              label: o.label,
-              sessionsCount: o.sessionsCount ?? idx2 + 1,
+              label: o.label ?? `Option ${idx + 1}`,
+              sessionsCount: o.sessionsCount ?? idx + 1,
               price: o.price ?? 0,
             })),
-          })) || [];
+          })
+        );
 
         setLocationSettings(
           locs.length
@@ -378,6 +427,7 @@ export default function EditServicePage() {
                   expiryDurationValue: undefined,
                   timeSlots: [],
                   sessionOptions: [],
+                  recurringRules: [],
                 },
               ]
         );
@@ -424,6 +474,7 @@ export default function EditServicePage() {
             expiryDurationValue: undefined,
             timeSlots: [],
             sessionOptions: [],
+            recurringRules: [],
           });
         }
       });
@@ -504,24 +555,36 @@ export default function EditServicePage() {
       spaceIds,
       locationSettings: locationSettings.map((loc) => ({
         locationType: loc.locationType,
-        sku: loc.sku,
-        maxParticipants: loc.maxParticipants,
-        price: loc.price,
-        discountType: loc.discountType,
-        discountValue: loc.discountValue,
-        discountCap: loc.discountCap,
+        sku: loc.sku || null,
+        maxParticipants: loc.maxParticipants ?? null,
+        price: loc.price ?? null,
+        discountType: loc.discountType ?? null,
+        discountValue: loc.discountValue ?? null,
+        discountCap: loc.discountCap ?? null,
         hasFixedSchedule: loc.hasFixedSchedule,
         expiryType: loc.expiryType,
-        expiryDurationUnit: loc.expiryDurationUnit,
-        expiryDurationValue: loc.expiryDurationValue,
-        timeSlots: loc.timeSlots.map((s) => ({
+        expiryDurationUnit: loc.expiryDurationUnit ?? null,
+        expiryDurationValue: loc.expiryDurationValue ?? null,
+        timeSlots: (loc.timeSlots ?? []).map((s) => ({
           start: s.start,
           end: s.end,
+          price: s.price ?? null,
+          discountType: s.discountType ?? null,
+          discountValue: s.discountValue ?? null,
+          discountCap: s.discountCap ?? null,
         })),
-        sessionOptions: loc.sessionOptions.map((p) => ({
+        sessionOptions: (loc.sessionOptions ?? []).map((p) => ({
           label: p.label,
           sessionsCount: p.sessionsCount,
           price: p.price,
+        })),
+        recurringRules: (loc.recurringRules ?? []).map((r) => ({
+          daysOfWeek: r.daysOfWeek ?? [],
+          startTime: r.startTime,
+          endTime: r.endTime,
+          startDate: r.startDate,
+          endDate: r.endDate ?? null,
+          providerId: r.providerId ?? null,
         })),
       })),
     };
@@ -600,8 +663,11 @@ export default function EditServicePage() {
           {/* Body */}
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-xs text-gray-500">
-              <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
-
+              <ClipLoader
+                size={40}
+                color="#6B46C1"
+                cssOverride={{ animationDuration: "3s" }}
+              />
             </div>
           ) : (
             <div className="flex-1 overflow-auto px-6 py-6">
@@ -671,9 +737,15 @@ export default function EditServicePage() {
                           ])
                         }
                         disabled={tabs.length >= 5}
-                        className="rounded-full bg-black px-3 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
+                        className="inline-flex items-center gap-2 rounded-full bg-black px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-gray-900 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        + Add Section
+                        <Image
+                          src="/images/common/plus-button.svg"
+                          alt="Add Section"
+                          width={14}
+                          height={14}
+                        />
+                        <span>Add Section</span>
                       </button>
                     </div>
 
@@ -699,9 +771,14 @@ export default function EditServicePage() {
                                       prev.filter((t) => t.id !== tab.id)
                                     )
                                   }
-                                  className="text-xs text-gray-400 hover:text-black"
+                                  className="p-1 hover:opacity-80 transition"
                                 >
-                                  ✕
+                                  <Image
+                                    src="/images/common/close-button.svg"
+                                    alt="Remove section"
+                                    width={16}
+                                    height={16}
+                                  />
                                 </button>
                               )}
                             </div>
@@ -871,125 +948,147 @@ export default function EditServicePage() {
                               : "In-Person Service Settings"}
                           </h3>
 
-   {/* 2 rows → each row has exactly 2 columns */}
-<div className="grid gap-4 text-xs md:grid-cols-2">
+                          {/* 2 rows → each row has exactly 2 columns */}
+                          <div className="grid gap-4 text-xs md:grid-cols-2">
+                            {/* ROW 1 — SKU */}
+                            <div>
+                              <label className="text-[11px] font-semibold text-gray-800">
+                                SKU
+                              </label>
+                              <input
+                                value={loc.sku}
+                                onChange={(e) =>
+                                  updateLocation(loc.locationType, {
+                                    sku: e.target.value,
+                                  })
+                                }
+                                className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
+                              />
+                            </div>
 
-  {/* ROW 1 — SKU */}
-  <div>
-    <label className="text-[11px] font-semibold text-gray-800">SKU</label>
-    <input
-      value={loc.sku}
-      onChange={(e) =>
-        updateLocation(loc.locationType, { sku: e.target.value })
-      }
-      className="mt-2 w-full rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 py-2 text-xs focus:border-purple-500 focus:outline-none"
-    />
-  </div>
+                            {/* ROW 1 — Max Participants */}
+                            <div>
+                              <label className="text-[11px] font-semibold text-gray-800">
+                                Max Participants
+                              </label>
+                              <div className="mt-2 flex items-center gap-1">
+                                <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
+                                  QTY
+                                </span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={loc.maxParticipants ?? ""}
+                                  onChange={(e) =>
+                                    updateLocation(loc.locationType, {
+                                      maxParticipants:
+                                        e.target.value === ""
+                                          ? undefined
+                                          : Number(e.target.value),
+                                    })
+                                  }
+                                  className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                />
+                              </div>
+                            </div>
 
-  {/* ROW 1 — Max Participants */}
-  <div>
-    <label className="text-[11px] font-semibold text-gray-800">
-      Max Participants
-    </label>
-    <div className="mt-2 flex items-center gap-1">
-      <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
-        QTY
-      </span>
-      <input
-        type="number"
-        min={1}
-        value={loc.maxParticipants ?? ""}
-        onChange={(e) =>
-          updateLocation(loc.locationType, {
-            maxParticipants:
-              e.target.value === "" ? undefined : Number(e.target.value),
-          })
-        }
-        className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-      />
-    </div>
-  </div>
+                            {/* Only show base price/discount if NO fixed schedule */}
+                            {!loc.hasFixedSchedule && (
+                              <>
+                                {/* ROW 2 — Price */}
+                                <div>
+                                  <label className="text-[11px] font-semibold text-gray-800">
+                                    Price
+                                  </label>
+                                  <div className="mt-2 flex items-center gap-1">
+                                    <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
+                                      SGD
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      value={loc.price ?? ""}
+                                      onChange={(e) =>
+                                        updateLocation(loc.locationType, {
+                                          price:
+                                            e.target.value === ""
+                                              ? undefined
+                                              : Number(e.target.value),
+                                        })
+                                      }
+                                      className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
 
-  {/* ROW 2 — Price */}
-  <div>
-    <label className="text-[11px] font-semibold text-gray-800">Price</label>
-    <div className="mt-2 flex items-center gap-1">
-      <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
-        SGD
-      </span>
-      <input
-        type="number"
-        min={0}
-        step="0.01"
-        value={loc.price ?? ""}
-        onChange={(e) =>
-          updateLocation(loc.locationType, {
-            price: e.target.value === "" ? undefined : Number(e.target.value),
-          })
-        }
-        className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-      />
-    </div>
-  </div>
+                                {/* ROW 2 — Discount */}
+                                <div>
+                                  <label className="text-[11px] font-semibold text-gray-800">
+                                    Discount
+                                  </label>
+                                  <div className="mt-2 flex flex-wrap items-center gap-1">
+                                    <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px] shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updateLocation(loc.locationType, {
+                                            discountType:
+                                              loc.discountType === "fixed"
+                                                ? null
+                                                : "fixed",
+                                          })
+                                        }
+                                        className={clsx(
+                                          "px-3 py-1.5 rounded-l-2xl transition-colors",
+                                          loc.discountType === "fixed"
+                                            ? "bg-purple-600 text-white"
+                                            : "text-gray-600 hover:bg-gray-50"
+                                        )}
+                                      >
+                                        SGD
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updateLocation(loc.locationType, {
+                                            discountType:
+                                              loc.discountType === "percent"
+                                                ? null
+                                                : "percent",
+                                          })
+                                        }
+                                        className={clsx(
+                                          "px-3 py-1.5 rounded-r-2xl transition-colors",
+                                          loc.discountType === "percent"
+                                            ? "bg-purple-600 text-white"
+                                            : "text-gray-600 hover:bg-gray-50"
+                                        )}
+                                      >
+                                        %
+                                      </button>
+                                    </div>
 
-  {/* ROW 2 — Discount */}
-<div>
-    <label className="text-[11px] font-semibold text-gray-800">
-      Discount
-    </label>
-    <div className="mt-2 flex flex-wrap items-center gap-1">
-      <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px] shrink-0">
-        <button
-          type="button"
-          onClick={() =>
-            updateLocation(loc.locationType, {
-              discountType: loc.discountType === "fixed" ? null : "fixed",
-            })
-          }
-          className={clsx(
-            "px-3 py-1.5 rounded-l-2xl transition-colors",
-            loc.discountType === "fixed"
-              ? "bg-purple-600 text-white"
-              : "text-gray-600 hover:bg-gray-50"
-          )}
-        >
-          SGD
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            updateLocation(loc.locationType, {
-              discountType: loc.discountType === "percent" ? null : "percent",
-            })
-          }
-          className={clsx(
-            "px-3 py-1.5 rounded-r-2xl transition-colors",
-            loc.discountType === "percent"
-              ? "bg-purple-600 text-white"
-              : "text-gray-600 hover:bg-gray-50"
-          )}
-        >
-          %
-        </button>
-      </div>
-
-      <input
-        type="number"
-        min={0}
-        step="0.01"
-        value={loc.discountValue ?? ""}
-        onChange={(e) =>
-          updateLocation(loc.locationType, {
-            discountValue:
-              e.target.value === "" ? undefined : Number(e.target.value),
-          })
-        }
-        className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
-      />
-    </div>
-  </div>
-
-</div>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      value={loc.discountValue ?? ""}
+                                      onChange={(e) =>
+                                        updateLocation(loc.locationType, {
+                                          discountValue:
+                                            e.target.value === ""
+                                              ? undefined
+                                              : Number(e.target.value),
+                                        })
+                                      }
+                                      className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
 
                           {/* Availability Card */}
                           <div className="mt-6 rounded-2xl bg-[#FBFBFE] p-4 text-xs">
@@ -1004,7 +1103,7 @@ export default function EditServicePage() {
                                 </p>
                               </div>
 
-                               <label className="flex items-center gap-2 text-[11px] text-gray-700">
+                              <label className="flex items-center gap-2 text-[11px] text-gray-700">
                                 <input
                                   type="checkbox"
                                   checked={loc.hasFixedSchedule}
@@ -1016,88 +1115,568 @@ export default function EditServicePage() {
                                   className="h-4 w-4 rounded border-gray-300"
                                 />
                                 <span>Yes, I have selected dates</span>
-                              </label> 
+                              </label>
                             </div>
 
                             {loc.hasFixedSchedule ? (
                               <>
+                                {/* RECURRING RULES SECTION */}
+                                <div className="mb-6 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+                                  <div className="mb-3 flex items-center justify-between">
+                                    <h5 className="text-sm font-semibold text-purple-900">
+                                      Recurring Schedule Rules
+                                    </h5>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        updateLocation(loc.locationType, {
+                                          recurringRules: [
+                                            ...(loc.recurringRules ?? []),
+                                            {
+                                              id: uuid(),
+                                              daysOfWeek: [],
+                                              startTime: "09:00",
+                                              endTime: "10:00",
+                                              startDate: new Date()
+                                                .toISOString()
+                                                .split("T")[0],
+                                              endDate: undefined,
+                                              providerId: undefined,
+                                            },
+                                          ],
+                                        })
+                                      }
+                                      className="rounded-full bg-purple-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-purple-700"
+                                    >
+                                      + Add Rule
+                                    </button>
+                                  </div>
+
+                                  <p className="mb-3 text-[10px] text-purple-700">
+                                    Set up recurring time slots (e.g., every
+                                    Monday & Wednesday at 9am). These will block
+                                    dates when creating individual sessions
+                                    below.
+                                  </p>
+
+                                  <div className="space-y-3">
+                                    {(loc.recurringRules ?? []).map((rule) => (
+                                      <div
+                                        key={rule.id}
+                                        className="rounded-xl border border-purple-200 bg-white p-3"
+                                      >
+                                        <div className="grid gap-3 md:grid-cols-2">
+                                          {/* Days of week */}
+                                          <div className="md:col-span-2">
+                                            <label className="text-[10px] font-semibold text-gray-700">
+                                              Days of Week
+                                            </label>
+                                            <div className="mt-1 flex flex-wrap gap-1">
+                                              {[
+                                                "Sun",
+                                                "Mon",
+                                                "Tue",
+                                                "Wed",
+                                                "Thu",
+                                                "Fri",
+                                                "Sat",
+                                              ].map((day, idx) => (
+                                                <button
+                                                  key={day}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const newDays = (
+                                                      rule.daysOfWeek ?? []
+                                                    ).includes(idx)
+                                                      ? (
+                                                          rule.daysOfWeek ?? []
+                                                        ).filter(
+                                                          (d) => d !== idx
+                                                        )
+                                                      : [
+                                                          ...(rule.daysOfWeek ??
+                                                            []),
+                                                          idx,
+                                                        ].sort((a, b) => a - b);
+                                                    updateLocation(
+                                                      loc.locationType,
+                                                      {
+                                                        recurringRules: (
+                                                          loc.recurringRules ??
+                                                          []
+                                                        ).map((r) =>
+                                                          r.id === rule.id
+                                                            ? {
+                                                                ...r,
+                                                                daysOfWeek:
+                                                                  newDays,
+                                                              }
+                                                            : r
+                                                        ),
+                                                      }
+                                                    );
+                                                  }}
+                                                  className={clsx(
+                                                    "rounded-lg px-2 py-1 text-[10px] font-medium transition-colors",
+                                                    (
+                                                      rule.daysOfWeek ?? []
+                                                    ).includes(idx)
+                                                      ? "bg-purple-600 text-white"
+                                                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                                  )}
+                                                >
+                                                  {day}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+
+                                          {/* Start time */}
+                                          <div>
+                                            <label className="text-[10px] font-semibold text-gray-700">
+                                              Start Time
+                                            </label>
+                                            <input
+                                              type="time"
+                                              value={rule.startTime}
+                                              onChange={(e) =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    recurringRules: (
+                                                      loc.recurringRules ?? []
+                                                    ).map((r) =>
+                                                      r.id === rule.id
+                                                        ? {
+                                                            ...r,
+                                                            startTime:
+                                                              e.target.value,
+                                                          }
+                                                        : r
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                            />
+                                          </div>
+
+                                          {/* End time */}
+                                          <div>
+                                            <label className="text-[10px] font-semibold text-gray-700">
+                                              End Time
+                                            </label>
+                                            <input
+                                              type="time"
+                                              value={rule.endTime}
+                                              onChange={(e) =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    recurringRules: (
+                                                      loc.recurringRules ?? []
+                                                    ).map((r) =>
+                                                      r.id === rule.id
+                                                        ? {
+                                                            ...r,
+                                                            endTime:
+                                                              e.target.value,
+                                                          }
+                                                        : r
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                            />
+                                          </div>
+
+                                          {/* Start date */}
+                                          <div>
+                                            <label className="text-[10px] font-semibold text-gray-700">
+                                              Start Date
+                                            </label>
+                                            <input
+                                              type="date"
+                                              value={rule.startDate}
+                                              onChange={(e) =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    recurringRules: (
+                                                      loc.recurringRules ?? []
+                                                    ).map((r) =>
+                                                      r.id === rule.id
+                                                        ? {
+                                                            ...r,
+                                                            startDate:
+                                                              e.target.value,
+                                                          }
+                                                        : r
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                            />
+                                          </div>
+
+                                          {/* End date (optional) */}
+                                          <div>
+                                            <label className="text-[10px] font-semibold text-gray-700">
+                                              End Date (Optional)
+                                            </label>
+                                            <input
+                                              type="date"
+                                              value={rule.endDate ?? ""}
+                                              onChange={(e) =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    recurringRules: (
+                                                      loc.recurringRules ?? []
+                                                    ).map((r) =>
+                                                      r.id === rule.id
+                                                        ? {
+                                                            ...r,
+                                                            endDate:
+                                                              e.target.value ||
+                                                              undefined,
+                                                          }
+                                                        : r
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                            />
+                                          </div>
+
+                                          {/* Provider (optional) */}
+                                          <div className="md:col-span-2">
+                                            <label className="text-[10px] font-semibold text-gray-700">
+                                              Provider (Optional)
+                                            </label>
+                                            <select
+                                              value={rule.providerId ?? ""}
+                                              onChange={(e) =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    recurringRules: (
+                                                      loc.recurringRules ?? []
+                                                    ).map((r) =>
+                                                      r.id === rule.id
+                                                        ? {
+                                                            ...r,
+                                                            providerId:
+                                                              e.target.value ||
+                                                              undefined,
+                                                          }
+                                                        : r
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                                            >
+                                              <option value="">
+                                                Any Provider
+                                              </option>
+                                              {allProviders.map((p) => (
+                                                <option key={p.id} value={p.id}>
+                                                  {p.name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            updateLocation(loc.locationType, {
+                                              recurringRules: (
+                                                loc.recurringRules ?? []
+                                              ).filter((r) => r.id !== rule.id),
+                                            })
+                                          }
+                                          className="mt-2 text-[10px] text-red-600 hover:text-red-700"
+                                        >
+                                          Remove Rule
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* INDIVIDUAL TIME SLOTS */}
                                 <div className="mt-3 space-y-3">
                                   <h5 className="text-[11px] font-semibold text-gray-800">
-                                    Date &amp; Time Slots
+                                    Individual Sessions (with per-session
+                                    pricing & discounts)
                                   </h5>
 
-                                {loc.timeSlots.map((slot) => (
-  <div
-    key={slot.id}
-    className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-  >
-    <div>
-      <label className="text-[10px] text-gray-600">
-        Start Date &amp; Time
-      </label>
-      <input
-        type="datetime-local"
-        value={toLocalDateTimeString(slot.start)} // ← CHANGED
-        onChange={(e) =>
-          updateLocation(loc.locationType, {
-            timeSlots: loc.timeSlots.map((s) =>
-              s.id === slot.id
-                ? { ...s, start: toISOString(e.target.value) } // ← CHANGED
-                : s
-            ),
-          })
-        }
-        className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
-      />
-    </div>
+                                  {(loc.timeSlots ?? []).map((slot, slotIdx) => (
+                                    <div
+                                      key={slot.id}
+                                      className="rounded-2xl border border-gray-200 bg-white p-4"
+                                    >
+                                      <div className="mb-2 flex items-center justify-between">
+                                        <span className="text-[11px] font-semibold text-purple-700">
+                                          Session {slotIdx + 1}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            updateLocation(loc.locationType, {
+                                              timeSlots: (
+                                                loc.timeSlots ?? []
+                                              ).filter((s) => s.id !== slot.id),
+                                            })
+                                          }
+                                          className="text-xs text-red-600 hover:text-red-700"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
 
-    <div>
-      <label className="text-[10px] text-gray-600">
-        End Date &amp; Time
-      </label>
-      <input
-        type="datetime-local"
-        value={toLocalDateTimeString(slot.end)} // ← CHANGED
-        onChange={(e) =>
-          updateLocation(loc.locationType, {
-            timeSlots: loc.timeSlots.map((s) =>
-              s.id === slot.id
-                ? { ...s, end: toISOString(e.target.value) } // ← CHANGED
-                : s
-            ),
-          })
-        }
-        className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
-      />
-    </div>
+                                      <div className="grid gap-3 md:grid-cols-2">
+                                        {/* Start Date & Time */}
+                                        <div>
+                                          <label className="text-[10px] text-gray-600">
+                                            Start Date & Time
+                                          </label>
+                                          <input
+                                            type="datetime-local"
+                                            value={toLocalDateTimeString(
+                                              slot.start
+                                            )}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                timeSlots: (
+                                                  loc.timeSlots ?? []
+                                                ).map((s) =>
+                                                  s.id === slot.id
+                                                    ? {
+                                                        ...s,
+                                                        start: toISOString(
+                                                          e.target.value
+                                                        ),
+                                                      }
+                                                    : s
+                                                ),
+                                              })
+                                            }
+                                            className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
+                                          />
+                                        </div>
 
-    <button
-      type="button"
-      onClick={() =>
-        updateLocation(loc.locationType, {
-          timeSlots: loc.timeSlots.filter((s) => s.id !== slot.id),
-        })
-      }
-      className="mt-6 h-9 rounded-full border border-gray-300 px-3 text-xs"
-    >
-      ✕
-    </button>
-  </div>
-))}
+                                        {/* End Date & Time */}
+                                        <div>
+                                          <label className="text-[10px] text-gray-600">
+                                            End Date & Time
+                                          </label>
+                                          <input
+                                            type="datetime-local"
+                                            value={toLocalDateTimeString(
+                                              slot.end
+                                            )}
+                                            onChange={(e) =>
+                                              updateLocation(loc.locationType, {
+                                                timeSlots: (
+                                                  loc.timeSlots ?? []
+                                                ).map((s) =>
+                                                  s.id === slot.id
+                                                    ? {
+                                                        ...s,
+                                                        end: toISOString(
+                                                          e.target.value
+                                                        ),
+                                                      }
+                                                    : s
+                                                ),
+                                              })
+                                            }
+                                            className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
+                                          />
+                                        </div>
+
+                                        {/* Price for this slot */}
+                                        <div>
+                                          <label className="text-[10px] font-semibold text-gray-700">
+                                            Session Price
+                                          </label>
+                                          <div className="mt-1 flex items-center gap-1">
+                                            <span className="inline-flex h-9 items-center rounded-2xl border border-gray-200 bg-white px-3 text-[11px] text-gray-500 shrink-0">
+                                              SGD
+                                            </span>
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              step="0.01"
+                                              value={slot.price ?? ""}
+                                              onChange={(e) =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    timeSlots: (
+                                                      loc.timeSlots ?? []
+                                                    ).map((s) =>
+                                                      s.id === slot.id
+                                                        ? {
+                                                            ...s,
+                                                            price:
+                                                              e.target.value ===
+                                                              ""
+                                                                ? undefined
+                                                                : Number(
+                                                                    e.target
+                                                                      .value
+                                                                  ),
+                                                          }
+                                                        : s
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                            />
+                                          </div>
+                                        </div>
+
+                                        {/* Discount for this slot */}
+                                        <div>
+                                          <label className="text-[10px] font-semibold text-gray-700">
+                                            Session Discount
+                                          </label>
+                                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                                            <div className="flex rounded-2xl border border-gray-200 bg-white text-[11px] shrink-0">
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  updateLocation(
+                                                    loc.locationType,
+                                                    {
+                                                      timeSlots: (
+                                                        loc.timeSlots ?? []
+                                                      ).map((s) =>
+                                                        s.id === slot.id
+                                                          ? {
+                                                              ...s,
+                                                              discountType:
+                                                                s.discountType ===
+                                                                "fixed"
+                                                                  ? null
+                                                                  : "fixed",
+                                                            }
+                                                          : s
+                                                      ),
+                                                    }
+                                                  )
+                                                }
+                                                className={clsx(
+                                                  "px-3 py-1.5 rounded-l-2xl transition-colors",
+                                                  slot.discountType === "fixed"
+                                                    ? "bg-purple-600 text-white"
+                                                    : "text-gray-600 hover:bg-gray-50"
+                                                )}
+                                              >
+                                                SGD
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  updateLocation(
+                                                    loc.locationType,
+                                                    {
+                                                      timeSlots: (
+                                                        loc.timeSlots ?? []
+                                                      ).map((s) =>
+                                                        s.id === slot.id
+                                                          ? {
+                                                              ...s,
+                                                              discountType:
+                                                                s.discountType ===
+                                                                "percent"
+                                                                  ? null
+                                                                  : "percent",
+                                                            }
+                                                          : s
+                                                      ),
+                                                    }
+                                                  )
+                                                }
+                                                className={clsx(
+                                                  "px-3 py-1.5 rounded-r-2xl transition-colors",
+                                                  slot.discountType ===
+                                                    "percent"
+                                                    ? "bg-purple-600 text-white"
+                                                    : "text-gray-600 hover:bg-gray-50"
+                                                )}
+                                              >
+                                                %
+                                              </button>
+                                            </div>
+
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              step="0.01"
+                                              value={slot.discountValue ?? ""}
+                                              onChange={(e) =>
+                                                updateLocation(
+                                                  loc.locationType,
+                                                  {
+                                                    timeSlots: (
+                                                      loc.timeSlots ?? []
+                                                    ).map((s) =>
+                                                      s.id === slot.id
+                                                        ? {
+                                                            ...s,
+                                                            discountValue:
+                                                              e.target.value ===
+                                                              ""
+                                                                ? undefined
+                                                                : Number(
+                                                                    e.target
+                                                                      .value
+                                                                  ),
+                                                          }
+                                                        : s
+                                                    ),
+                                                  }
+                                                )
+                                              }
+                                              className="h-9 flex-1 rounded-2xl border border-gray-200 bg-[#FBFBFE] px-3 text-xs focus:border-purple-500 focus:outline-none"
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
 
                                   <button
                                     type="button"
                                     onClick={() =>
                                       updateLocation(loc.locationType, {
                                         timeSlots: [
-                                          ...loc.timeSlots,
-                                          { id: uuid(), start: "", end: "" },
+                                          ...(loc.timeSlots ?? []),
+                                          {
+                                            id: uuid(),
+                                            start: "",
+                                            end: "",
+                                            price: undefined,
+                                            discountType: null,
+                                            discountValue: undefined,
+                                            discountCap: undefined,
+                                          },
                                         ],
                                       })
                                     }
                                     className="mt-2 inline-flex items-center rounded-full bg-black px-4 py-2 text-[11px] font-semibold text-white"
                                   >
-                                    + Add Time Slot
+                                    + Add Session
                                   </button>
                                 </div>
                               </>
@@ -1165,14 +1744,16 @@ export default function EditServicePage() {
                                           className="h-9 w-20 rounded-2xl border border-gray-200 bg-white px-3 text-xs"
                                         />
                                         <select
-                                          value={loc.expiryDurationUnit ?? "days"}
+                                          value={
+                                            loc.expiryDurationUnit ?? "days"
+                                          }
                                           onChange={(e) =>
                                             updateLocation(loc.locationType, {
-                                              expiryDurationUnit:
-                                                e.target.value as
-                                                  | "days"
-                                                  | "weeks"
-                                                  | "months",
+                                              expiryDurationUnit: e.target
+                                                .value as
+                                                | "days"
+                                                | "weeks"
+                                                | "months",
                                             })
                                           }
                                           className="h-9 flex-1 rounded-2xl border border-gray-200 bg-white px-3 text-xs"
@@ -1198,7 +1779,7 @@ export default function EditServicePage() {
                                   </div>
 
                                   <div className="space-y-3">
-                                    {loc.sessionOptions.map((opt, i) => (
+                                    {(loc.sessionOptions ?? []).map((opt, i) => (
                                       <div
                                         key={opt.id}
                                         className="grid items-end gap-3 md:grid-cols-[1.2fr_1fr_auto]"
@@ -1211,15 +1792,16 @@ export default function EditServicePage() {
                                             value={opt.label}
                                             onChange={(e) =>
                                               updateLocation(loc.locationType, {
-                                                sessionOptions:
-                                                  loc.sessionOptions.map((s) =>
-                                                    s.id === opt.id
-                                                      ? {
-                                                          ...s,
-                                                          label: e.target.value,
-                                                        }
-                                                      : s
-                                                  ),
+                                                sessionOptions: (
+                                                  loc.sessionOptions ?? []
+                                                ).map((s) =>
+                                                  s.id === opt.id
+                                                    ? {
+                                                        ...s,
+                                                        label: e.target.value,
+                                                      }
+                                                    : s
+                                                ),
                                               })
                                             }
                                             className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs"
@@ -1243,18 +1825,18 @@ export default function EditServicePage() {
                                                 updateLocation(
                                                   loc.locationType,
                                                   {
-                                                    sessionOptions:
-                                                      loc.sessionOptions.map(
-                                                        (s) =>
-                                                          s.id === opt.id
-                                                            ? {
-                                                                ...s,
-                                                                price: Number(
-                                                                  e.target.value
-                                                                ),
-                                                              }
-                                                            : s
-                                                      ),
+                                                    sessionOptions: (
+                                                      loc.sessionOptions ?? []
+                                                    ).map((s) =>
+                                                      s.id === opt.id
+                                                        ? {
+                                                            ...s,
+                                                            price: Number(
+                                                              e.target.value
+                                                            ),
+                                                          }
+                                                        : s
+                                                    ),
                                                   }
                                                 )
                                               }
@@ -1267,10 +1849,9 @@ export default function EditServicePage() {
                                           type="button"
                                           onClick={() =>
                                             updateLocation(loc.locationType, {
-                                              sessionOptions:
-                                                loc.sessionOptions.filter(
-                                                  (s) => s.id !== opt.id
-                                                ),
+                                              sessionOptions: (
+                                                loc.sessionOptions ?? []
+                                              ).filter((s) => s.id !== opt.id),
                                             })
                                           }
                                           className="h-9 rounded-full border border-gray-300 px-3 text-xs text-gray-500"
@@ -1286,14 +1867,16 @@ export default function EditServicePage() {
                                     onClick={() =>
                                       updateLocation(loc.locationType, {
                                         sessionOptions: [
-                                          ...loc.sessionOptions,
+                                          ...(loc.sessionOptions ?? []),
                                           {
                                             id: uuid(),
                                             label: `Option ${
-                                              loc.sessionOptions.length + 1
+                                              (loc.sessionOptions ?? [])
+                                                .length + 1
                                             }`,
                                             sessionsCount:
-                                              loc.sessionOptions.length + 1,
+                                              (loc.sessionOptions ?? [])
+                                                .length + 1,
                                             price: 0,
                                           },
                                         ],
@@ -1317,79 +1900,76 @@ export default function EditServicePage() {
                 <div className="space-y-6">
                   {/* Service Images */}
                   <section className="rounded-3xl border border-[#ECECFB] bg-white p-5">
-  <h2 className="mb-3 text-sm font-semibold text-gray-900">
-    Service Images
-  </h2>
+                    <h2 className="mb-3 text-sm font-semibold text-gray-900">
+                      Service Images
+                    </h2>
 
-  {/* Main (cover) image */}
-  <div className="overflow-hidden rounded-3xl bg-gray-200 relative">
-    {coverImageUrl ? (
-      <img
-        src={coverImageUrl}
-        alt="Service cover"
-        className="h-56 w-full object-cover"
-      />
-    ) : (
-      <div className="flex h-56 items-center justify-center text-xs text-gray-500">
-        Upload a main service image
-      </div>
-    )}
-  </div>
+                    {/* Main (cover) image */}
+                    <div className="overflow-hidden rounded-3xl bg-gray-200 relative">
+                      {coverImageUrl ? (
+                        <img
+                          src={coverImageUrl}
+                          alt="Service cover"
+                          className="h-56 w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-56 items-center justify-center text-xs text-gray-500">
+                          Upload a main service image
+                        </div>
+                      )}
+                    </div>
 
-  {/* Image thumbnails */}
-<div className="mt-3 flex gap-2">
-  {images.slice(0, 5).map((url, idx) => (
-    <div
-      key={url}
-      className="relative h-14 w-14 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
-    >
-      <img
-        src={url}
-        alt=""
-        className="h-full w-full object-cover"
-      />
+                    {/* Image thumbnails */}
+                    <div className="mt-3 flex gap-2">
+                      {images.slice(0, 5).map((url, idx) => (
+                        <div
+                          key={url}
+                          className="relative h-14 w-14 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
+                        >
+                          <img
+                            src={url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
 
-      {/* Delete button */}
-      <button
-        type="button"
-        onClick={() => {
-          setImages((prev) => prev.filter((img) => img !== url));
-        }}
-        className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold leading-none text-white shadow-md hover:bg-red-700"
-        aria-label="Remove image"
-      >
-        ✕
-      </button>
-    </div>
-  ))}
+                          {/* Delete button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImages((prev) =>
+                                prev.filter((img) => img !== url)
+                              );
+                            }}
+                            className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold leading-none text-white shadow-md hover:bg-red-700"
+                            aria-label="Remove image"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
 
-  {images.length < 6 && (
-    <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">
-      +
-      <input
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={(e) => handleImageUpload(e.target.files)}
-      />
-    </label>
-  )}
-</div>
+                      {images.length < 6 && (
+                        <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F5F5F8] text-xl text-gray-500">
+                          +
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => handleImageUpload(e.target.files)}
+                          />
+                        </label>
+                      )}
+                    </div>
 
-  <p className="mt-2 text-[10px] text-gray-500">
-    Upload a high-resolution cover image and up to 5 gallery images.
-  </p>
-</section>
+                    <p className="mt-2 text-[10px] text-gray-500">
+                      Upload a high-resolution cover image and up to 5 gallery
+                      images.
+                    </p>
+                  </section>
 
                   {/* Wellness / Categories / Tags */}
-                  {/* <div
-                    ref={categorySectionRef}
-                    className={clsx(
-                      categoryError &&
-                        "rounded-3xl border border-red-500 p-[1px]"
-                    )}
-                  > */}
+                  <div ref={categorySectionRef}>
                     <WellnessCategoryTagsSection
                       title="Wellness Dimension, Category & Tags"
                       wellnessOptions={wellnessOptions}
@@ -1400,14 +1980,14 @@ export default function EditServicePage() {
                       tags={tags}
                       onChangeTags={setTags}
                     />
+                    {categoryError && (
+                      <p className="mt-2 text-[11px] text-red-600">
+                        {categoryError}
+                      </p>
+                    )}
                   </div>
-                  {categoryError && (
-                    <p className="mt-2 text-[11px] text-red-600">
-                      {categoryError}
-                    </p>
-                  )}
                 </div>
-              {/* </div> */}
+              </div>
             </div>
           )}
         </div>

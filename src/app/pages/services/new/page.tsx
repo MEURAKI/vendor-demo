@@ -452,99 +452,99 @@ export default function NewServicePage() {
     );
   }
 
-  async function handleSave(status: ServiceStatus) {
-    if (saving) return;
-    setSubmitAttempted(true);
+async function handleSave(status: ServiceStatus) {
+  if (saving) return;
+  setSubmitAttempted(true);
 
-    // 1) validate description tabs
-    if (!validateDescriptionTabs(tabs)) {
-      setShowDescriptionErrorModal(true);
-      return;
-    }
-
-    // 2) validate category when publishing (active)
-    if (status === "active" && categories.length === 0) {
-      setCategoryError("Please add at least one category.");
-      setShowCategoryErrorModal(true);
-      return;
-    } else {
-      setCategoryError(null);
-    }
-
-    if (!canSave) return;
-    setSaving(true);
-
-    const payload = {
-      sku: sku || null,
-      name,
-      description,
-      status,
-      serviceTypes,
-      locationTypes,
-      wellnessDimensions: selectedWellnessIds,
-      categories,
-      tags,
-      coverImageUrl,
-      images,
-      descriptionTabs: tabs.map((t, idx) => ({
-        title: t.title,
-        body: t.body,
-        position: idx,
-      })),
-      providerIds,
-      spaceIds,
-      locationSettings: locationSettings.map((loc) => ({
-        locationType: loc.locationType,
-        sku: loc.sku,
-        maxParticipants: loc.maxParticipants,
-        price: loc.price,
-        discountType: loc.discountType,
-        discountValue: loc.discountValue,
-        discountCap: loc.discountCap,
-        hasFixedSchedule: loc.hasFixedSchedule,
-        expiryType: loc.expiryType,
-        expiryDurationUnit: loc.expiryDurationUnit,
-        expiryDurationValue: loc.expiryDurationValue,
-        timeSlots: loc.timeSlots.map((s) => ({
-          start: s.start,
-          end: s.end,
-          price: s.price,
-          discountType: s.discountType,
-          discountValue: s.discountValue,
-          discountCap: s.discountCap,
-        })),
-        sessionOptions: loc.sessionOptions.map((p) => ({
-          label: p.label,
-          sessionsCount: p.sessionsCount,
-          price: p.price,
-        })),
-        recurringRules: loc.recurringRules.map((r) => ({
-          daysOfWeek: r.daysOfWeek,
-          startTime: r.startTime,
-          endTime: r.endTime,
-          startDate: r.startDate,
-          endDate: r.endDate,
-          providerId: r.providerId,
-        })),
-      })),
-    };
-
-    try {
-      const res = await fetch("/api/services", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        console.error(json);
-        alert(json.error || "Error saving service");
-        return;
-      }
-      window.location.href = "/pages/services";
-    } finally {
-      setSaving(false);
-    }
+  // 1) validate description tabs
+  if (!validateDescriptionTabs(tabs)) {
+    setShowDescriptionErrorModal(true);
+    return;
   }
+
+  // 2) validate category when publishing (active)
+  if (status === "active" && categories.length === 0) {
+    setCategoryError("Please add at least one category.");
+    setShowCategoryErrorModal(true);
+    return;
+  } else {
+    setCategoryError(null);
+  }
+
+  if (!canSave) return;
+  setSaving(true);
+
+  const payload = {
+    sku: sku || null,
+    name,
+    description,
+    status,
+    serviceTypes,
+    locationTypes,
+    wellnessDimensions: selectedWellnessIds,
+    categories,
+    tags,
+    coverImageUrl,
+    images,
+    descriptionTabs: tabs.map((t, idx) => ({
+      title: t.title,
+      body: t.body,
+      position: idx,
+    })),
+    providerIds,
+    spaceIds,
+    locationSettings: locationSettings.map((loc) => ({
+      locationType: loc.locationType,
+      sku: loc.sku || null,
+      maxParticipants: loc.maxParticipants ?? null,
+      price: loc.price ?? null,
+      discountType: loc.discountType ?? null,
+      discountValue: loc.discountValue ?? null,
+      discountCap: loc.discountCap ?? null,
+      hasFixedSchedule: loc.hasFixedSchedule,
+      expiryType: loc.expiryType,
+      expiryDurationUnit: loc.expiryDurationUnit ?? null,
+      expiryDurationValue: loc.expiryDurationValue ?? null,
+      timeSlots: (loc.timeSlots ?? []).map((s) => ({
+        start: s.start,
+        end: s.end,
+        price: s.price ?? null,
+        discountType: s.discountType ?? null,
+        discountValue: s.discountValue ?? null,
+        discountCap: s.discountCap ?? null,
+      })),
+      sessionOptions: (loc.sessionOptions ?? []).map((p) => ({
+        label: p.label,
+        sessionsCount: p.sessionsCount,
+        price: p.price,
+      })),
+      recurringRules: (loc.recurringRules ?? []).map((r) => ({
+        daysOfWeek: r.daysOfWeek ?? [],
+        startTime: r.startTime,
+        endTime: r.endTime,
+        startDate: r.startDate,
+        endDate: r.endDate ?? null,
+        providerId: r.providerId ?? null,
+      })),
+    })),
+  };
+
+  try {
+    const res = await fetch("/api/services", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      console.error(json);
+      alert(json.error || "Error saving service");
+      return;
+    }
+    window.location.href = "/pages/services";
+  } finally {
+    setSaving(false);
+  }
+}
 
   useEffect(() => {
     if (!name) return;

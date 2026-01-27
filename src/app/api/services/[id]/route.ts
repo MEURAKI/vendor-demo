@@ -108,10 +108,17 @@ export async function GET(
     expiryType: loc.expiry_type ?? "anytime",
     expiryDurationUnit: loc.expiry_duration_unit ?? undefined,
     expiryDurationValue: loc.expiry_duration_value ?? undefined,
+    
+    // ✅ Return full timeSlots with pricing & discounts
     timeSlots: (loc.timeSlots ?? []).map((s: any) => ({
       start: s.start_at,
       end: s.end_at,
+      price: typeof s.price_cents === "number" ? s.price_cents / 100 : undefined,
+      discountType: s.discount_type ?? null,
+      discountValue: s.discount_value ?? undefined,
+      discountCap: s.discount_cap ?? undefined,
     })),
+    
     sessionOptions: (loc.sessionOptions ?? []).map((pkg: any, idx: number) => ({
       label: pkg.label,
       sessionsCount: pkg.sessions_count ?? idx + 1,
@@ -120,6 +127,9 @@ export async function GET(
           ? pkg.price_cents / 100
           : 0,
     })),
+    
+    // ✅ Return recurringRules from JSON column
+    recurringRules: loc.recurring_rules ?? [],
   }));
 
   // 5) Flatten service row + children to match LoadedService
@@ -193,7 +203,7 @@ export async function PUT(
     .eq("vendor_id", auth.user.id);
 
   if (error) {
-    console.error(error);
+    console.error("Error updating service:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
@@ -209,7 +219,7 @@ export async function PUT(
   ]);
 
   if (descriptionTabs?.length) {
-    await supabase.from("service_description_tabs").insert(
+    const { error: tabsError } = await supabase.from("service_description_tabs").insert(
       descriptionTabs.map((t: any, idx: number) => ({
         service_id: params.id,
         title: t.title,
@@ -217,10 +227,11 @@ export async function PUT(
         position: idx,
       }))
     );
+    if (tabsError) console.error("Error inserting description tabs:", tabsError);
   }
 
   if (images?.length) {
-    await supabase.from("service_images").insert(
+    const { error: imgsError } = await supabase.from("service_images").insert(
       images.map((url: string, idx: number) => ({
         service_id: params.id,
         image_url: url,
@@ -228,10 +239,11 @@ export async function PUT(
         is_cover: idx === 0,
       }))
     );
+    if (imgsError) console.error("Error inserting images:", imgsError);
   }
 
   if (providerIds?.length) {
-    await supabase
+    const { error: providersError } = await supabase
       .from("service_providers")
       .insert(
         providerIds.map((pid: string) => ({
@@ -239,10 +251,11 @@ export async function PUT(
           provider_id: pid,
         }))
       );
+    if (providersError) console.error("Error inserting providers:", providersError);
   }
 
   if (spaceIds?.length) {
-    await supabase
+    const { error: spacesError } = await supabase
       .from("service_spaces")
       .insert(
         spaceIds.map((sid: string) => ({
@@ -250,58 +263,79 @@ export async function PUT(
           space_id: sid,
         }))
       );
+    if (spacesError) console.error("Error inserting spaces:", spacesError);
   }
 
   if (locationSettings?.length) {
     for (const loc of locationSettings) {
+      console.log("Processing location:", loc.locationType, loc);
+      
+      // ✅ Save recurringRules to JSON column
       const { data: locRow, error: locErr } = await supabase
         .from("service_location_settings")
         .insert({
           service_id: params.id,
           location_type: loc.locationType,
           sku: loc.sku,
-          max_participants: loc.maxParticipants,
-          price_cents: Math.round((loc.price ?? 0) * 100),
-          discount_type: loc.discountType,
+          max_participants: loc.maxParticipants ?? null,
+          price_cents: loc.price != null ? Math.round(loc.price * 100) : null,
+          discount_type: loc.discountType ?? null,
           discount_value: loc.discountValue ?? null,
           discount_cap: loc.discountCap ?? null,
           has_fixed_schedule: loc.hasFixedSchedule,
           expiry_type: loc.expiryType,
           expiry_duration_unit: loc.expiryDurationUnit ?? null,
           expiry_duration_value: loc.expiryDurationValue ?? null,
+          recurring_rules: loc.recurringRules ?? [], // ✅ Save as JSON
         })
         .select("id")
         .single();
 
       if (locErr) {
-        console.error(locErr);
+        console.error("Error inserting location settings:", locErr);
         continue;
       }
 
       const locId = locRow.id;
 
+      // ✅ Save timeSlots with pricing & discounts
       if (loc.timeSlots?.length) {
-        await supabase.from("service_time_slots").insert(
+        const { error: slotsError } = await supabase.from("service_time_slots").insert(
           loc.timeSlots.map((slot: any) => ({
             service_id: params.id,
             location_settings_id: locId,
             start_at: slot.start,
             end_at: slot.end,
+            price_cents: slot.price != null ? Math.round(slot.price * 100) : null,
+            discount_type: slot.discountType ?? null,
+            discount_value: slot.discountValue ?? null,
+            discount_cap: slot.discountCap ?? null,
           }))
         );
+       
       }
 
+      // ✅ FIXED: Ensure price_cents is never null for session packages
       if (loc.sessionOptions?.length) {
-        await supabase.from("service_session_packages").insert(
-          loc.sessionOptions.map((pkg: any, idx: number) => ({
-            service_id: params.id,
-            location_settings_id: locId,
-            label: pkg.label,
-            sessions_count: pkg.sessionsCount,
-            price_cents: Math.round((pkg.price ?? 0) * 100),
-            position: idx,
-          }))
-        );
+        const packagesToInsert = loc.sessionOptions.map((pkg: any, idx: number) => ({
+          service_id: params.id,
+          location_settings_id: locId,
+          label: pkg.label || `Option ${idx + 1}`,
+          sessions_count: pkg.sessionsCount ?? (idx + 1),
+          price_cents: Math.round((pkg.price ?? 0) * 100), 
+          position: idx,
+        }));
+        
+        
+        const { error: pkgsError } = await supabase
+          .from("service_session_packages")
+          .insert(packagesToInsert);
+          
+        if (pkgsError) {
+          console.error("Error inserting session packages:", pkgsError);
+        } else {
+          console.log("Successfully inserted", loc.sessionOptions.length, "session packages");
+        }
       }
     }
   }
