@@ -29,16 +29,16 @@ export async function setVendorStatus(
   } = await supabase.auth.getUser();
   if (uErr || !user) throw new Error("No user");
 
-  const [p1, p2] = await Promise.all([
-    supabase
-      .from("profiles")
-      .update({ status, onboarding_completed: completed })
-      .eq("id", user.id),
-    supabase
-      .from("onboarding")
-      .upsert({ user_id: user.id, status, onboarding_completed: completed }),
-  ]);
+  // const [p1, p2] = await Promise.all([
+  //   // supabase
+  //   //   .from("profiles")
+  //   //   .update({ status, onboarding_completed: completed })
+  //   //   .eq("id", user.id),
+  //   // supabase
+  //   //   .from("onboarding")
+  //   //   .upsert({ user_id: user.id, status, onboarding_completed: completed }),
+  // ]);
 
-  if (p1.error) throw p1.error;
-  if (p2.error) throw p2.error;
+  // if (p1.error) throw p1.error;
+  // if (p2.error) throw p2.error;
 }
