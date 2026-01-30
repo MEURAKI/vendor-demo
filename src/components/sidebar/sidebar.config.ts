@@ -4,6 +4,7 @@ import {
   BarChart3,
   CalendarDays,
   Package,
+  Airplay,
   ShoppingBasket,
   Users,
   PiggyBank,
@@ -18,6 +19,7 @@ export const ICONS = {
   BarChart3,
   CalendarDays,
   Package,
+  Airplay,
   ShoppingBasket,
   Users,
   PiggyBank,
@@ -161,6 +163,15 @@ export function buildSidebarConfig({
               },
             ],
           },
+          {
+            id: "experiences",
+            label: "Experiences",
+            icon: "Airplay",
+            items: [
+              { id: "e-all", label: "All Experiences", href: "/pages/experiences" },
+              { id: "e-add", label: "Add Experience", href: "/pages/experiences/new" },
+            ],
+          }
         ],
       },
 

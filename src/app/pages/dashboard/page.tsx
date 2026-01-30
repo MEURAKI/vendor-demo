@@ -214,6 +214,17 @@ export default function DashboardPage() {
               { id: "s-spaces", label: "Wellness Spaces", href: "/pages/services/spaces" },
               ],
             },
+            {
+              id: "experiences",
+              label: "Experiences",
+              icon: "Airplay",
+              items: [
+                { id: "e-all", label: "All Experiences", href: "/pages/experiences" },
+              { id: "e-add", label: "Add Experience", href: "/pages/experiences/new" },
+              { id: "e-providers", label: "Wellness Providers", href: "/pages/experiences/providers" },
+              { id: "e-spaces", label: "Wellness Spaces", href: "/pages/experiences/spaces" },
+              ],
+            },
           ],
         },
         {
