@@ -9,24 +9,13 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Your existing scales (kept as-is)
-        purple: {
-          50:  "#faf5ff",
-          100: "#f3e8ff",
-          200: "#e9d5ff",
-          300: "#d8b4fe",
-          400: "#c084fc",
-          500: "#a855f7", // Main purple color from design
-          600: "#9333ea",
-          700: "#7e22ce",
-          800: "#6b21a8",
-          900: "#581c87",
-        },
+        // Standard Tailwind grays (matching style guide)
         gray: {
-          900: "#111111",
-          800: "#1a1a1a",
-          700: "#2a2a2a",
-          600: "#3a3a3a",
+          950: "#030712",
+          900: "#111827",
+          800: "#1f2937",
+          700: "#374151",
+          600: "#4b5563",
           500: "#6b7280",
           400: "#9ca3af",
           300: "#d1d5db",
@@ -35,45 +24,98 @@ module.exports = {
           50:  "#f9fafb",
         },
 
+        // Brand purple
+        purple: {
+          50:  "#faf5ff",
+          100: "#f3e8ff",
+          200: "#e9d5ff",
+          300: "#d8b4fe",
+          400: "#c084fc",
+          500: "#a855f7",
+          600: "#9333ea",
+          700: "#7e22ce",
+          800: "#6b21a8",
+          900: "#581c87",
+        },
+
+        // Primary / secondary aliases
+        primary: {
+          50:  "#faf5ff",
+          100: "#f3e8ff",
+          200: "#e9d5ff",
+          300: "#d8b4fe",
+          400: "#c084fc",
+          500: "#a855f7",
+          600: "#9333ea",
+          700: "#7e22ce",
+          800: "#6b21a8",
+          900: "#581c87",
+        },
+        secondary: {
+          50:  "#fdf4ff",
+          100: "#fae8ff",
+          200: "#f5d0fe",
+          300: "#f0abfc",
+          400: "#e879f9",
+          500: "#d946ef",
+          600: "#c026d3",
+          700: "#a21caf",
+          800: "#86198f",
+          900: "#701a75",
+        },
+
         /* ────────────────────────────────────────────
-           Brand UI tokens for the dark sidebar theme
+           Dark sidebar tokens (remapped to style guide)
         ──────────────────────────────────────────── */
-        // Deep ink surfaces
         ink: {
-          900: "#0E0F12", // page bg / vignette
-          800: "#121316", // main panel
-          700: "#17181C", // hover / inner panel
-          line: "#26272B", // subtle divider
+          900: "#030712", // gray-950
+          800: "#030712", // gray-950 — sidebar background
+          700: "#111827", // gray-900 — hover / inner panel
+          600: "#1f2937", // gray-800 — flyout active
+          line: "#1f2937", // gray-800 — subtle dividers
         },
-        // Neutral text scale tuned for dark UI
+
+        // Neutral text scale (tuned for dark sidebar)
         neu: {
-          50:  "#F5F6F7",
-          200: "#D3D6DC",
-          400: "#A6ABB4",
-          500: "#8A9099",
-          600: "#757B86",
-          700: "#5B616C",
+          50:  "#f9fafb", // gray-50  — brightest text
+          200: "#9ca3af", // gray-400 — default sidebar text
+          300: "#9ca3af", // gray-400 — icons
+          400: "#9ca3af", // gray-400
+          500: "#6b7280", // gray-500 — secondary text
+          600: "#4b5563", // gray-600 — section labels
+          700: "#374151", // gray-700
         },
-        // Accent (purple) for highlights
+
+        // Accent purple for sidebar highlights
         accent: {
-          300: "#C084FC", // ≈ Tailwind purple-400
-          400: "#A78BFA", // slightly cooler mid
-          500: "#8B5CF6", // vibrant
-          600: "#7C3AED", // deep
+          300: "#c084fc", // purple-400
+          400: "#c084fc", // purple-400
+          500: "#a855f7", // purple-500
+          600: "#9333ea", // purple-600
         },
+
         // States
-        danger: "#EF4444",
+        danger:  "#EF4444",
         success: "#22C55E",
-        amber:  "#F59E0B",
+        amber:   "#F59E0B",
       },
 
-      // Soft elevated panel shadow used on sidebar/card
       boxShadow: {
         panel: "0 8px 28px rgba(0,0,0,.30)",
       },
 
+      keyframes: {
+        "gradient-shift": {
+          "0%, 100%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+        },
+      },
+      animation: {
+        "gradient-shift": "gradient-shift 12s ease infinite",
+      },
+
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-poppins)", "Poppins", "sans-serif"],
       },
     },
   },

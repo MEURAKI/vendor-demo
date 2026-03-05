@@ -1,10 +1,10 @@
 // app/pages/setting/account/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import Sidebar from "../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -291,7 +291,7 @@ function AccountSettingsPageInner() {
           phone: "",
           country_code: "+65",
           avatar_url: null,
-          role: "Vendor",
+          role: "Subscriber",
         });
       } else {
         setProfile({
@@ -301,7 +301,7 @@ function AccountSettingsPageInner() {
           last_name: profData.last_name ?? "",
           phone: profData.phone ?? "",
           country_code: profData.country_code ?? "+65",
-          role: profData.role ?? "Vendor",
+          role: profData.role ?? "Subscriber",
         });
       }
 
@@ -384,18 +384,6 @@ function AccountSettingsPageInner() {
   }, [biz, docs, payout]);
 
   /* ------------ Sidebar config ------------ */
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name,
-        email: profile?.email,
-        role: "Vendor",
-        status: profile?.status ? "active" :  "Incomplete Registration",
-      }),
-    [profile, completeness.overallIncomplete]
-  );
-
   /* ------------ Avatar upload ------------ */
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -704,17 +692,15 @@ function AccountSettingsPageInner() {
 
   if (loading || !profile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <ClipLoader size={24} color="gray" />
-      </div>
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={24} color="gray" />
+          </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Dark app sidebar */}
-      <Sidebar config={sidebarConfig} />
-
       {/* Left settings nav – 🔴 global completeness alerts */}
       <SettingsNav alerts={completeness.navAlerts} />
 
@@ -1284,9 +1270,9 @@ export default function AccountSettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-white">
-          <ClipLoader size={24} color="gray" />
-        </div>
+        <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={24} color="gray" />
+          </div>
       }
     >
       <AccountSettingsPageInner />

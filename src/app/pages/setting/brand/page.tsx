@@ -1,9 +1,9 @@
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
-import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
 import { useAuthGuard } from "../../../../hooks/useAuthGuard";
@@ -64,14 +64,14 @@ const MOTIVATIONS = [
   "Participate in events and wellness festivals",
   "Participate in corporate engagements",
   "Connect & collaborate with like-minded wellness brands",
-  "Participate in exclusive vendor events and promotions",
+  "Participate in exclusive subscriber events and promotions",
   "Others",
 ];
 
 const INTERESTS = [
   "Wellness events and festivals",
   "Corporate engagements",
-  "Collaborative events with other vendors",
+  "Collaborative events with other subscribers",
   "In-app promotions or advertisements",
   "Workshops and webinars",
   "Social media or influencer partnerships",
@@ -195,18 +195,6 @@ export default function BrandStoryOfferingsPage() {
       setLoading(false);
     })();
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name,
-        email: profile?.email,
-        role: "Vendor",
-       status: profile?.status ?? "active"
-      }),
-    [profile]
-  );
-
   const toggleIn = (arr: string[], value: string, setArr: (next: string[]) => void) => {
     setArr(arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]);
   };
@@ -239,19 +227,15 @@ export default function BrandStoryOfferingsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-                <ClipLoader size={24} color="gray" />
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={24} color="gray" />
 
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar config={sidebarConfig} />
-      <SettingsNav />
-
-      <main className="flex-1 overflow-y-auto">
+    <>
         <div className="mx-auto max-w-5xl px-8 py-10 lg:py-12">
           <h1 className="text-3xl font-semibold text-gray-900">Business Settings</h1>
 
@@ -427,7 +411,6 @@ export default function BrandStoryOfferingsPage() {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+    </>
   );
 }

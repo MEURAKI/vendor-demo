@@ -1,6 +1,8 @@
 // app/pages/bundles/[bundleId]/edit/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useParams, useRouter } from "next/navigation";
@@ -8,8 +10,6 @@ import { useParams, useRouter } from "next/navigation";
 import { BundleProductPickerModal } from "../../../../../../components/bundles/BundleProductPickerModal";
 import type { BundleCandidateItem } from "../../../../../../types/bundles.types";
 import { supabase } from "../../../../../../lib/supabase/client";
-import Sidebar from "../../../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../../../components/sidebar/sidebar.config";
 import ClipLoader from "react-spinners/ClipLoader";
 import WellnessCategoryTagsSection, {
   WellnessOption,
@@ -170,18 +170,6 @@ export default function EditBundlePage() {
       mounted = false;
     };
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   // ---------- Load existing bundle ----------
   useEffect(() => {
     if (!bundleId) return;
@@ -354,26 +342,18 @@ export default function EditBundlePage() {
     router.push("/pages/products/bundles");
   }
 
-  /* ---------- FULL-SCREEN LOADING STATE ---------- */
+  /* ---------- LOADING STATE ---------- */
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#050509]">
-        <ClipLoader
-          size={40}
-          color="#6B46C1"
-          cssOverride={{ animationDuration: "3s" }}
-        />
-      </div>
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={40} color="#6B46C1" />
+          </div>
     );
   }
 
   // ---------- UI ----------
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      <Sidebar config={sidebarConfig} />
-
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           {/* Top bar */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-5">
             <div className="flex items-center gap-3">
@@ -881,8 +861,6 @@ export default function EditBundlePage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
       {/* Product picker modal */}
       <BundleProductPickerModal
@@ -916,6 +894,6 @@ export default function EditBundlePage() {
           setPickerOpen(false);
         }}
       />
-    </div>
+    </>
   );
 }

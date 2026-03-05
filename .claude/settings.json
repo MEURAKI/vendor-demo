@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git diff src/app/pages/products/bundles/[bundleId]/edit/page.tsx)",
+      "Bash(npx --yes tsc --noEmit --pretty src/app/pages/rewards/submissions/page.tsx)",
+      "Bash(for f in src/app/pages/rewards/submissions/page.tsx src/app/pages/services/[serviceId]/edit/page.tsx src/app/pages/services/new/page.tsx src/app/pages/services/page.tsx src/app/pages/setting/brand/page.tsx)",
+      "Bash(echo \"=== $f ===\")",
+      "Read(//Users/miriam/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/pages/rewards/submissions)",
+      "Bash(curl -s http://localhost:3000/pages/rewards/submissions)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 5 \"https://kltjywhkfwoaefxtzztg.supabase.co/rest/v1/\" -H \"apikey: REDACTED_SUPABASE_ANON_KEY\")",
+      "Bash(curl -s http://localhost:3000/pages/auth/login -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(npx --yes tsc --noEmit --skipLibCheck src/app/pages/services/page.tsx)",
+      "Bash(awk 'NR>=942 && NR<=1413' src/app/pages/services/page.tsx)",
+      "Bash(awk 'NR==1392' /Users/miriam/Downloads/meuraki-vendor-portal/src/app/pages/services/page.tsx)",
+      "Bash(awk 'NR>=940 && NR<=945' /Users/miriam/Downloads/meuraki-vendor-portal/src/app/pages/services/page.tsx)",
+      "Bash(awk 'NR==1394' /Users/miriam/Downloads/meuraki-vendor-portal/src/app/pages/services/page.tsx)",
+      "Bash(awk 'NR>=316 && NR<=623' src/app/pages/vendor/finance/page.tsx)",
+      "Bash(awk 'NR>=251 && NR<=544' src/app/pages/vendor/customers/page.tsx)",
+      "Read(//Users/miriam/Downloads/meuraki-vendor-portal/{\n  line = $0\n  gsub\\(/<div[^>]*\\\\/>/, \"\"\"\"\"\"\"\", line\\)\n  opens = 0; closes = 0\n  n1 = split\\(line, a1, \"\"\"\"<div\"\"\"\"\\); opens = n1 - 1\n  n2 = split\\(line, a2, \"\"\"\"</**)",
+      "Bash(cp \"/Users/miriam/Downloads/admin-portal-v2/public/bg-1.mp4\" /Users/miriam/Downloads/meuraki-vendor-portal/public/)",
+      "Bash(cp \"/Users/miriam/Downloads/admin-portal-v2/public/bg-3.mp4\" /Users/miriam/Downloads/meuraki-vendor-portal/public/)",
+      "Bash(cp \"/Users/miriam/Downloads/admin-portal-v2/public/bg-4.mp4\" /Users/miriam/Downloads/meuraki-vendor-portal/public/)"
+    ]
+  }
+}

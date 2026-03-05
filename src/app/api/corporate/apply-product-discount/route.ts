@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (vbErr || !vb) {
-    return NextResponse.json({ error: "Vendor settings not found" }, { status: 400 });
+    return NextResponse.json({ error: "Subscriber settings not found" }, { status: 400 });
   }
 
   if (!vb.corporate_program_enabled || !vb.corporate_discount_products) {

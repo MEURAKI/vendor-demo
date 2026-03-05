@@ -79,8 +79,8 @@ export default function RootClient({ children }: { children: React.ReactNode }) 
 
   if (checking && isProtected(pathname)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <ClipLoader size={28} />
+      <div className="min-h-screen flex items-center justify-center bg-[#050509]">
+        <ClipLoader size={55} color="#6B46C1" cssOverride={{ animationDuration: "3s" }} />
       </div>
     );
   }

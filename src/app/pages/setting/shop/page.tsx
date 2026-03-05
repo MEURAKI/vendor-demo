@@ -1,6 +1,8 @@
 // app/pages/setting/shop/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import {
   Suspense,
   useEffect,
@@ -11,9 +13,7 @@ import {
 import Script from "next/script";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { supabase } from "../../../../lib/supabase/client";
-import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { useToast } from "../../../../components/toast/ToastProvider";
 import AppModal from "../../../../components/common/AppModal";
 import Image from "next/image";
@@ -832,19 +832,6 @@ session_operating_hours: DEFAULT_SESSION_HOURS,
     return { missing, overallIncomplete, navAlerts };
   }, [vb, docs, payout]);
 
-  /* ------------------------- Sidebar config ------------------------- */
-
-  const sidebarConfig = useMemo(() => {
-    const statusLabel = profile?.status ? "active" : "Incomplete Registration";
-
-    return buildSidebarConfig({
-      fullName: profile?.full_name ?? profile?.email ?? "User",
-      email: profile?.email ?? "",
-      role: "Vendor",
-      status: statusLabel,
-    });
-  }, [profile, completeness.overallIncomplete]);
-
   /* ------------------------- Save helpers --------------------------- */
 
   function buildPayload(src: VendorBusiness) {
@@ -1131,9 +1118,9 @@ session_operating_hours: sessionHours?.length
 
   if (loading || !vb || !profile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <ClipLoader size={32} color="gray" />
-      </div>
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={32} color="gray" />
+          </div>
     );
   }
 
@@ -1158,7 +1145,6 @@ session_operating_hours: sessionHours?.length
       />
 
       <div className="flex h-screen bg-[#F7F7FB]">
-        <Sidebar config={sidebarConfig} />
         <SettingsNav alerts={completeness.navAlerts} />
 
         <main className="flex-1 overflow-y-auto">
@@ -1276,7 +1262,7 @@ session_operating_hours: sessionHours?.length
                   <div>
                     <div className="text-sm font-semibold text-gray-900">Shop Name</div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Displayed name of vendor’s store.
+                      Displayed name of subscriber’s store.
                     </p>
                   </div>
                   <input
@@ -2495,9 +2481,9 @@ export default function ShopSettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-white">
-          <ClipLoader size={32} color="gray" />
-        </div>
+        <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={32} color="gray" />
+          </div>
       }
     >
       <ShopSettingsPageInner />

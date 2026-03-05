@@ -1,13 +1,13 @@
 // app/pages/experiences/[experienceId]/edit/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import clsx from "clsx";
 import ClipLoader from "react-spinners/ClipLoader";
 
-import Sidebar from "../../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
 import AppModal from "../../../../../components/common/AppModal";
 import { uploadProviderImage } from "../../../../../lib/uploadProviderImage";
@@ -162,18 +162,6 @@ export default function EditExperiencePage() {
   });
 
   const canSave = useMemo(() => title.trim().length > 0, [title]);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   useEffect(() => {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
@@ -371,23 +359,14 @@ export default function EditExperiencePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050509] p-6">
-        <div className="mx-auto max-w-4xl rounded-[32px] border-[3px] border-black bg-[#F6F6FC] p-10 shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-          <div className="flex items-center gap-3 text-sm text-gray-700">
-            <ClipLoader size={18} color="#6B46C1" />
-            Loading…
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={40} color="#6B46C1" />
           </div>
-        </div>
-      </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
-      <Sidebar config={sidebarConfig} />
-
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <div>
@@ -1092,8 +1071,6 @@ export default function EditExperiencePage() {
               </section>
             )}
           </div>
-        </div>
-      </div>
 
       {/* Title modal */}
       <AppModal
@@ -1146,7 +1123,7 @@ export default function EditExperiencePage() {
         onPrimaryClick={handleDeleteConfirmed}
         onClose={() => (!deleting ? setShowDeleteModal(false) : null)}
       />
-    </div>
+    </>
   );
 }
 

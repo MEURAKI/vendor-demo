@@ -1,11 +1,11 @@
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import Sidebar from "../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 import AppModal from "../../../../components/common/AppModal";
@@ -363,18 +363,6 @@ export default function AllBundlesPage() {
       setSelectedIds([]); // reset selection after reload
     }
   }
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   const filtered = bundles.filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -400,11 +388,7 @@ export default function AllBundlesPage() {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      <Sidebar config={sidebarConfig} />
-
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           {/* Top bar */}
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <div className="flex items-center gap-3">
@@ -648,8 +632,6 @@ export default function AllBundlesPage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
       {/* Bulk edit modal */}
       <BulkEditModal
@@ -658,6 +640,6 @@ export default function AllBundlesPage() {
         selectedBundles={selectedBundles}
         onSaved={() => reloadBundles()}
       />
-    </div>
+    </>
   );
 }

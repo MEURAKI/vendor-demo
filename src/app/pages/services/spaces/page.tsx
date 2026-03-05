@@ -1,12 +1,12 @@
 // app/pages/spaces/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import Sidebar from "../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useAuthGuard } from "../../../../hooks/useAuthGuard";
@@ -134,18 +134,6 @@ export default function SpacesPage() {
       mounted = false;
     };
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-       status: profile?.status ?? "active"
-      }),
-    [profile]
-  );
-
   const filtered = rows.filter((r) => {
     const q = search.toLowerCase();
     return (
@@ -167,11 +155,7 @@ export default function SpacesPage() {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
-      <Sidebar config={sidebarConfig} />
-
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           {/* TOP BAR */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             {/* Left: title + count */}
@@ -393,8 +377,6 @@ export default function SpacesPage() {
               Showing {filtered.length} spaces
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </>
   );
 }

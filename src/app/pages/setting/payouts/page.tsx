@@ -1,12 +1,12 @@
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase/client";
-import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { useToast } from "../../../../components/toast/ToastProvider";
 import ClipLoader from "react-spinners/ClipLoader";
 
@@ -353,31 +353,16 @@ function BillingSettingsPageInner() {
 
     return { missing, overallIncomplete, navAlerts };
   }, [biz, docs, payout]);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: me?.full_name || me?.email || "User",
-        email: me?.email || "",
-        role: "Vendor",
-        status: completeness.overallIncomplete
-          ? "Incomplete Registration"
-          : me?.status ?? "active",
-      }),
-    [me, completeness.overallIncomplete]
-  );
-
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <ClipLoader size={24} color="gray" />
-      </div>
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={24} color="gray" />
+          </div>
     );
   }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar config={sidebarConfig} />
       <SettingsNav alerts={completeness.navAlerts} />
 
       <main className="flex-1 overflow-y-auto">
@@ -563,9 +548,9 @@ export default function BillingSettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-white">
-          <ClipLoader size={24} color="gray" />
-        </div>
+        <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={24} color="gray" />
+          </div>
       }
     >
       <BillingSettingsPageInner />

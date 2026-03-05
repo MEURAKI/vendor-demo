@@ -6,31 +6,44 @@
 
 .tracking-tight-lg { letter-spacing: -1px; }
 
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 250, 250, 250;
+  --background-end-rgb: 255, 255, 255;
+}
+
 @layer base {
   body {
-    @apply bg-white text-gray-900;
+    @apply bg-gray-50 text-gray-600;
+    color: rgb(var(--foreground-rgb));
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    ) rgb(var(--background-start-rgb));
   }
 
   label {
-    @apply text-black font-semibold tracking-wide;
+    @apply text-sm font-medium text-gray-700;
   }
 
-  /* Custom scrollbar */
+  /* Custom scrollbar — style guide */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-gray-900;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-700 rounded;
+    background: #d1d5db; /* gray-300 */
+    border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-600;
+    background: #9ca3af; /* gray-400 */
   }
 
   /* Focus styles */
@@ -42,26 +55,24 @@
 }
 
 @layer components {
-  /* Button styles */
+  /* Primary button — black fill (main CTA) */
   .btn-primary {
-    @apply bg-white text-black font-medium py-3 px-6 rounded-lg hover:bg-gray-200 transition-colors;
+    @apply px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors;
   }
 
+  /* Secondary button — outline */
   .btn-secondary {
-    @apply bg-gray-900 text-white font-medium py-3 px-6 rounded-lg border border-gray-800 hover:bg-gray-800 transition-colors;
+    @apply px-4 py-2 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors;
   }
 
-  /* Input styles */
+  /* Input — settings style (preferred for forms) */
   .input-primary {
-    @apply w-full px-4 py-3 rounded-lg 
-          bg-[#EFEDFF] border border-transparent
-          text-gray-900 placeholder-gray-500 
-          focus:outline-none focus:ring-2 focus:ring-purple-500;
+    @apply w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-100 focus:border-purple-300 outline-none transition-all;
   }
 
-  /* Card styles */
+  /* Card — white with subtle border */
   .card {
-    @apply bg-gray-900 border border-gray-800 rounded-lg p-6;
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6;
   }
 
   /* Animation for page transitions */
@@ -98,40 +109,58 @@
   }
 }
 
+/* Animations */
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
-.animate-fadeIn { animation: fadeIn 0.2s ease-in-out; }
 
+.animate-slide-in { animation: slideIn 0.3s ease-out forwards; }
+.animate-fade-in  { animation: fadeIn  0.3s ease-out forwards; }
+.animate-fadeIn   { animation: fadeIn  0.2s ease-in-out; }
 
+@keyframes slideUp {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Settings-style input */
 .input {
-  @apply w-full h-12 px-4 rounded-xl border border-gray-200 bg-purple-50/40 focus:outline-none focus:ring-2 focus:ring-purple-500;
+  @apply w-full h-12 px-4 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 transition-all;
 }
 
+/* Hide scrollbar utility */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 .no-scrollbar {
-  -ms-overflow-style: none; /* IE, Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
+/* Table styles — style guide */
 .table-wrapper {
   overflow: hidden;
-  border-radius: 16px; /* makes top corners rounded */
+  border-radius: 16px;
   background: white;
+  border: 1px solid #f3f4f6; /* gray-100 */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
 .table-header-row {
-  background: #F7F7FB;
+  background: #111827; /* gray-900 — dark header */
 }
 
 .table-header-cell {
-  padding: 14px 20px !important; /* adds breathing space */
+  padding: 14px 20px !important;
   font-weight: 600;
   font-size: 13px;
-  color: #6B6B76;
+  color: #ffffff; /* white text on dark header */
 }
 
 .table-body-cell {

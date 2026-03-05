@@ -1,14 +1,14 @@
 // app/pages/bundles/new/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
 
 import { BundleProductPickerModal } from "../../../../../components/bundles/BundleProductPickerModal";
 import type { BundleCandidateItem } from "../../../../../types/bundles.types";
-import Sidebar from "../../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
 import WellnessCategoryTagsSection, {
   WellnessOption,
@@ -162,18 +162,6 @@ export default function NewBundlePage() {
       isMounted = false;
     };
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   /* ---------- Auto-generate SKU from bundle name ---------- */
 
   useEffect(() => {
@@ -290,22 +278,20 @@ export default function NewBundlePage() {
 
   /* ---------- UI ---------- */
 
-  if (loadingProfile || !sidebarConfig) {
+  if (loadingProfile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <ClipLoader size={32} color="#6B46C1" />
-      </div>
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={40} color="#6B46C1" />
+          </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
+    <>
       {/* Left sidebar */}
-      <Sidebar config={sidebarConfig} />
-
       {/* Tablet container */}
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+      <div className="relative flex flex-1 items-stretch z-0">
+        <div className="flex h-full w-full flex-col overflow-hidden rounded-l-[2rem] bg-[#F6F6FC]">
           {/* Top bar inside tablet */}
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <div className="flex items-center gap-3">
@@ -876,6 +862,6 @@ export default function NewBundlePage() {
           setPickerOpen(false);
         }}
       />
-    </div>
+    </>
   );
 }

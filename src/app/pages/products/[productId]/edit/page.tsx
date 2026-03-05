@@ -1,6 +1,8 @@
 // app/pages/products/[productId]/edit/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -18,8 +20,6 @@ import {
 } from "../../../../../components/product/ProductVariantChooser";
 import { ProductVariantSettings } from "../../../../../components/product/ProductVariantSettings";
 
-import Sidebar from "../../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
 
 import {
@@ -375,18 +375,6 @@ export default function EditProductPage({
   const categorySectionRef = useRef<HTMLDivElement | null>(null);
 
   /* ---------- Sidebar config ---------- */
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   /* ---------- Load profile + vendor id ---------- */
 
   useEffect(() => {
@@ -861,29 +849,20 @@ export default function EditProductPage({
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-        <Sidebar config={sidebarConfig} />
-        <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
-          <div className="flex h-full w-full items-center justify-center rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-            <p className="w-full text-center text-sm text-gray-500">
-              <ClipLoader size={55} color="#8884ff" />
-            </p>
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={40} color="#6B46C1" />
           </div>
-        </div>
-      </div>
     );
   }
 
   /* ---------- UI ---------- */
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
+    <>
       {/* Sidebar */}
-      <Sidebar config={sidebarConfig} />
-
       {/* Black bezel + tablet */}
       <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+        <div className="flex h-full w-full flex-col overflow-hidden rounded-l-[2rem] bg-[#F6F6FC]">
           {/* Sticky header */}
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
             <h1 className="text-lg font-semibold text-[#1B1529] sm:text-2xl">
@@ -1438,6 +1417,6 @@ export default function EditProductPage({
           setPendingStatus(null);
         }}
       />
-    </div>
+    </>
   );
 }

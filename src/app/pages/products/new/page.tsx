@@ -1,13 +1,13 @@
 // app/pages/products/new/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 
-import Sidebar from "../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 
 import { ProductPricingAndStock } from "../../../../components/product/ProductPricingAndStock";
@@ -663,17 +663,6 @@ export default function NewProductPage() {
     useState(false);
 
   // sidebar config
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   // load profile (vendor-specific) and wellness options
   useEffect(() => {
     let isMounted = true;
@@ -848,7 +837,7 @@ export default function NewProductPage() {
 
   if (!canSave) return;
   if (!vendorId) {
-    alert("You must be logged in as a vendor to save a product.");
+    alert("You must be logged in as a subscriber to save a product.");
     return;
   }
 
@@ -970,14 +959,12 @@ export default function NewProductPage() {
   /* ---------- UI ---------- */
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
+    <>
       {/* Sidebar on the left */}
-      <Sidebar config={sidebarConfig} />
-
       {/* Black bezel + inner tablet */}
       <div className="flex flex-1 items-stretch justify-center px-3 py-3 sm:px-6 sm:py-4">
         {/* Big rounded tablet container */}
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+        <div className="flex h-full w-full flex-col overflow-hidden rounded-l-[2rem] bg-[#F6F6FC]">
           {/* Sticky top bar inside tablet */}
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-4 py-4 sm:px-8">
             <h1 className="text-lg font-semibold text-[#1B1529] sm:text-2xl">
@@ -1592,6 +1579,6 @@ export default function NewProductPage() {
         }}
         onClose={() => setShowDescriptionErrorModal(false)}
       />
-    </div>
+    </>
   );
 }

@@ -15,12 +15,11 @@ const nextConfig = {
       hostname: "kltjywhkfwoaefxtzztg.supabase.co",
       pathname: "/storage/v1/object/public/**",
     },
-      // Add your production Supabase domain too so it works after deploy:
-      // {
-      //   protocol: "https",
-      //   hostname: "<your-project-ref>.supabase.co",
-      //   pathname: "/storage/v1/object/public/**",
-      // },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
     ],
   },
 };

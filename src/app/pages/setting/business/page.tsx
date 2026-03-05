@@ -1,12 +1,12 @@
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import Sidebar from "../../../../components/sidebar/Sidebar";
 import SettingsNav from "../../../../components/settings/SettingsNav";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
 import { useAuthGuard } from "../../../../hooks/useAuthGuard";
@@ -115,14 +115,14 @@ const MOTIVATIONS = [
   "Participate in events and wellness festivals",
   "Participate in corporate engagements",
   "Connect & collaborate with like-minded wellness brands",
-  "Participate in exclusive vendor events and promotions",
+  "Participate in exclusive subscriber events and promotions",
   "Others",
 ];
 
 const INTERESTS = [
   "Wellness events and festivals",
   "Corporate engagements",
-  "Collaborative events with other vendors",
+  "Collaborative events with other subscribers",
   "In-app promotions or advertisements",
   "Workshops and webinars",
   "Social media or influencer partnerships",
@@ -441,20 +441,6 @@ function BusinessSettingsPageInner() {
 
     return { missing, overallIncomplete, navAlerts };
   }, [biz, docs, payout]);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name,
-        email: profile?.email,
-        role: "Vendor",
-        status: completeness.overallIncomplete
-          ? "Incomplete Registration"
-          : profile?.status ?? "active",
-      }),
-    [profile, completeness.overallIncomplete]
-  );
-
   /* ---------- Business: upload logo & save ---------- */
 
   async function handleUploadLogo(file: File) {
@@ -754,7 +740,7 @@ function BusinessSettingsPageInner() {
                   Business / Brand Name
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
-                  Displayed across the marketplace and on your MEURAKI vendor listings.
+                  Displayed across the marketplace and on your MEURAKI subscriber listings.
                 </p>
               </div>
               <div>
@@ -1136,8 +1122,8 @@ function BusinessSettingsPageInner() {
       <>
         <div className="mt-8 space-y-8 pb-28">
           <DocsSection
-            title="Vendor Agreement (Download → Sign → Upload)"
-            hint="Upload the signed PDF of the vendor agreement."
+            title="Subscriber Agreement (Download → Sign → Upload)"
+            hint="Upload the signed PDF of the subscriber agreement."
             kind="vendor_agreement"
             accept=".pdf"
             templateUrl={AGREEMENT_TEMPLATE_URL}
@@ -1337,17 +1323,17 @@ function BusinessSettingsPageInner() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <ClipLoader size={32} color="#6b7280" />
-      </div>
+      <div className="flex h-full w-full items-center justify-center">
+            <ClipLoader size={32} color="#6b7280" />
+          </div>
     );
   }
 
   if (!profile || !biz) {
     // unauthenticated or broken state
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-sm text-gray-500">
+      <div className="flex h-full w-full items-center justify-center">
+            <p className="text-sm text-gray-500">
           You must be logged in to view this page.
         </p>
       </div>
@@ -1358,7 +1344,6 @@ function BusinessSettingsPageInner() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar config={sidebarConfig} />
       <SettingsNav alerts={completeness.navAlerts} />
 
       <main className="flex-1 overflow-y-auto">
@@ -1387,9 +1372,9 @@ export default function BusinessSettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="flex h-full w-full items-center justify-center">
           <ClipLoader size={32} color="#6b7280" />
-        </div>
+          </div>
       }
     >
       <BusinessSettingsPageInner />

@@ -1,13 +1,13 @@
 // app/pages/experiences/new/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import Image from "next/image";
 
-import Sidebar from "../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import AppModal from "../../../../components/common/AppModal";
 import ClipLoader from "react-spinners/ClipLoader";
@@ -169,18 +169,6 @@ export default function NewExperiencePage() {
       if (data) setProfile(data as Profile);
     })();
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   async function handleImageUpload(files: FileList | null) {
     if (!files || !files.length) return;
     const newUrls: string[] = [];
@@ -259,11 +247,7 @@ export default function NewExperiencePage() {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
-      <Sidebar config={sidebarConfig} />
-
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           {/* Header (match Services new) */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <div>
@@ -997,8 +981,6 @@ export default function NewExperiencePage() {
               </div>
             </div>
           )}
-        </div>
-      </div>
 
       {/* Modals (match Services style) */}
       <AppModal
@@ -1035,7 +1017,7 @@ export default function NewExperiencePage() {
         }}
         onClose={() => setShowCategoryErrorModal(false)}
       />
-    </div>
+    </>
   );
 }
 

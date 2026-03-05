@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
 import ClipLoader from "react-spinners/ClipLoader";
+
+const bgVideos = ["/bg-1.mp4", "/bg-3.mp4", "/bg-4.mp4"];
 
 function readHash() {
   const hash = typeof window !== "undefined" ? window.location.hash : "";
@@ -26,6 +28,8 @@ export default function ResetPasswordPage() {
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [activeVideo, setActiveVideo] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const pwError =
     pw1.length > 0 && pw1.length < 8
@@ -82,139 +86,114 @@ export default function ResetPasswordPage() {
 
   if (!ready) {
     return (
-      <div className="grid min-h-screen place-items-center bg-white">
-               <ClipLoader size={24} color="gray" />
+      <div className="fixed inset-0 bg-gray-950 grid place-items-center">
+        <ClipLoader size={28} color="#a855f7" />
       </div>
-    ); 
+    );
   }
 
   return (
-    <div className="h-screen bg-white flex overflow-hidden">
-      {/* Left — form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-10 lg:px-16 py-10">
-        <div className="w-full max-w-md">
-          {/* Back link */}
+    <div className="fixed inset-0 bg-gray-950">
+      {/* Video background */}
+      <video
+        ref={videoRef}
+        key={activeVideo}
+        src={bgVideos[activeVideo]}
+        autoPlay
+        muted
+        playsInline
+        onEnded={() => setActiveVideo((v) => (v + 1) % bgVideos.length)}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      <div className="absolute inset-0 backdrop-blur-[2px]" />
+      <div
+        className="absolute inset-0 animate-gradient-shift"
+        style={{
+          backgroundSize: "300% 300%",
+          backgroundImage:
+            "linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(88,28,135,0.5) 20%, rgba(219,39,119,0.4) 40%, rgba(126,34,206,0.5) 60%, rgba(0,0,0,0.6) 80%, rgba(168,85,247,0.45) 100%)",
+        }}
+      />
+
+      {/* Floating modal */}
+      <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-8 z-20">
+        <div className="absolute inset-0 bg-black/30" />
+
+        <div className="relative z-10 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl shadow-black/60 bg-white p-8 sm:p-10 lg:p-12">
           <Link
             href="/pages/auth/login"
-            className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 mb-6"
           >
-            <span className="-rotate-90 text-lg leading-none">⌃</span>
-            Go Back
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            Back to sign in
           </Link>
 
-          {/* Heading */}
-          <div className="mt-6 mb-6">
-            <h1 className="text-3xl font-extrabold leading-tight text-black">
-              Enter your
-              <br /> new password
-            </h1>
-          </div>
+          <h1 className="text-3xl font-extrabold leading-tight text-gray-900">
+            Set your<br />new password
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">Choose a strong password — at least 8 characters.</p>
 
-          {/* Form */}
-          <form onSubmit={onSubmit} className="space-y-5">
-            {/* New password */}
+          <form onSubmit={onSubmit} className="mt-8 space-y-4">
             <div>
-              <label className="block text-xs font-semibold tracking-wide text-black">
-                NEW PASSWORD
+              <label className="text-xs font-bold tracking-wider text-gray-900 uppercase">
+                New Password
               </label>
               <input
                 type="password"
-                placeholder="••••••"
+                placeholder="••••••••"
                 value={pw1}
                 onChange={(e) => setPw1(e.target.value)}
-                className={[
-                  "mt-2 w-full h-12 rounded-2xl px-4",
-                  "bg-[#EFEDFF] border border-transparent",
-                  "text-gray-900 placeholder-gray-500",
-                  "focus:outline-none focus:ring-2 focus:ring-purple-500",
-                ].join(" ")}
+                className="mt-2 w-full px-4 py-4 text-sm border border-gray-300 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 transition-all"
                 minLength={8}
                 required
+                autoFocus
               />
             </div>
 
-            {/* Confirm password */}
             <div>
-              <label className="block text-xs font-semibold tracking-wide text-black">
-                CONFIRM PASSWORD
+              <label className="text-xs font-bold tracking-wider text-gray-900 uppercase">
+                Confirm Password
               </label>
               <input
                 type="password"
-                placeholder="••••••"
+                placeholder="••••••••"
                 value={pw2}
                 onChange={(e) => setPw2(e.target.value)}
-                className={[
-                  "mt-2 w-full h-12 rounded-2xl px-4",
-                  "bg-[#EFEDFF] border border-transparent",
-                  "text-gray-900 placeholder-gray-500",
-                  "focus:outline-none focus:ring-2 focus:ring-purple-500",
-                ].join(" ")}
+                className="mt-2 w-full px-4 py-4 text-sm border border-gray-300 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 transition-all"
                 minLength={8}
                 required
               />
             </div>
 
-            {/* Inline validation */}
             {!!pwError && (
-              <p className="text-xs text-red-600 -mt-2">{pwError}</p>
+              <p className="text-xs text-red-600">{pwError}</p>
             )}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={!canSubmit || busy}
-              className={[
-                "w-full h-12 rounded-full text-white text-base font-medium",
-                "shadow-lg shadow-black/10 transition-colors",
+              className={`w-full py-4 rounded-2xl text-sm font-semibold text-white transition-all ${
                 canSubmit && !busy
-                  ? "bg-black hover:bg-gray-900"
-                  : "bg-gray-300 cursor-not-allowed",
-              ].join(" ")}
+                  ? "bg-gray-900 hover:bg-gray-800"
+                  : "bg-gray-300 cursor-not-allowed"
+              }`}
             >
               {busy ? "Saving…" : "Set new password"}
             </button>
 
-            {/* Support */}
-            <p className="mt-2 text-xs text-gray-500">
-              If you need further assistance{" "}
-              <a
-                className="text-purple-600 font-medium"
-                href="mailto:support@meuraki.com.sg"
-              >
-                contact our support team
+            <p className="text-xs text-gray-500">
+              Need help?{" "}
+              <a className="text-purple-600 font-medium" href="mailto:support@meuraki.com.sg">
+                Contact support
               </a>
             </p>
           </form>
-        </div>
-      </div>
 
-      {/* Right — hero panel */}
-      <div className="hidden lg:block lg:w-1/2 relative">
-        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
-      
-          {/* --- GIF Background --- */}
-          <Image
-            src="/images/hero-bg.gif"
-            alt="Animated background"
-            fill
-            priority
-            unoptimized
-            className="object-cover"
-          />
-      
-          {/* --- PNG Overlay (logo, text, etc.) --- */}
-           <div className="absolute inset-0 flex items-center justify-center">
-                      <Image
-                        src="/images/hero-overlay.png"
-                        alt="Meuraki overlay"
-                        width={320} // adjust if needed
-                        height={640}
-                        className="rounded-[28px] pointer-events-none"
-                      />
-                    </div>
-      
-          {/* Optional gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
+          <div className="flex justify-center mt-8">
+            <Image src="/images/logo-meuraki.svg" alt="Meuraki" width={100} height={25} />
+          </div>
         </div>
       </div>
     </div>

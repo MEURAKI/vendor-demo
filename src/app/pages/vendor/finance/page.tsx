@@ -1,5 +1,7 @@
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import {
   Area,
@@ -12,9 +14,6 @@ import {
 } from "recharts";
 
 import { supabase } from "../../../../lib/supabase/client";
-import Sidebar from "../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
-
 /* ---------- Types ---------- */
 
 type OrderStatus = "placed" | "fulfilled" | "shipped" | "delivered" | "cancelled";
@@ -133,18 +132,6 @@ export default function VendorFinancePage() {
       setLoading(false);
     })();
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? profile?.email ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "Active",
-      }),
-    [profile]
-  );
-
   /* ---------- Derived metrics ---------- */
 
   const {
@@ -312,94 +299,90 @@ export default function VendorFinancePage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
+      <>
         Loading finance…
-      </div>
+      </>
     );
   }
 
   if (error && orders.length === 0) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
+      <div className="flex h-full w-full items-center justify-center">
         {error}
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      {/* Sidebar */}
-      <Sidebar config={sidebarConfig} />
+    <div className="relative min-h-full flex-1 overflow-auto">
+      {/* Background image */}
+      <div className="absolute top-0 left-0 right-0 h-[420px] overflow-hidden pointer-events-none">
+        <img src="/images/vendor bg.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-[#F6F6FC]" />
+      </div>
 
-      {/* Main shell */}
-      <div className="flex flex-1 items-stretch justify-center px-3 py-3 md:px-6 md:py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-3xl border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)] md:rounded-[32px]">
-          <div className="flex-1 overflow-auto px-4 py-4 md:px-6 md:py-6">
-            <div className="mx-auto max-w-6xl space-y-6">
-              {/* Header */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">
-                    Earnings overview
-                  </h1>
-                  <p className="text-xs text-slate-500 md:text-sm">
-                    Understand your payouts across orders and bookings.
-                  </p>
-                </div>
+      <div className="relative px-6 sm:px-8 py-6 sm:py-8 space-y-6">
 
-                <div className="flex items-center gap-2">
-                  <select
-                    value={range}
-                    onChange={(e) => setRange(e.target.value as DateRangeKey)}
-                    className="h-9 rounded-full bg-white px-3 text-xs text-slate-700 shadow-sm outline-none ring-0"
-                  >
-                    <option value="7d">Last 7 days</option>
-                    <option value="30d">Last 30 days</option>
-                    <option value="90d">Last 90 days</option>
-                  </select>
+        {/* Glass panel — header + summary cards */}
+        <div className="rounded-3xl bg-white/[0.25] backdrop-blur-3xl border border-white/40 shadow-[0_22px_90px_rgba(124,58,237,0.35)] p-6 sm:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl sm:text-4xl xl:text-5xl font-extrabold text-black tracking-tight">Earnings</h1>
+              <p className="mt-1.5 text-sm text-black/50">Understand your payouts across orders and bookings.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <select
+                value={range}
+                onChange={(e) => setRange(e.target.value as DateRangeKey)}
+                className="h-10 rounded-2xl bg-white/80 px-4 text-sm text-slate-700 border border-white/60 shadow-sm outline-none"
+              >
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+              </select>
+              <button
+                onClick={handleDownloadReport}
+                className="h-10 rounded-2xl bg-gray-900 px-5 text-sm font-semibold text-white hover:bg-gray-800 transition-all"
+              >
+                Download report
+              </button>
+            </div>
+          </div>
 
-                  <button
-                    onClick={handleDownloadReport}
-                    className="h-9 rounded-full bg-black px-4 text-xs font-medium text-white shadow-sm hover:bg-slate-900"
-                  >
-                    Download report
-                  </button>
-                </div>
+          {/* Top summary cards inside glass */}
+          <div className="grid gap-4 md:grid-cols-3">
+              {/* Pending payout */}
+              <div className="rounded-2xl bg-white/70 px-4 py-4 shadow-sm">
+                <p className="text-xs text-slate-500">Pending payout</p>
+                <p className="mt-2 text-xl font-semibold text-slate-900">
+                  {formatCurrencyFromCents(pendingPayoutCents)}
+                </p>
+                <p className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
+                  Releases as orders are delivered
+                </p>
               </div>
-
-              {/* Top summary cards */}
-              <div className="grid gap-4 md:grid-cols-3">
-                {/* Pending payout */}
-                <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
-                  <p className="text-xs text-slate-500">Pending payout</p>
-                  <p className="mt-2 text-xl font-semibold text-slate-900">
-                    {formatCurrencyFromCents(pendingPayoutCents)}
-                  </p>
-                  <p className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
-                    Releases as orders are delivered
-                  </p>
-                </div>
-
-                {/* Lifetime paid */}
-                <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
-                  <p className="text-xs text-slate-500">Paid out (lifetime)</p>
-                  <p className="mt-2 text-xl font-semibold text-slate-900">
-                    {formatCurrencyFromCents(lifetimePaidCents)}
-                  </p>
-                  {/* You can add % vs last month here if you want */}
-                </div>
-
-                {/* This month */}
-                <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
-                  <p className="text-xs text-slate-500">This month</p>
-                  <p className="mt-2 text-xl font-semibold text-slate-900">
-                    {formatCurrencyFromCents(thisMonthCents)}
-                  </p>
-                  <p className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
-                    From {sourceMetrics.ordersCount} orders &amp; 0 bookings
-                  </p>
-                </div>
+              {/* Lifetime paid */}
+              <div className="rounded-2xl bg-white/70 px-4 py-4 shadow-sm">
+                <p className="text-xs text-slate-500">Paid out (lifetime)</p>
+                <p className="mt-2 text-xl font-semibold text-slate-900">
+                  {formatCurrencyFromCents(lifetimePaidCents)}
+                </p>
               </div>
+              {/* This month */}
+              <div className="rounded-2xl bg-white/70 px-4 py-4 shadow-sm">
+                <p className="text-xs text-slate-500">This month</p>
+                <p className="mt-2 text-xl font-semibold text-slate-900">
+                  {formatCurrencyFromCents(thisMonthCents)}
+                </p>
+                <p className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
+                  From {sourceMetrics.ordersCount} orders &amp; 0 bookings
+                </p>
+              </div>
+          </div>
+        </div>
+
+        {/* Body cards */}
+        <div className="space-y-6 max-w-6xl mx-auto">
 
               {/* Middle grid: trend + earnings by source */}
               <div className="grid gap-4 md:grid-cols-2">
@@ -633,10 +616,8 @@ export default function VendorFinancePage() {
                   </table>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </div> 
+        </div>{/* close body cards */}
+      </div>{/* close content wrapper */}
     </div>
   );
 }

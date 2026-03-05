@@ -1,12 +1,12 @@
 // app/pages/providers/new/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../../context/VendorShellContext";
+
 import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
-import Sidebar from "../../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
 import { uploadProviderImage } from "../../../../../lib/uploadProviderImage";
 import WellnessCategoryTagsSection, { WellnessOption } from "../../../../../components/taxonomy/WellnessCategoryTagsSection";
@@ -79,18 +79,6 @@ export default function NewProviderPage() {
       
     })();
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-       status: profile?.status ?? "active"
-      }),
-    [profile]
-  );
-
   const canSave = name.trim().length > 0 && whatsNumber.trim().length > 0;
 
   // --------- image handlers ----------
@@ -216,11 +204,7 @@ export default function NewProviderPage() {
   // --------- UI ----------
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      <Sidebar config={sidebarConfig} />
-
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           {/* Top bar */}
           <header className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <h1 className="text-xl font-semibold text-[#1B1529]">
@@ -591,8 +575,6 @@ export default function NewProviderPage() {
               </div>
             </div>
           </main>
-        </div>
-      </div>
-    </div>
+        </>
   );
 }

@@ -9,6 +9,9 @@ import {
   Users,
   PiggyBank,
   Boxes,
+  TrendingUp,
+  Gift,
+  ClipboardList,
 } from "lucide-react";
 
 /* -------------------------------------------------- */
@@ -24,6 +27,9 @@ export const ICONS = {
   Users,
   PiggyBank,
   Boxes,
+  TrendingUp,
+  Gift,
+  ClipboardList,
 };
 
 export type IconName = keyof typeof ICONS;
@@ -94,7 +100,7 @@ export function buildSidebarConfig({
     profile: {
       initials: getInitials(fullName || email),
       name: displayName,
-      role: role || "Vendor",
+      role: role || "Subscriber",
       status: status || "Active",
     },
 
@@ -112,6 +118,14 @@ export function buildSidebarConfig({
             icon: "BarChart3",
             items: [
               { id: "dash-home", label: "Home", href: "/pages/dashboard" },
+            ],
+          },
+          {
+            id: "analytics",
+            label: "Analytics",
+            icon: "TrendingUp",
+            items: [
+              { id: "a-overview", label: "Analytics", href: "/pages/vendor/analytics" },
             ],
           },
         ],
@@ -170,13 +184,58 @@ export function buildSidebarConfig({
             items: [
               { id: "e-all", label: "All Experiences", href: "/pages/experiences" },
               { id: "e-add", label: "Add Experience", href: "/pages/experiences/new" },
+              { id: "e-providers", label: "Wellness Providers", href: "/pages/experiences/providers" },
+              { id: "e-spaces", label: "Wellness Spaces", href: "/pages/experiences/spaces" },
             ],
           }
         ],
       },
 
       /* ---------------------------------------------- */
-      /* 3) Orders & Bookings                           */
+      /* 3) Rewards                                     */
+      /* ---------------------------------------------- */
+      {
+        id: "rewards",
+        label: "Rewards",
+        groups: [
+          {
+            id: "reward-calendar",
+            label: "Rewards Calendar",
+            icon: "Gift",
+            items: [
+              {
+                id: "r-submissions",
+                label: "Rewards Calendar",
+                href: "/pages/rewards/submissions",
+              },
+            ],
+          },
+        ],
+      },
+
+      /* ---------------------------------------------- */
+      /* 4) Quests                                      */
+      /* ---------------------------------------------- */
+      {
+        id: "quests",
+        label: "Quests",
+        groups: [
+          {
+            id: "quest-hub",
+            label: "Questionnaires",
+            icon: "ClipboardList",
+            items: [
+              { id: "q-all", label: "My Quests", href: "/pages/quests" },
+              { id: "q-new", label: "Create Quest", href: "/pages/quests/builder" },
+              { id: "q-linking", label: "Product Linking", href: "/pages/quests/linking" },
+              { id: "q-analytics", label: "Quest Analytics", href: "/pages/quests/analytics" },
+            ],
+          },
+        ],
+      },
+
+      /* ---------------------------------------------- */
+      /* 5) Orders & Bookings                           */
       /* ---------------------------------------------- */
       {
         id: "orders-bookings",

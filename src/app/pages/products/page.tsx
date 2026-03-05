@@ -1,11 +1,11 @@
 "use client";
 
+import { useVendorProfile } from "../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import Sidebar from "../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
 import { Listbox, Transition,Popover } from "@headlessui/react";
 import { Fragment } from "react";
@@ -1670,18 +1670,6 @@ export default function AllProductsPage() {
       setCurrentPage(totalPages);
     }
   }, [currentPage, totalPages]);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   const allVisibleIds = currentRows.map((p) => p.id);
   const allSelectedOnPage =
     allVisibleIds.length > 0 &&
@@ -1750,324 +1738,192 @@ export default function AllProductsPage() {
 const hasActiveFilters = activeFilterCount > 0;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      <Sidebar config={sidebarConfig} />
+    <div className="relative min-h-full flex-1 overflow-auto">
+      {/* Background image */}
+      <div className="absolute top-0 left-0 right-0 h-[420px] overflow-hidden pointer-events-none">
+        <img src="/images/vendor bg.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-[#F6F6FC]" />
+      </div>
 
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-          {/* Top bar */}
-          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold text-[#1B1529]">
-                All Products
-              </h1>
-              <span className="inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
-                {products.length}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Bulk Actions */}
-              <button
-                type="button"
-                onClick={() => selectedProducts.length && setBulkOpen(true)}
-                className={clsx(
-                  "inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[11px] font-semibold shadow-sm",
-                  selectedProducts.length
-                    ? "border-black bg-black text-white"
-                    : "border-gray-200 bg-white text-gray-700"
-                )}
-              >
-                Bulk Actions
-                {selectedProducts.length > 0 && (
-                  <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white text-[10px] font-bold text-black">
-                    {selectedProducts.length}
+      <div className="relative px-6 sm:px-8 py-6 sm:py-8 space-y-6">
+        {/* ============ HEADER (glass panel) ============ */}
+        <div className="rounded-3xl bg-white/[0.25] backdrop-blur-3xl border border-white/40 shadow-[0_22px_90px_rgba(124,58,237,0.35)] p-4 sm:p-6 xl:p-10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-extrabold text-[#1B1529] tracking-tight">
+                  All Products
+                </h1>
+                <span className="inline-flex h-7 items-center rounded-full bg-purple-600 px-3 text-xs font-semibold text-white">
+                  {products.length}
+                </span>
+                {hasActiveFilters && (
+                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-medium text-amber-800">
+                    {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
                   </span>
-                )}
-                <span>▾</span>
-              </button>
-
-              {/* Filters */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setFilterOpen((o) => !o)}
-                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-[11px] font-semibold text-gray-700 shadow-sm"
-                >
-                  Filter by ▾
-                </button>
-
-                {filterOpen && (
-                  <div className="absolute right-0 z-40 mt-2 w-60 rounded-2xl border border-gray-200 bg-white p-3 text-[11px] shadow-xl">
-                    <div className="space-y-4">
-                      {/* Filter by Type */}
-                      <div>
-                        <p className="mb-1 font-semibold text-gray-700">
-                          Filter by: Type
-                        </p>
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.type.includes("single")}
-                            onChange={(e) =>
-                              toggleFilter("type", "single", e.target.checked)
-                            }
-                          />
-                          <span>Single</span>
-                        </label>
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.type.includes("variant")}
-                            onChange={(e) =>
-                              toggleFilter("type", "variant", e.target.checked)
-                            }
-                          />
-                          <span>Variant</span>
-                        </label>
-                      </div>
-
-                      {/* Filter by Status */}
-                      <div>
-                        <p className="mb-1 font-semibold text-gray-700">
-                          Filter by: Status
-                        </p>
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.status.includes("draft")}
-                            onChange={(e) =>
-                              toggleFilter("status", "draft", e.target.checked)
-                            }
-                          />
-                          <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 font-medium text-gray-600">
-                            Draft
-                          </span>
-                        </label>
-
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.status.includes("inactive")}
-                            onChange={(e) =>
-                              toggleFilter(
-                                "status",
-                                "inactive",
-                                e.target.checked
-                              )
-                            }
-                          />
-                          <span className="inline-flex items-center rounded-full bg-gray-300 px-2 py-0.5 font-medium text-gray-700">
-                            In-active
-                          </span>
-                        </label>
-
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.status.includes("active")}
-                            onChange={(e) =>
-                              toggleFilter(
-                                "status",
-                                "active",
-                                e.target.checked
-                              )
-                            }
-                          />
-                          <span className="inline-flex items-center rounded-full bg-[#DCFCE7] px-2 py-0.5 font-medium text-[#166534]">
-                            Active
-                          </span>
-                        </label>
-
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.status.includes("out_of_stock")}
-                            onChange={(e) =>
-                              toggleFilter(
-                                "status",
-                                "out_of_stock",
-                                e.target.checked
-                              )
-                            }
-                          />
-                          <span className="inline-flex items-center rounded-full bg-[#FEE2E2] px-2 py-0.5 font-medium text-[#B91C1C]">
-                            Out of Stock
-                          </span>
-                        </label>
-
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.status.includes("published")}
-                            onChange={(e) =>
-                              toggleFilter(
-                                "status",
-                                "published",
-                                e.target.checked
-                              )
-                            }
-                          />
-                          <span className="inline-flex items-center rounded-full bg-[#E0F2FE] px-2 py-0.5 font-medium text-[#0369A1]">
-                            Published
-                          </span>
-                        </label>
-                      </div>
-
-                      {/* Filter by Discount (visual only; not wired to data) */}
-                      <div>
-                        <p className="mb-1 font-semibold text-gray-700">
-                          Filter by: Discount
-                        </p>
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.discount.includes("no_discount")}
-                            onChange={(e) =>
-                              toggleFilter(
-                                "discount",
-                                "no_discount",
-                                e.target.checked
-                              )
-                            }
-                          />
-                          <span>No Discounts</span>
-                        </label>
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.discount.includes("active")}
-                            onChange={(e) =>
-                              toggleFilter(
-                                "discount",
-                                "active",
-                                e.target.checked
-                              )
-                            }
-                          />
-                          <span>Active Discounts</span>
-                        </label>
-                        <label className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={filters.discount.includes("expired")}
-                            onChange={(e) =>
-                              toggleFilter(
-                                "discount",
-                                "expired",
-                                e.target.checked
-                              )
-                            }
-                          />
-                          <span>Expired Discounts</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
                 )}
               </div>
 
-              {/* Search box + button */}
-             <div className="relative">
-  <Search
-    className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-  />
-  <input
-    value={searchInput}
-    onChange={(e) => setSearchInput(e.target.value)}
-    onKeyDown={(e) => {
-      if (e.key === "Enter") {
-        setSearch(searchInput);
-        setCurrentPage(1);
-      }
-    }}
-    placeholder="Search product…"
-    className="
-      w-60
-      rounded-full
-      bg-white
-      pl-11
-      pr-4
-      py-2
-      text-xs
-      text-gray-700
-      shadow-sm
-      border border-gray-200
-      placeholder:text-gray-400
-      focus:border-[#7C3AED]
-      focus:ring-2 
-      focus:ring-[#E9D8FD] 
-      focus:outline-none
-      transition-all
-    "
-  />
-</div>
+              <div className="flex items-center gap-2">
+                {/* Bulk Actions */}
+                <button
+                  type="button"
+                  onClick={() => selectedProducts.length && setBulkOpen(true)}
+                  className={clsx(
+                    "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
+                    selectedProducts.length
+                      ? "border-gray-900 bg-gray-900 text-white hover:bg-gray-800"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  )}
+                >
+                  Bulk Actions
+                  {selectedProducts.length > 0 && (
+                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white text-[10px] font-bold text-gray-900">
+                      {selectedProducts.length}
+                    </span>
+                  )}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch(searchInput); // trigger search
-                  setCurrentPage(1);
-                }}
-                className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white"
-              >
-                Search
-              </button>
+                {/* Filters */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setFilterOpen((o) => !o)}
+                    className={clsx(
+                      "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
+                      hasActiveFilters
+                        ? "border-purple-300 bg-purple-50 text-purple-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    )}
+                  >
+                    <Filter className="h-3.5 w-3.5" />
+                    Filters
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => setAddChoiceOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-lg font-semibold text-white shadow-md hover:bg-gray-900"
-              >
-                +
-              </button>
+                  {filterOpen && (
+                    <div className="absolute right-0 z-40 mt-2 w-64 rounded-2xl border border-gray-200 bg-white p-4 text-xs shadow-xl">
+                      <div className="space-y-4">
+                        {/* Filter by Type */}
+                        <div>
+                          <p className="mb-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                            Type
+                          </p>
+                          <label className="flex items-center gap-2 py-1 cursor-pointer">
+                            <input type="checkbox" className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" checked={filters.type.includes("single")} onChange={(e) => toggleFilter("type", "single", e.target.checked)} />
+                            <span className="text-gray-700">Single</span>
+                          </label>
+                          <label className="flex items-center gap-2 py-1 cursor-pointer">
+                            <input type="checkbox" className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" checked={filters.type.includes("variant")} onChange={(e) => toggleFilter("type", "variant", e.target.checked)} />
+                            <span className="text-gray-700">Variant</span>
+                          </label>
+                        </div>
+
+                        {/* Filter by Status */}
+                        <div>
+                          <p className="mb-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                            Status
+                          </p>
+                          {[
+                            { key: "draft", label: "Draft", cls: "bg-gray-100 text-gray-600" },
+                            { key: "inactive", label: "Inactive", cls: "bg-gray-200 text-gray-700" },
+                            { key: "active", label: "Active", cls: "bg-green-50 text-green-700" },
+                            { key: "out_of_stock", label: "Out of Stock", cls: "bg-red-50 text-red-700" },
+                            { key: "published", label: "Published", cls: "bg-blue-50 text-blue-700" },
+                          ].map((s) => (
+                            <label key={s.key} className="flex items-center gap-2 py-1 cursor-pointer">
+                              <input type="checkbox" className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" checked={filters.status.includes(s.key)} onChange={(e) => toggleFilter("status", s.key, e.target.checked)} />
+                              <span className={clsx("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium", s.cls)}>{s.label}</span>
+                            </label>
+                          ))}
+                        </div>
+
+                        {/* Filter by Discount */}
+                        <div>
+                          <p className="mb-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                            Discount
+                          </p>
+                          {[
+                            { key: "no_discount", label: "No Discounts" },
+                            { key: "active", label: "Active Discounts" },
+                            { key: "expired", label: "Expired Discounts" },
+                          ].map((d) => (
+                            <label key={d.key} className="flex items-center gap-2 py-1 cursor-pointer">
+                              <input type="checkbox" className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" checked={filters.discount.includes(d.key)} onChange={(e) => toggleFilter("discount", d.key, e.target.checked)} />
+                              <span className="text-gray-700">{d.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Search */}
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { setSearch(searchInput); setCurrentPage(1); } }}
+                    placeholder="Search product..."
+                    className="w-56 rounded-full border border-gray-200 bg-white py-2 pl-10 pr-4 text-xs text-gray-700 shadow-sm placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 focus:outline-none transition-all"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => { setSearch(searchInput); setCurrentPage(1); }}
+                  className="rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-800 transition-colors"
+                >
+                  Search
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAddChoiceOpen(true)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-lg font-semibold text-white shadow-md hover:bg-gray-800 transition-colors"
+                >
+                  +
+                </button>
+              </div>
             </div>
-          </div>
+        </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-auto p-6">
-            <div className="min-h-0 overflow-auto rounded-2xl border border-[#ECECFB] bg-white">
+        {/* ============ TABLE BODY ============ */}
+        <div className="rounded-2xl bg-white shadow-sm">
+            <div className="min-h-0 overflow-auto">
               <table className="min-w-full text-xs">
-                <thead className="sticky top-0 z-20 bg-[#F6F5FF] text-[11px] font-semibold text-gray-500 shadow-sm">
-                  <tr>
-                    <th className="w-8 px-3 py-3">
+                <thead className="sticky top-0 z-20">
+                  <tr className="bg-gray-50/80 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    <th className="w-10 px-4 py-3">
                       <input
                         type="checkbox"
-                        className="h-3 w-3"
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                         checked={allSelectedOnPage}
                         onChange={toggleSelectAllPage}
                       />
                     </th>
-                    <th className="px-3 py-3 text-left">Product Name</th>
-                    <th className="px-3 py-3 text-left">Type</th>
-                    <th className="px-3 py-3 text-left">Category</th>
-                    <th className="px-3 py-3 text-right">Price</th>
-                    <th className="px-3 py-3 text-center">Variants</th>
-                    <th className="px-3 py-3 text-right">Stock</th>
-                    <th className="px-3 py-3 text-left">SKU</th>
-                    <th className="px-3 py-3 text-center">Status</th>
-                    <th className="px-3 py-3 text-center">Action</th>
+                    <th className="px-4 py-3 text-left">Product</th>
+                    <th className="px-4 py-3 text-left">Category</th>
+                    <th className="px-4 py-3 text-right">Price</th>
+                    <th className="px-4 py-3 text-center">Variants</th>
+                    <th className="px-4 py-3 text-right">Stock</th>
+                    <th className="px-4 py-3 text-center">Status</th>
+                    <th className="w-28 px-4 py-3 text-center"></th>
                   </tr>
                 </thead>
 
-                <tbody>
+                <tbody className="divide-y divide-gray-50">
                   {loading ? (
                     <tr>
-                      <td
-                        colSpan={10}
-                        className="px-4 py-10 text-center text-xs text-gray-500"
-                      >
-                                <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }}/>
-
-
+                      <td colSpan={8} className="px-4 py-12 text-center">
+                        <ClipLoader size={40} color="#6B46C1" cssOverride={{ animationDuration: "3s" }} />
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={10}
-                        className="px-4 py-16 text-center text-xs text-gray-500"
-                      >
+                      <td colSpan={8} className="px-4 py-16 text-center text-sm text-gray-400">
                         No products found.
                       </td>
                     </tr>
@@ -2078,22 +1934,23 @@ const hasActiveFilters = activeFilterCount > 0;
                         <tr
                           key={p.id}
                           className={clsx(
-                            "border-t border-gray-100",
-                            idx % 2 === 1 && "bg-[#FBFBFE]"
+                            "group transition-colors hover:bg-purple-50/30",
+                            checked && "bg-purple-50/40"
                           )}
                         >
-                          <td className="px-3 py-3">
+                          <td className="px-4 py-3">
                             <input
                               type="checkbox"
-                              className="h-3 w-3"
+                              className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                               checked={checked}
                               onChange={() => toggleRow(p.id)}
                             />
                           </td>
 
-                          <td className="px-3 py-3">
+                          {/* Product: image + name + SKU + type badge */}
+                          <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="relative h-9 w-9 overflow-hidden rounded-xl bg-gray-200">
+                              <div className="relative h-10 w-10 overflow-hidden rounded-xl bg-gray-100 shrink-0">
                                 {p.imageUrl && (
                                   <Image
                                     src={p.imageUrl}
@@ -2103,94 +1960,71 @@ const hasActiveFilters = activeFilterCount > 0;
                                   />
                                 )}
                               </div>
-                              <div className="text-xs font-semibold text-gray-900">
-                                {p.name}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate max-w-[220px]">
+                                  {p.name}
+                                </p>
+                                <div className="mt-0.5 flex items-center gap-2">
+                                  <span className="text-[11px] text-gray-400 font-mono">{p.sku}</span>
+                                  <span className={clsx(
+                                    "inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                                    p.type === "Variant" ? "bg-purple-100 text-purple-600" : "bg-gray-100 text-gray-500"
+                                  )}>
+                                    {p.type}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </td>
 
-                          <td className="px-3 py-3 text-[11px] text-gray-600">
-                            {p.type}
-                          </td>
-
-                          <td className="px-3 py-3 text-[11px] text-gray-600">
+                          <td className="px-4 py-3 text-xs text-gray-500">
                             {p.categories}
                           </td>
 
-                          <td className="px-3 py-3 text-right text-[11px] text-gray-800">
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
                             {formatMoney(p.price)}
                           </td>
 
-                          <td className="px-3 py-3 text-center">
+                          <td className="px-4 py-3 text-center">
                             {p.type === "Variant" ? (
                               <button
                                 type="button"
                                 onClick={() => handleOpenVariants(p)}
-                                className="inline-flex h-7 min-w-[32px] items-center justify-center rounded-full bg-[#F3E8FF] px-2 text-[11px] font-semibold text-[#6D28D9] hover:bg-[#EDE0FF]"
+                                className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-full bg-purple-50 px-2 text-[11px] font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
                               >
                                 {p.variantCount}
                               </button>
                             ) : (
-                              <span className="text-[11px] text-gray-400">
-                                {p.variantCount}
-                              </span>
+                              <span className="text-xs text-gray-300">—</span>
                             )}
                           </td>
 
-                          <td className="px-3 py-3 text-right text-[11px] text-gray-800">
+                          <td className="px-4 py-3 text-right text-sm font-medium text-gray-700">
                             {p.stock}
                           </td>
 
-                          <td className="px-3 py-3 text-[11px] text-gray-600">
-                            {p.sku}
+                          <td className="px-4 py-3 text-center">
+                            <span className={clsx(
+                              "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                              (p.status === "active" || p.status === "published") && "bg-green-50 text-green-700",
+                              p.status === "draft" && "bg-gray-100 text-gray-500",
+                              p.status === "out_of_stock" && "bg-red-50 text-red-600",
+                              p.status === "inactive" && "bg-gray-100 text-gray-400"
+                            )}>
+                              {p.status === "out_of_stock" ? "Out of Stock" : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                            </span>
                           </td>
 
-                     <td className="px-3 py-4 text-center">
-  <div className="relative inline-flex">
-    <select
-      value={p.status}
-      onChange={(e) =>
-        handleStatusChange(p.id, e.target.value as ProductStatus)
-      }
-      className={clsx(
-        // removed h-8 → allow padding to define height
-        "rounded-full border pl-3 pr-8 py-1.5 text-[11px] font-semibold focus:outline-none appearance-none",
-
-        (p.status === "active" || p.status === "published") &&
-          "border-transparent bg-[#DCFCE7] text-[#166534]",
-        p.status === "draft" &&
-          "border-transparent bg-gray-200 text-gray-700",
-        p.status === "out_of_stock" &&
-          "border-transparent bg-[#FEE2E2] text-[#B91C1C]",
-        p.status === "inactive" &&
-          "border-transparent bg-gray-300 text-gray-700"
-      )}
-    >
-      <option value="draft">Draft</option>
-      <option value="active">Active</option>
-      <option value="published">Published</option>
-      <option value="inactive">Inactive</option>
-    </select>
-
-    {/* custom caret */}
-    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">
-      ▾
-    </span>
-  </div>
-</td>
-
-                          <td className="px-3 py-3 text-center">
-                            <div className="flex items-center justify-center gap-2">
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
-                                className="rounded-full bg-black px-4 py-1.5 text-[11px] font-semibold text-white"
-                                onClick={() =>
-                                  router.push(`/pages/products/${p.id}/edit`)
-                                }
+                                className="rounded-lg bg-gray-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-gray-800 transition-colors"
+                                onClick={() => router.push(`/pages/products/${p.id}/edit`)}
                               >
                                 Edit
                               </button>
                               <button
-                                className="rounded-full border border-gray-300 px-4 py-1.5 text-[11px] text-gray-700"
+                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
                                 onClick={() => handleTrash(p.id)}
                               >
                                 Trash
@@ -2205,21 +2039,19 @@ const hasActiveFilters = activeFilterCount > 0;
               </table>
             </div>
 
-            {/* Pagination */}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
-              <span>
-                Showing {fromItem}-{toItem} of {filtered.length} products
+            {/* ============ PAGINATION ============ */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-3">
+              <span className="text-xs text-gray-500">
+                Showing <span className="font-medium text-gray-900">{fromItem}-{toItem}</span> of <span className="font-medium text-gray-900">{filtered.length}</span> products
               </span>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
-                  className="rounded-full border border-gray-300 px-3 py-1 disabled:opacity-40"
-                  onClick={() =>
-                    setCurrentPage((p) => Math.max(1, p - 1))
-                  }
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={safePage === 1}
                 >
-                  &lt; Back
+                  Previous
                 </button>
 
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map(
@@ -2227,10 +2059,10 @@ const hasActiveFilters = activeFilterCount > 0;
                     <button
                       key={page}
                       className={clsx(
-                        "min-w-[28px] rounded-md border px-2 py-1",
+                        "min-w-[32px] rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
                         page === safePage
-                          ? "border-black bg-black text-white"
-                          : "border-gray-300 bg-white text-gray-700"
+                          ? "border-purple-600 bg-purple-600 text-white"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                       )}
                       onClick={() => setCurrentPage(page)}
                     >
@@ -2240,70 +2072,63 @@ const hasActiveFilters = activeFilterCount > 0;
                 )}
 
                 <button
-                  className="rounded-full border border-gray-300 px-3 py-1 disabled:opacity-40"
-                  onClick={() =>
-                    setCurrentPage((p) => Math.min(totalPages, p + 1))
-                  }
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={safePage === totalPages}
                 >
-                  Next &gt;
+                  Next
                 </button>
 
-                <div className="ml-3 flex items-center gap-2 text-xs text-gray-600">
-      <span className="whitespace-nowrap">Results per page</span>
-
-      <Listbox value={pageSize} onChange={(v) => setPageSize(v)}>
-        <div className="relative">
-          <Listbox.Button className="relative w-28 cursor-pointer rounded-full border border-gray-200 bg-white py-1.5 pl-3 pr-10 text-left text-xs text-gray-800 shadow-sm focus:outline-none">
-            <span className="block truncate">{pageSize}</span>
-            <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
-              <ChevronDown className="h-3 w-3 text-gray-400" />
-            </span>
-          </Listbox.Button>
-
-          <Transition
-            as={Fragment}
-            leave="transition ease-in duration-150"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <Listbox.Options className="absolute z-50 mt-2 w-full rounded-2xl border border-gray-200 bg-white py-2 shadow-lg focus:outline-none">
-              {pageOptions.map((opt) => (
-                <Listbox.Option
-                  key={opt}
-                  value={opt}
-                  className={({ active }) =>
-                    `relative cursor-pointer select-none py-2 pl-4 pr-8 text-xs ${
-                      active ? "bg-gray-100" : "text-gray-700"
-                    }`
-                  }
-                >
-                  {({ selected }) => (
-                    <>
-                      <span
-                        className={`block truncate ${
-                          selected ? "font-semibold text-gray-900" : ""
-                        }`}
-                      >
-                        {opt}
-                      </span>
-                      {selected && (
-                        <span className="absolute inset-y-0 right-3 flex items-center text-purple-600">
-                          <Check className="h-3 w-3" />
+                <div className="ml-3 flex items-center gap-2 text-xs text-gray-500">
+                  <span className="whitespace-nowrap">Per page</span>
+                  <Listbox value={pageSize} onChange={(v) => setPageSize(v)}>
+                    <div className="relative">
+                      <Listbox.Button className="relative w-20 cursor-pointer rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-8 text-left text-xs text-gray-800 hover:bg-gray-50 focus:outline-none transition-colors">
+                        <span className="block truncate">{pageSize}</span>
+                        <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                          <ChevronDown className="h-3 w-3 text-gray-400" />
                         </span>
-                      )}
-                    </>
-                  )}
-                </Listbox.Option>
-              ))}
-            </Listbox.Options>
-          </Transition>
-        </div>
-      </Listbox>
-    </div>
+                      </Listbox.Button>
+
+                      <Transition
+                        as={Fragment}
+                        leave="transition ease-in duration-150"
+                        leaveFrom="opacity-100"
+                        leaveTo="opacity-0"
+                      >
+                        <Listbox.Options className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white py-1 shadow-lg focus:outline-none">
+                          {pageOptions.map((opt) => (
+                            <Listbox.Option
+                              key={opt}
+                              value={opt}
+                              className={({ active }) =>
+                                clsx(
+                                  "relative cursor-pointer select-none py-2 pl-3 pr-8 text-xs",
+                                  active ? "bg-purple-50 text-purple-700" : "text-gray-700"
+                                )
+                              }
+                            >
+                              {({ selected }) => (
+                                <>
+                                  <span className={clsx("block truncate", selected && "font-semibold text-gray-900")}>
+                                    {opt}
+                                  </span>
+                                  {selected && (
+                                    <span className="absolute inset-y-0 right-3 flex items-center text-purple-600">
+                                      <Check className="h-3 w-3" />
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </Listbox.Option>
+                          ))}
+                        </Listbox.Options>
+                      </Transition>
+                    </div>
+                  </Listbox>
+                </div>
               </div>
             </div>
-          </div>
         </div>
       </div>
 

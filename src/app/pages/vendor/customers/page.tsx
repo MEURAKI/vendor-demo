@@ -1,13 +1,13 @@
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Search, X } from "lucide-react";
 import ClipLoader from "react-spinners/ClipLoader";
 
-import Sidebar from "../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 
 /* ---------- Types ---------- */
@@ -164,18 +164,6 @@ export default function VendorCustomersPage() {
       isMounted = false;
     };
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   /* ---------- Group orders by customer ---------- */
 
   const allCustomers: CustomerRow[] = useMemo(() => {
@@ -261,22 +249,22 @@ export default function VendorCustomersPage() {
     [];
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      <Sidebar config={sidebarConfig} />
+    <div className="relative min-h-full flex-1 overflow-auto">
+      {/* Background image */}
+      <div className="absolute top-0 left-0 right-0 h-[420px] overflow-hidden pointer-events-none">
+        <img src="/images/vendor bg.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-[#F6F6FC]" />
+      </div>
 
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
-          {/* Top bar */}
-          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold text-[#1B1529]">
-                Customers
-              </h1>
-              <span className="inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
-                {allCustomers.length}
-              </span>
+      <div className="relative px-6 sm:px-8 py-6 sm:py-8 space-y-6">
+
+        {/* Glass panel — header */}
+        <div className="rounded-3xl bg-white/[0.25] backdrop-blur-3xl border border-white/40 shadow-[0_22px_90px_rgba(124,58,237,0.35)] p-6 sm:p-8">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-3xl sm:text-4xl xl:text-5xl font-extrabold text-black tracking-tight">Customers</h1>
+              <p className="mt-1.5 text-sm text-black/50">All customers who have placed orders with you.</p>
             </div>
-
             <div className="flex items-center gap-3">
               {/* Search box */}
               <div className="relative">
@@ -291,43 +279,23 @@ export default function VendorCustomersPage() {
                     }
                   }}
                   placeholder="Search by customer name or email…"
-                  className="
-                    w-80
-                    rounded-full
-                    bg-white
-                    pl-11
-                    pr-4
-                    py-2
-                    text-xs
-                    text-gray-700
-                    shadow-sm
-                    border border-gray-200
-                    placeholder:text-gray-400
-                    focus:border-[#7C3AED]
-                    focus:ring-2 
-                    focus:ring-[#E9D8FD] 
-                    focus:outline-none
-                    transition-all
-                  "
-                />
-              </div>
-
+                  className="w-72 rounded-2xl bg-white/80 pl-11 pr-4 py-3 text-sm text-gray-700 shadow-sm border border-white/60 placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-500/20 focus:outline-none transition-all"
+                /></div>
               <button
                 type="button"
-                onClick={() => {
-                  setSearch(searchInput);
-                  setCurrentPage(1);
-                }}
-                className="rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white"
+                onClick={() => { setSearch(searchInput); setCurrentPage(1); }}
+                className="rounded-2xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white hover:bg-gray-800 transition-all"
               >
                 Search
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-auto p-6">
-            <div className="min-h-0 overflow-auto rounded-2xl border border-[#ECECFB] bg-white">
+        {/* White card — table */}
+        <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
+          <div className="overflow-auto">
+            <div className="min-h-0 overflow-auto">
               <table className="min-w-full text-xs">
                 <thead className="sticky top-0 z-20 bg-[#F6F5FF] text-[11px] font-semibold text-gray-500 shadow-sm">
                   <tr>
@@ -480,8 +448,7 @@ export default function VendorCustomersPage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </div>{/* close white card */}
 
       {/* ---------- CUSTOMER SUMMARY MODAL ---------- */}
       {selectedCustomer && (
@@ -571,6 +538,7 @@ export default function VendorCustomersPage() {
           </div>
         </div>
       )}
+      </div>{/* close content wrapper */}
     </div>
   );
 }

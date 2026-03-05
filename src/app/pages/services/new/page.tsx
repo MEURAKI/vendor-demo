@@ -1,10 +1,10 @@
 "use client";
 
+import { useVendorProfile } from "../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState, useRef } from "react";
 import clsx from "clsx";
 import Image from "next/image";
-import Sidebar from "../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../lib/supabase/client";
 import { uploadProviderImage } from "../../../../lib/uploadProviderImage";
 import MultiSelect from "../../../../components/inputs/MultiSelect";
@@ -394,18 +394,6 @@ useEffect(() => {
       mounted = false;
     };
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   const canSave = name.trim().length > 0;
   const descriptionHasError =
     submitAttempted && !validateDescriptionTabs(tabs);
@@ -587,11 +575,7 @@ async function handleSave(status: ServiceStatus) {
   );
 
   return (
-    <div className="flex h-screen w-screen bg-[#050509] overflow-hidden">
-      <Sidebar config={sidebarConfig} />
-
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
             <h1 className="text-xl font-semibold text-[#1B1529]">
@@ -1834,8 +1818,6 @@ async function handleSave(status: ServiceStatus) {
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
       {/* Description error modal */}
       <AppModal
@@ -1885,6 +1867,6 @@ async function handleSave(status: ServiceStatus) {
         }}
         onClose={() => setShowCategoryErrorModal(false)}
       />
-    </div>
+    </>
   );
 }

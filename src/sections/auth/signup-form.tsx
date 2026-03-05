@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -10,6 +10,42 @@ import { useToast } from "../../components/toast/ToastProvider";
 const redirectTo =
   process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI ||
   "https://subscriber.meuraki.com.sg/pages/auth/callback";
+
+/* ── Carousel slides ── */
+const slides = [
+  {
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+        <path d="M2 17l10 5 10-5" />
+        <path d="M2 12l10 5 10-5" />
+      </svg>
+    ),
+    title: "List Your Products\n& Services",
+    desc: "Showcase your wellness offerings to thousands of health-conscious consumers on Meuraki's marketplace.",
+  },
+  {
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </svg>
+    ),
+    title: "Track & Grow\nYour Revenue",
+    desc: "Monitor sales, bookings, and customer engagement with real-time analytics and actionable insights.",
+  },
+  {
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+    title: "Join a Thriving\nCommunity",
+    desc: "Connect with like-minded wellness professionals and build lasting customer relationships.",
+  },
+];
 
 export default function SignupForm() {
   const router = useRouter();
@@ -22,6 +58,7 @@ export default function SignupForm() {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
 
   const checks = useMemo(() => {
     const p = formData.password || "";
@@ -41,6 +78,15 @@ export default function SignupForm() {
     checks.number &&
     checks.special &&
     formData.acceptTerms;
+
+  // Auto-rotate carousel
+  useEffect(() => {
+    const timer = setInterval(
+      () => setActiveSlide((s) => (s + 1) % slides.length),
+      5000
+    );
+    return () => clearInterval(timer);
+  }, []);
 
   const doSignup = async (opts?: { quick?: boolean }) => {
     const quick = opts?.quick ?? false;
@@ -63,7 +109,7 @@ export default function SignupForm() {
       password,
       options: {
         data: {
-          role : "vendor",
+          role: "subscriber",
           quick_signup: quick,
         },
       },
@@ -81,7 +127,11 @@ export default function SignupForm() {
       try {
         const { error: profileError } = await supabase
           .from("profiles")
-          .update({ onboarding_completed: true, status: "incomplete_registration", email_verified: true })
+          .update({
+            onboarding_completed: true,
+            status: "incomplete_registration",
+            email_verified: true,
+          })
           .eq("id", data.user.id);
 
         if (profileError) {
@@ -91,7 +141,10 @@ export default function SignupForm() {
           );
         }
       } catch (e) {
-        console.error("Unexpected error updating profile onboarding flag:", e);
+        console.error(
+          "Unexpected error updating profile onboarding flag:",
+          e
+        );
       }
     }
 
@@ -103,13 +156,17 @@ export default function SignupForm() {
         // - notify admin
         // - go straight to dashboard
 
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error: signInError } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
         if (signInError) {
-          console.error("Quick signup sign-in error:", signInError.message);
+          console.error(
+            "Quick signup sign-in error:",
+            signInError.message
+          );
           errorToast({
             title: "Error",
             description:
@@ -135,7 +192,7 @@ export default function SignupForm() {
 
         successToast({
           title: "Welcome!",
-          description: "Your account is ready and you’re now logged in.",
+          description: "Your account is ready and you're now logged in.",
         });
 
         setFormData({
@@ -162,7 +219,7 @@ export default function SignupForm() {
         console.error("send-verify error:", j);
         errorToast({
           title: "Error",
-          description: j.error || "Couldn’t send verification email.",
+          description: j.error || "Couldn't send verification email.",
         });
         setIsSubmitting(false);
         return;
@@ -183,7 +240,7 @@ export default function SignupForm() {
 
       successToast({
         title: "Check your email",
-        description: "We’ve sent a verification link to your inbox.",
+        description: "We've sent a verification link to your inbox.",
       });
 
       setFormData({
@@ -225,27 +282,26 @@ export default function SignupForm() {
   };
 
   return (
-    // Full-page scroll (scrollbar on far right), 2-column on desktop
-    <div className="flex min-h-screen flex-col bg-white lg:flex-row">
-      {/* Left – Form */}
-      <div className="flex flex-1 items-start justify-center px-6 sm:px-10 lg:px-16 py-8 lg:items-center">
-        <div className="w-full max-w-md">
-          {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-black mb-1">
-              Create an account
-            </h1>
-            <p className="text-xs sm:text-sm text-gray-500">
-              Please fill in your login details
-            </p>
-          </div>
+    <div className="min-h-screen flex">
+      {/* Left panel — Form */}
+      <div className="flex-1 flex flex-col justify-between p-8 sm:p-12 lg:p-16 bg-white overflow-y-auto">
+        <div className="flex-1 flex flex-col justify-center max-w-md w-full mx-auto">
+          {/* Title */}
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-tight">
+            MEURAKI
+            <br />
+            Vendor Portal
+          </h1>
+          <p className="text-base text-gray-500 mt-3">
+            Create your account and start growing your wellness brand.
+          </p>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="mt-10 space-y-5">
             {/* Email */}
             <div>
-              <label className="text-black font-semibold tracking-wide text-xs sm:text-sm">
-                EMAIL ADDRESS
+              <label className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                Email Address
               </label>
               <input
                 type="email"
@@ -253,10 +309,7 @@ export default function SignupForm() {
                 onChange={(e) =>
                   setFormData((s) => ({ ...s, email: e.target.value }))
                 }
-                className="mt-2 w-full h-11 sm:h-12 rounded-2xl px-4
-                           bg-[#EFEDFF] border border-transparent
-                           text-gray-900 placeholder-gray-500
-                           focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full mt-2 px-4 py-4 text-sm border border-gray-300 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 transition-all"
                 placeholder="Email Address"
                 required
               />
@@ -264,8 +317,8 @@ export default function SignupForm() {
 
             {/* Password */}
             <div>
-              <label className="text-black font-semibold tracking-wide text-xs sm:text-sm">
-                PASSWORD
+              <label className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                Password
               </label>
               <input
                 type="password"
@@ -273,23 +326,19 @@ export default function SignupForm() {
                 onChange={(e) =>
                   setFormData((s) => ({ ...s, password: e.target.value }))
                 }
-                className={`mt-2 w-full h-11 sm:h-12 rounded-2xl px-4
-                           bg-[#EFEDFF] border
-                           ${
-                             formData.password && !allGood
-                               ? "border-purple-300"
-                               : "border-transparent"
-                           }
-                           text-gray-900 placeholder-gray-500
-                           focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                className={`w-full mt-2 px-4 py-4 text-sm border rounded-2xl bg-white transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 ${
+                  formData.password && !allGood
+                    ? "border-purple-300"
+                    : "border-gray-300"
+                }`}
                 placeholder="Create a strong password"
                 required
                 aria-describedby="password-hints"
               />
 
               {formData.password.length > 0 && (
-                <div id="password-hints" className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1.5">
+                <div id="password-hints" className="mt-3">
+                  <p className="text-xs text-gray-500 mb-2">
                     Password must include:
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -304,7 +353,7 @@ export default function SignupForm() {
             </div>
 
             {/* Terms */}
-            <label className="flex items-start gap-3 text-xs sm:text-sm text-gray-600">
+            <label className="flex items-start gap-3 text-sm text-gray-600">
               <input
                 type="checkbox"
                 checked={formData.acceptTerms}
@@ -317,7 +366,7 @@ export default function SignupForm() {
                 className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
               />
               <span>
-                By clicking “Sign up”, you are creating a{" "}
+                By clicking &ldquo;Sign up&rdquo;, you are creating a{" "}
                 <b>MEURAKI Subscriber account</b> and therefore you agree to
                 MEURAKI{" "}
                 <Link
@@ -341,34 +390,33 @@ export default function SignupForm() {
             <button
               type="submit"
               disabled={!allGood || isSubmitting}
-              className={`w-full h-11 sm:h-12 rounded-full text-sm sm:text-base font-medium transition-colors shadow-lg
-                         ${
-                           allGood && !isSubmitting
-                             ? "bg-black text-white hover:bg-gray-900"
-                             : "bg-gray-200 text-gray-500 cursor-not-allowed"
-                         }`}
+              className={`w-full px-4 py-4 text-sm font-semibold rounded-2xl transition-all ${
+                allGood && !isSubmitting
+                  ? "bg-gray-900 text-white hover:bg-gray-800"
+                  : "bg-gray-200 text-gray-500 cursor-not-allowed"
+              }`}
             >
               {isSubmitting ? "Signing up..." : "Sign up"}
             </button>
 
-            {/* Quick sign up – skips confirmation & onboarding */}
+            {/* Quick sign up */}
             <button
               type="button"
               onClick={handleQuickSignup}
               disabled={!allGood || isSubmitting}
-              className="w-full h-10 sm:h-11 rounded-full text-xs sm:text-sm font-medium mt-2 border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-3 rounded-2xl text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed transition-all"
             >
               Quick sign up (skip email & onboarding)
             </button>
 
             {/* Divider */}
-            <div className="relative my-4 sm:my-5">
+            <div className="relative my-2">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-white px-3 text-xs sm:text-sm text-gray-500">
-                  Or
+                <span className="bg-white px-3 text-xs text-gray-400">
+                  or continue with
                 </span>
               </div>
             </div>
@@ -378,12 +426,10 @@ export default function SignupForm() {
               type="button"
               onClick={handleGoogleSignup}
               disabled={isSubmitting}
-              className="w-full h-11 sm:h-12 rounded-2xl bg-white border border-gray-200
-                         flex items-center justify-center gap-3 text-sm text-gray-700 font-medium
-                         shadow-sm hover:shadow transition-shadow disabled:cursor-not-allowed"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 hover:shadow-sm disabled:cursor-not-allowed"
             >
               <svg
-                className="h-4 w-4 sm:h-5 sm:w-5"
+                className="h-5 w-5"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
               >
@@ -408,52 +454,98 @@ export default function SignupForm() {
             </button>
 
             {/* Switch to login */}
-            <p className="text-center text-xs sm:text-sm text-gray-600">
+            <p className="text-center text-sm text-gray-500">
               Already have an account?{" "}
               <Link
                 href="/pages/auth/login"
-                className="text-black font-semibold hover:underline"
+                className="font-semibold text-purple-600 hover:text-purple-700"
               >
                 Log in
               </Link>
             </p>
           </form>
+        </div>
 
-          {/* Footer logo */}
-          <div className="mt-8 flex justify-center">
-            <Image
-              src="/images/logo-meuraki.svg"
-              alt="Meuraki"
-              width={120}
-              height={28}
-              className="opacity-60"
-            />
-          </div>
+        {/* Bottom logo */}
+        <div className="flex justify-center mt-8">
+          <Image
+            src="/images/logo-meuraki.svg"
+            alt="Meuraki"
+            width={140}
+            height={35}
+          />
         </div>
       </div>
 
-      {/* Right – hero panel */}
-      <div className="relative hidden flex-1 lg:flex">
-        <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
-          {/* GIF background – full column */}
-          <Image
-            src="/images/hero-bg.gif"
-            alt="Animated background"
-            fill
-            priority
-            unoptimized
-            className="object-cover"
-          />
+      {/* Right panel — Purple gradient carousel (desktop only) */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-purple-700 via-purple-800 to-purple-900 p-12 flex-col justify-end relative overflow-hidden">
+        {/* Radial gradient overlays */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(168,85,247,0.4),_transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(124,58,237,0.3),_transparent_60%)]" />
 
-          {/* PNG overlay – centered card */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Image
-              src="/images/hero-overlay.png"
-              alt="Meuraki overlay"
-              width={320}
-              height={640}
-              className="rounded-[28px] pointer-events-none"
-            />
+        {/* Slide content */}
+        <div className="relative z-10 mb-16">
+          <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center text-white mb-8">
+            {slides[activeSlide].icon}
+          </div>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-white leading-tight whitespace-pre-line transition-all duration-500">
+            {slides[activeSlide].title}
+          </h2>
+          <p className="text-base text-white/70 mt-4 max-w-lg leading-relaxed transition-all duration-500">
+            {slides[activeSlide].desc}
+          </p>
+        </div>
+
+        {/* Carousel controls */}
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {slides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveSlide(idx)}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  idx === activeSlide ? "w-8 bg-white" : "w-2 bg-white/40"
+                }`}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() =>
+                setActiveSlide(
+                  (activeSlide - 1 + slides.length) % slides.length
+                )
+              }
+              className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-white/60 hover:text-white hover:border-white/40 transition-all"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <button
+              onClick={() =>
+                setActiveSlide((activeSlide + 1) % slides.length)
+              }
+              className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-white/60 hover:text-white hover:border-white/40 transition-all"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -464,8 +556,9 @@ export default function SignupForm() {
 function Req({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs
-                  ${ok ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs ${
+        ok ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+      }`}
       role="status"
       aria-live="polite"
     >

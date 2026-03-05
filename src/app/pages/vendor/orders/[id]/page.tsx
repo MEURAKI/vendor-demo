@@ -1,12 +1,12 @@
 // app/pages/vendor/orders/[id]/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-import Sidebar from "../../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 
@@ -582,18 +582,6 @@ export default function OrderDetailPage() {
       setLoading(false);
     })();
   }, [orderId]);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   async function handleSaveShipment() {
     if (!order || order.status === "delivered") return; // no edits when delivered
     setSavingShipment(true);
@@ -979,15 +967,15 @@ export default function OrderDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
+      <>
         <ClipLoader color="#7B61FF" size={50} />
-      </div>
+      </>
     );
   }
 
   if (error && !order) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
+      <div className="flex h-full w-full items-center justify-center">
         {error}
       </div>
     );
@@ -995,7 +983,7 @@ export default function OrderDetailPage() {
 
   if (!order) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
+      <div className="flex h-full w-full items-center justify-center">
         Order not found.
       </div>
     );
@@ -1125,13 +1113,7 @@ export default function OrderDetailPage() {
             : "bg-slate-100 text-slate-700 border-slate-300";
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      {/* Sidebar */}
-      <Sidebar config={sidebarConfig} />
-
-      {/* Main shell */}
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           {/* Scrollable content */}
           <div className="flex-1 overflow-auto px-6 py-6">
             <div className="mx-auto max-w-6xl">
@@ -1484,7 +1466,7 @@ export default function OrderDetailPage() {
 
                       {vendorPromoStacked > 0 && (
                         <div className="flex justify-between">
-                          <dt>Vendor promo (stacked)</dt>
+                          <dt>Subscriber promo (stacked)</dt>
                           <dd>– {formatCurrencyFromCents(vendorPromoStacked)}</dd>
                         </div>
                       )}
@@ -1506,7 +1488,7 @@ export default function OrderDetailPage() {
                       )}
 
                       <div className="mt-2 flex justify-between border-t border-slate-100 pt-3 text-base font-semibold">
-                        <dt>Vendor net product payout</dt>
+                        <dt>Subscriber net product payout</dt>
                         <dd>{formatCurrencyFromCents(vendorNetProductPayout)}</dd>
                       </div>
                     </dl>
@@ -1684,8 +1666,6 @@ export default function OrderDetailPage() {
               {/* end grid */}
             </div>
           </div>
-        </div>
-      </div>
 
       {/* Items modal */}
       {itemsModalOpen && (
@@ -1857,6 +1837,6 @@ export default function OrderDetailPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -30,14 +30,14 @@ const MOTIVATIONS = [
   "Participate in events and wellness festivals",
   "Participate in corporate engagements",
   "Connect and collaborate with like-minded wellness brands",
-  "Participate in exclusive vendor events and promotions",
+  "Participate in exclusive subscriber events and promotions",
   "Others",
 ] as const;
 
 const INTERESTS = [
   "Wellness events and festivals",
   "Corporate engagements",
-  "Collaborative events with other vendors",
+  "Collaborative events with other subscribers",
   "In-app promotions or advertisements",
   "Workshops and webinars",
   "Social media or influencer partnerships",

@@ -1,12 +1,12 @@
 // app/pages/experiences/page.tsx
 "use client";
 
+import { useVendorProfile } from "../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
-import Sidebar from "../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../lib/supabase/client";
 import ClipLoader from "react-spinners/ClipLoader";
 import AppModal from "../../../components/common/AppModal";
@@ -124,18 +124,6 @@ export default function ExperiencesPage() {
       if (data) setProfile(data as Profile);
     })();
   }, []);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   async function reloadExperiences() {
     setLoading(true);
     try {
@@ -270,23 +258,19 @@ export default function ExperiencesPage() {
   }
 
   return (
-    <div className="flex min-h-dvh w-full bg-white sm:bg-[#050509] overflow-x-hidden">
-      {/* Sidebar */}
-      <div className="shrink-0">
-        <Sidebar config={sidebarConfig} initialCollapsed={true} />
+    <div className="relative min-h-full flex-1 overflow-auto">
+      {/* Background image */}
+      <div className="absolute top-0 left-0 right-0 h-[420px] overflow-hidden pointer-events-none">
+        <img src="/images/vendor bg.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-[#F6F6FC]" />
       </div>
 
-      <div className="flex flex-1 items-stretch justify-center px-0 py-0 sm:px-6 sm:py-4">
-        <div
-          className="
-            flex h-full w-full flex-col overflow-hidden bg-[#F6F6FC]
-            rounded-none border-0 shadow-none
-            sm:rounded-[32px] sm:border-[3px] sm:border-black sm:shadow-[0_24px_60px_rgba(0,0,0,0.7)]
-          "
-        >
+      <div className="relative px-6 sm:px-8 py-6 sm:py-8 space-y-6">
+        {/* Glass panel: header / search / filters */}
+        <div className="rounded-3xl bg-white/[0.25] backdrop-blur-3xl border border-white/40 shadow-[0_22px_90px_rgba(124,58,237,0.35)] p-4 sm:p-6 xl:p-10">
           {/* ✅ MOBILE TOP BAR */}
-          <div className="sm:hidden border-b border-[#E5E0FF] bg-white/90 backdrop-blur">
-            <div className="px-4 py-3 space-y-3">
+          <div className="sm:hidden">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-[#1B1529]">
@@ -337,7 +321,7 @@ export default function ExperiencesPage() {
           </div>
 
           {/* ✅ DESKTOP TOP BAR */}
-          <div className="hidden sm:flex items-center justify-between border-b border-[#E5E0FF] bg-gradient-to-r from-[#F6F0FF] to-[#FDFBFF] px-8 py-4">
+          <div className="hidden sm:flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-semibold text-[#1B1529]">All Experiences</h1>
               <span className="inline-flex h-7 items-center rounded-full bg-[#B266FF] px-3 text-xs font-semibold text-white">
@@ -370,11 +354,12 @@ export default function ExperiencesPage() {
               </button>
             </div>
           </div>
+        </div>
 
-          {/* CONTENT */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-6 sm:p-6">
-            {/* ✅ MOBILE CARD VIEW */}
-            <div className="sm:hidden space-y-3">
+        {/* Content card */}
+        <div className="rounded-2xl bg-white shadow-sm p-6 sm:p-6">
+          {/* ✅ MOBILE CARD VIEW */}
+          <div className="sm:hidden space-y-3">
               {loading ? (
                 <div className="py-12 flex justify-center">
                   <ClipLoader size={40} color="#6B46C1" />
@@ -646,6 +631,5 @@ export default function ExperiencesPage() {
           </div>
         </div>
       </div>
-    </div>
   );
 }

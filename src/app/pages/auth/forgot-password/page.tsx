@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase/client";
 import { useToast } from "../../../../components/toast/ToastProvider";
+
+const bgVideos = ["/bg-1.mp4", "/bg-3.mp4", "/bg-4.mp4"];
 
 const RESET_REDIRECT =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") + "/pages/auth/reset-password";
@@ -14,6 +16,8 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [activeVideo, setActiveVideo] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const canSend = useMemo(() => cooldown === 0, [cooldown]);
 
   useEffect(() => {
@@ -52,111 +56,106 @@ async function sendLink() {
 }
 
   return (
-    <div className="h-screen bg-white flex overflow-hidden">
-      {/* Left */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-10 lg:px-16 py-10">
-        <div className="w-full max-w-md">
-          <Link href="/pages/auth/login" className="text-purple-600 text-sm font-medium inline-flex items-center gap-2 mb-6">
-            <span className="rotate-180">›</span> Go Back
+    <div className="fixed inset-0 bg-gray-950">
+      {/* Video background */}
+      <video
+        ref={videoRef}
+        key={activeVideo}
+        src={bgVideos[activeVideo]}
+        autoPlay
+        muted
+        playsInline
+        onEnded={() => setActiveVideo((v) => (v + 1) % bgVideos.length)}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      <div className="absolute inset-0 backdrop-blur-[2px]" />
+      <div
+        className="absolute inset-0 animate-gradient-shift"
+        style={{
+          backgroundSize: "300% 300%",
+          backgroundImage:
+            "linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(88,28,135,0.5) 20%, rgba(219,39,119,0.4) 40%, rgba(126,34,206,0.5) 60%, rgba(0,0,0,0.6) 80%, rgba(168,85,247,0.45) 100%)",
+        }}
+      />
+
+      {/* Floating modal */}
+      <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-8 z-20">
+        <div className="absolute inset-0 bg-black/30" />
+
+        <div className="relative z-10 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl shadow-black/60 bg-white p-8 sm:p-10 lg:p-12">
+          <Link
+            href="/pages/auth/login"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 mb-6"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            Back to sign in
           </Link>
 
           {!sent ? (
             <>
-              <h1 className="text-[28px] font-extrabold leading-tight text-black">Recover your password</h1>
+              <h1 className="text-3xl font-extrabold leading-tight text-gray-900">Recover your<br />password</h1>
               <p className="mt-2 text-sm text-gray-500">
-                Enter the email used to sign up. We’ll email you a reset link.
+                Enter the email used to sign up. We&apos;ll email you a reset link.
               </p>
 
-              <label className="mt-6 block text-xs font-semibold tracking-wide text-black">
-                EMAIL ADDRESS
+              <label className="mt-6 block text-xs font-bold tracking-wider text-gray-900 uppercase">
+                Email Address
               </label>
               <input
                 type="email"
                 placeholder="Email Address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 w-full h-12 rounded-2xl px-4 bg-[#EFEDFF] border border-transparent text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="mt-2 w-full px-4 py-4 text-sm border border-gray-300 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 transition-all"
+                autoFocus
               />
 
               <button
                 onClick={sendLink}
-                className="mt-5 w-full h-12 rounded-full bg-black text-white text-base font-medium hover:bg-gray-900"
+                className="mt-5 w-full py-4 rounded-2xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-all"
               >
-                Send Link
+                Send Reset Link
               </button>
 
-              <p className="mt-6 text-xs text-gray-500">
-                If you need further assistance{" "}
+              <p className="mt-5 text-xs text-gray-500">
+                Need help?{" "}
                 <a className="text-purple-600 font-medium" href="mailto:support@meuraki.com.sg">
-                  contact our support team
+                  Contact support
                 </a>
               </p>
             </>
           ) : (
             <>
-              <div className="mt-2 h-14 w-14 grid place-items-center rounded-full bg-[#EFEDFF] text-purple-600">
+              <div className="h-14 w-14 grid place-items-center rounded-2xl bg-purple-50 text-2xl mb-4">
                 ✉️
               </div>
-              <h2 className="mt-4 text-xl font-semibold">We’ve sent you an email</h2>
-              <p className="mt-2 text-sm text-gray-600">
-                Can’t find it? Check your Spam or Promotions. It may take up to 30 seconds.
+              <h2 className="text-2xl font-extrabold text-gray-900">Check your email</h2>
+              <p className="mt-2 text-sm text-gray-500">
+                We sent a reset link to <span className="font-medium text-gray-700">{email}</span>.
+                Can&apos;t find it? Check spam or promotions.
               </p>
 
               <button
                 disabled={!canSend}
                 onClick={sendLink}
-                className={`mt-6 w-full h-12 rounded-full border ${
-                  canSend ? "bg-white hover:bg-gray-50" : "bg-gray-50 text-gray-400"
+                className={`mt-6 w-full py-4 rounded-2xl text-sm font-semibold border transition-all ${
+                  canSend
+                    ? "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                    : "bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed"
                 }`}
-                title={canSend ? "Resend link" : "Please wait"}
               >
                 {canSend ? "Resend Link" : `Resend in ${cooldown}s`}
               </button>
-
-              <p className="mt-6 text-xs text-gray-500">
-                Didn’t receive your email?{" "}
-                <button
-                  className="text-purple-600 font-medium disabled:text-gray-400"
-                  onClick={sendLink}
-                  disabled={!canSend}
-                >
-                  Resend
-                </button>
-              </p>
             </>
           )}
+
+          <div className="flex justify-center mt-8">
+            <Image src="/images/logo-meuraki.svg" alt="Meuraki" width={100} height={25} />
+          </div>
         </div>
       </div>
-
-      {/* Right – hero */}
-    <div className="hidden lg:block lg:w-1/2 relative">
-  <div className="absolute inset-0 lg:rounded-l-[28px] overflow-hidden">
-
-    {/* --- GIF Background --- */}
-    <Image
-      src="/images/hero-bg.gif"
-      alt="Animated background"
-      fill
-      priority
-      unoptimized
-      className="object-cover"
-    />
-
-    {/* --- PNG Overlay (logo, text, etc.) --- */}
-    <div className="absolute inset-0 flex items-center justify-center">
-               <Image
-                 src="/images/hero-overlay.png"
-                 alt="Meuraki overlay"
-                 width={320} // adjust if needed
-                 height={640}
-                 className="rounded-[28px] pointer-events-none"
-               />
-             </div>
-
-    {/* Optional gradient overlay */}
-    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
-  </div>
-</div>
     </div>
   );
 }

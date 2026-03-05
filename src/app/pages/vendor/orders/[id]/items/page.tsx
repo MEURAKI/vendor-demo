@@ -1,11 +1,11 @@
 "use client";
 
+import { useVendorProfile } from "../../../../../../context/VendorShellContext";
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-import Sidebar from "../../../../../../components/sidebar/Sidebar";
-import { buildSidebarConfig } from "../../../../../../components/sidebar/sidebar.config";
 import { supabase } from "../../../../../../lib/supabase/client";
 
 type Profile = {
@@ -153,18 +153,6 @@ export default function OrderItemsPage() {
       setLoading(false);
     })();
   }, [orderId]);
-
-  const sidebarConfig = useMemo(
-    () =>
-      buildSidebarConfig({
-        fullName: profile?.full_name ?? "",
-        email: profile?.email ?? "",
-        role: "Vendor",
-        status: profile?.status ?? "active",
-      }),
-    [profile]
-  );
-
   async function updateItemStatus(
     itemId: string,
     newStatus: ItemFulfilmentStatus
@@ -196,15 +184,15 @@ export default function OrderItemsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
+      <>
         Loading items…
-      </div>
+      </>
     );
   }
 
   if (error && !order) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
+      <div className="flex h-full w-full items-center justify-center">
         {error}
       </div>
     );
@@ -212,7 +200,7 @@ export default function OrderItemsPage() {
 
   if (!order) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050509] text-slate-100">
+      <div className="flex h-full w-full items-center justify-center">
         Order not found.
       </div>
     );
@@ -222,13 +210,7 @@ export default function OrderItemsPage() {
   const orderCode = buildOrderCode(order.id);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050509]">
-      {/* Sidebar */}
-      <Sidebar config={sidebarConfig} />
-
-      {/* Main shell */}
-      <div className="flex flex-1 items-stretch justify-center px-6 py-4">
-        <div className="flex h-full w-full flex-col overflow-hidden rounded-[32px] border-[3px] border-black bg-[#F6F6FC] shadow-[0_24px_60px_rgba(0,0,0,0.7)]">
+    <>
           <div className="flex-1 overflow-auto px-6 py-6">
             <div className="mx-auto max-w-6xl">
               <div className="mb-4 text-sm text-slate-500">
@@ -397,8 +379,6 @@ export default function OrderItemsPage() {
               {/* end table wrapper */}
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
