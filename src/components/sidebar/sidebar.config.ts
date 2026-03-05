@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Gift,
   ClipboardList,
+  House,
 } from "lucide-react";
 
 /* -------------------------------------------------- */
@@ -30,6 +31,7 @@ export const ICONS = {
   TrendingUp,
   Gift,
   ClipboardList,
+  House,
 };
 
 export type IconName = keyof typeof ICONS;
@@ -113,11 +115,19 @@ export function buildSidebarConfig({
         label: "Overview",
         groups: [
           {
+            id: "home",
+            label: "Home",
+            icon: "House",
+            items: [
+              { id: "home-splash", label: "Home", href: "/pages/home" },
+            ],
+          },
+          {
             id: "dashboard",
             label: "Dashboard",
             icon: "BarChart3",
             items: [
-              { id: "dash-home", label: "Home", href: "/pages/dashboard" },
+              { id: "dash-home", label: "Dashboard", href: "/pages/dashboard" },
             ],
           },
           {

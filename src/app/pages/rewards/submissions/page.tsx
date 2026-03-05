@@ -917,8 +917,8 @@ export default function RewardSubmissionsPage() {
                           <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-1.5 sm:p-2">
                             {takenByOther && daySubs.length === 0 && inM && !xp && (
                               <div className="flex flex-col items-center gap-1.5">
-                                <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-gray-700">
-                                  <Lock className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                                <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-gray-300">
+                                  <Lock className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
                                 </div>
                                 <span className="text-[10px] sm:text-xs font-semibold text-gray-400">Filled</span>
                               </div>

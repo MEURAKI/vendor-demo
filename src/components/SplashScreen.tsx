@@ -15,9 +15,11 @@ export default function SplashScreen() {
 
   useEffect(() => {
     try {
-      const flag = sessionStorage.getItem("vendor:showSplash");
-      if (flag) {
-        sessionStorage.removeItem("vendor:showSplash");
+      const loginFlag = sessionStorage.getItem("vendor:showSplash");
+      const alreadyShown = sessionStorage.getItem("vendor:splashShown");
+      if (loginFlag || !alreadyShown) {
+        if (loginFlag) sessionStorage.removeItem("vendor:showSplash");
+        sessionStorage.setItem("vendor:splashShown", "1");
         setVisible(true);
       }
     } catch {}
@@ -56,7 +58,7 @@ export default function SplashScreen() {
   if (!visible) return null;
 
   return (
-    <div className="absolute inset-0 z-50 overflow-hidden rounded-l-[2rem]">
+    <div className="absolute inset-0 z-[200] overflow-hidden">
       {/* Video background */}
       <video
         ref={videoRef}

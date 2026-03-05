@@ -63,8 +63,8 @@ export default function Sidebar({
       className={clsx(
         "relative z-[60] shrink-0 flex flex-col bg-ink-800 text-neu-200 transition-[width] duration-300 ease-in-out",
         collapsed ? "w-[60px]" : "w-[250px]",
-        // During transition: clip overflow. After: visible for flyouts (collapsed) or hidden for scroll (expanded)
-        transitioning ? "overflow-hidden" : collapsed ? "overflow-visible" : "overflow-hidden"
+        // During transition: clip content flash. After: always visible so toggle button isn't clipped.
+        transitioning ? "overflow-hidden" : "overflow-visible"
       )}
     >
       {/* Toggle button — always outside scroll, always on top */}
@@ -200,7 +200,7 @@ export default function Sidebar({
         /* ============================================================ */
         /* Expanded view                                                 */
         /* ============================================================ */
-        <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar px-5 py-6">
           {/* Profile */}
           <div className="flex items-center gap-3 mb-6">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent-600 text-[11px] font-bold text-white">
