@@ -63,7 +63,17 @@ export default function QuestAnalyticsPage() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await res.json();
-      if (json.stats) setStats(json.stats);
+      if (json.stats) {
+        const s = json.stats;
+        setStats([
+          { label: "Total Completions", value: s.totalCompletions ?? 0 },
+          { label: "This Week", value: s.totalQuests ?? 0 },
+          { label: "Recommendations Shown", value: s.totalLinkedProducts ?? 0 },
+          { label: "Product Clicks", value: s.totalProductClicks ?? 0 },
+          { label: "Click-Through Rate", value: s.averageCompletionRate ? `${s.averageCompletionRate}%` : "0%" },
+          { label: "Bookings from Quests", value: 0 },
+        ]);
+      }
       if (json.questBreakdown) setQuestBreakdown(json.questBreakdown);
       if (json.platformPerformance) setPlatformPerformance(json.platformPerformance);
     } catch (e) { console.error(e); }
@@ -96,7 +106,7 @@ export default function QuestAnalyticsPage() {
     );
   }
 
-  const totalRevenue = platformPerformance.reduce((sum: number, pq: any) => sum + pq.links.reduce((s: number, l: any) => s + l.booked * 85, 0), 0);
+  const totalRevenue = platformPerformance.reduce((sum: number, pq: any) => sum + (pq.links || []).reduce((s: number, l: any) => s + l.booked * 85, 0), 0);
 
   return (
     <>
@@ -200,7 +210,7 @@ export default function QuestAnalyticsPage() {
               <div key={pq.quest} className="rounded-2xl border border-gray-200 bg-white p-4">
                 <p className="text-sm font-bold text-gray-900 mb-3">{pq.quest}</p>
                 <div className="space-y-2">
-                  {pq.links.map((link: any, i: number) => (
+                  {(pq.links || []).map((link: any, i: number) => (
                     <div key={i} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <CalendarCheck className="h-4 w-4 text-violet-400" />
@@ -224,7 +234,7 @@ export default function QuestAnalyticsPage() {
 
           <div className="mt-4 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-5 py-4">
             <p className="text-sm font-bold text-emerald-800">Total quest-driven revenue: <span className="text-lg">${totalRevenue.toLocaleString()}</span></p>
-            <p className="text-xs text-emerald-600 mt-0.5">From {platformPerformance.reduce((s: number, p: any) => s + p.links.reduce((ss: number, l: any) => ss + l.booked, 0), 0)} bookings across all quests</p>
+            <p className="text-xs text-emerald-600 mt-0.5">From {platformPerformance.reduce((s: number, p: any) => s + (p.links || []).reduce((ss: number, l: any) => ss + l.booked, 0), 0)} bookings across all quests</p>
           </div>
         </div>
       </div>

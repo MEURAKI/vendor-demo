@@ -97,9 +97,56 @@ export default function ProductLinkingPage() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await res.json();
-      if (json.platformQuests) setPlatformQuests(json.platformQuests);
-      if (json.myQuests) setMyQuests(json.myQuests);
-      if (json.catalog) setCatalog(json.catalog);
+      const catalogList = json.catalog || [];
+      const catalogMap = new Map(catalogList.map((c: any) => [c.id, c]));
+
+      // Build myLinks from recommendedProductIds in each range
+      function buildLinks(resultRanges: any[]): LinkedProduct[] {
+        const links: LinkedProduct[] = [];
+        for (const r of resultRanges || []) {
+          for (const pid of r.recommendedProductIds || []) {
+            const item = catalogMap.get(pid) as any;
+            if (!item) continue;
+            links.push({
+              id: `${r.id}_${pid}`,
+              productName: item.name,
+              productType: item.type === "service" ? "session" : "product",
+              price: 0,
+              range: r.label,
+              displayType: "card",
+              ctaText: "",
+              clicks: 0,
+              conversions: 0,
+            });
+          }
+        }
+        return links;
+      }
+
+      // Transform API shapes to match PlatformQuest type
+      if (json.platformQuests) {
+        setPlatformQuests(json.platformQuests.map((pq: any) => ({
+          id: pq.id,
+          title: pq.name || pq.title || "",
+          type: pq.category || pq.type || "",
+          duration: pq.duration || "",
+          dimensions: pq.dimension ? [pq.dimension] : (pq.dimensions || []),
+          ranges: (pq.resultRanges || []).map((r: any) => r.label),
+          myLinks: buildLinks(pq.resultRanges),
+        })));
+      }
+      if (json.myQuests) {
+        setMyQuests(json.myQuests.map((q: any) => ({
+          id: q.id,
+          title: q.title || q.name || "",
+          type: q.type || "",
+          duration: q.duration || "",
+          dimensions: q.dimension ? [q.dimension] : (q.dimensions || []),
+          ranges: (q.resultRanges || []).map((r: any) => r.label),
+          myLinks: buildLinks(q.resultRanges),
+        })));
+      }
+      if (json.catalog) setCatalog(catalogList);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
@@ -111,7 +158,7 @@ export default function ProductLinkingPage() {
 
   function openLinkModal(quest: PlatformQuest) {
     setLinkQuest(quest);
-    setLinkRange(quest.ranges[0] || "");
+    setLinkRange((quest.ranges || [])[0] || "");
     setLinkProduct("");
     setLinkDisplay("card");
     setLinkCta("Book a Session");
@@ -155,7 +202,7 @@ export default function ProductLinkingPage() {
   }
 
   const filteredPlatform = platformQuests.filter((q) => {
-    if (dimFilter !== "all" && !q.dimensions.includes(dimFilter)) return false;
+    if (dimFilter !== "all" && !(q.dimensions || []).includes(dimFilter)) return false;
     if (search && !q.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -191,7 +238,7 @@ export default function ProductLinkingPage() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Platform Quests</h2>
           <div className="space-y-3">
             {filteredPlatform.map((quest) => (
-              <QuestLinkCard key={quest.id} quest={quest} onLink={() => openLinkModal(quest)} onRemove={(linkId) => handleRemoveLink(linkId, linkId)} />
+              <QuestLinkCard key={quest.id} quest={quest} onLink={() => openLinkModal(quest)} onRemove={(linkId) => { const [rangeId, productId] = linkId.split("_"); handleRemoveLink(rangeId, productId); }} />
             ))}
             {filteredPlatform.length === 0 && (
               <p className="text-sm text-gray-400 py-8 text-center">No platform quests match your filters</p>
@@ -204,7 +251,7 @@ export default function ProductLinkingPage() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">My Quests</h2>
           <div className="space-y-3">
             {myQuests.map((quest) => (
-              <QuestLinkCard key={quest.id} quest={quest} isMine onLink={() => openLinkModal(quest)} onRemove={(linkId) => handleRemoveLink(linkId, linkId)}
+              <QuestLinkCard key={quest.id} quest={quest} isMine onLink={() => openLinkModal(quest)} onRemove={(linkId) => { const [rangeId, productId] = linkId.split("_"); handleRemoveLink(rangeId, productId); }}
                 onEditInBuilder={() => router.push(`/pages/quests/builder?id=${quest.id}`)} />
             ))}
           </div>
@@ -227,7 +274,7 @@ export default function ProductLinkingPage() {
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-gray-500">Show when result is:</label>
                 <div className="flex flex-wrap gap-1.5">
-                  {linkQuest.ranges.map((r) => (
+                  {(linkQuest.ranges || []).map((r) => (
                     <button key={r} onClick={() => setLinkRange(r)}
                       className={clsx("rounded-full px-3 py-1.5 text-xs font-medium border transition-all",
                         linkRange === r ? "border-purple-300 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-500"
@@ -303,19 +350,19 @@ function QuestLinkCard({ quest, isMine, onLink, onRemove, onEditInBuilder }: {
           <p className="text-[11px] text-gray-400 mt-0.5">{quest.type} · {quest.duration} · Scored</p>
         </div>
         <div className="flex items-center gap-1.5">
-          {quest.dimensions.map((d) => {
+          {(quest.dimensions || []).map((d) => {
             const DI = DIMENSION_ICONS[d] || Target;
             return <span key={d} className="flex items-center gap-0.5 text-[10px] text-gray-400"><DI className="h-3 w-3" /> {d}</span>;
           })}
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {quest.ranges.map((r) => (
+        {(quest.ranges || []).map((r) => (
           <span key={r} className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-medium text-gray-500">{r}</span>
         ))}
       </div>
 
-      {quest.myLinks.length > 0 ? (
+      {(quest.myLinks || []).length > 0 ? (
         <div className="space-y-2 mb-3">
           <p className="text-[10px] font-semibold uppercase text-gray-400">Your linked products:</p>
           {quest.myLinks.map((link) => (
@@ -336,9 +383,13 @@ function QuestLinkCard({ quest, isMine, onLink, onRemove, onEditInBuilder }: {
       )}
 
       <div className="flex items-center gap-2">
-        <button onClick={onLink} className="flex items-center gap-1 text-[11px] font-semibold text-purple-600 hover:underline">
-          <Plus className="h-3 w-3" /> Link Product to a Range
-        </button>
+        {(quest.ranges || []).length > 0 ? (
+          <button onClick={onLink} className="flex items-center gap-1 text-[11px] font-semibold text-purple-600 hover:underline">
+            <Plus className="h-3 w-3" /> Link Product to a Range
+          </button>
+        ) : (
+          <p className="text-[10px] text-gray-400 italic">No result ranges configured</p>
+        )}
         {isMine && onEditInBuilder && (
           <button onClick={onEditInBuilder} className="flex items-center gap-1 ml-auto text-[11px] font-semibold text-gray-500 hover:underline">
             Edit in Builder <ExternalLink className="h-3 w-3" />
