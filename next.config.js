@@ -11,16 +11,28 @@ const nextConfig = {
         pathname: "/storage/v1/object/public/**",
       },
       {
-      protocol: "https",
-      hostname: "kltjywhkfwoaefxtzztg.supabase.co",
-      pathname: "/storage/v1/object/public/**",
-    },
+        protocol: "https",
+        hostname: "kltjywhkfwoaefxtzztg.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
       {
         protocol: "https",
         hostname: "images.unsplash.com",
         pathname: "/**",
       },
     ],
+  },
+  // Tree-shake heavy icon/chart libraries
+  modularizeImports: {
+    "lucide-react": {
+      transform: "lucide-react/dist/esm/icons/{{ kebabCase member }}",
+    },
+  },
+  // Faster builds with SWC
+  swcMinify: true,
+  // Skip type checking during build (run separately with type-check script)
+  typescript: {
+    ignoreBuildErrors: false,
   },
 };
 

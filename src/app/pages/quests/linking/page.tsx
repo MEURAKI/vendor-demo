@@ -1,7 +1,7 @@
 // app/pages/quests/linking/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import clsx from "clsx";
 import {
   Search,
@@ -29,9 +29,10 @@ import {
 import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useVendorProfile } from "../../../../context/VendorShellContext";
+import { supabase } from "../../../../lib/supabase/client";
 
 /* ================================================================ */
-/* Types & Mock Data                                                */
+/* Types                                                             */
 /* ================================================================ */
 
 type LinkedProduct = {
@@ -61,59 +62,6 @@ const DIMENSION_ICONS: Record<string, typeof Brain> = {
   Occupational: Briefcase, Social: Users, Spiritual: Compass, Intellectual: Smile,
 };
 
-const PLATFORM_QUESTS: PlatformQuest[] = [
-  {
-    id: "pq1", title: "Stress Deep Dive", type: "Deep Dive", duration: "5 min",
-    dimensions: ["Mental", "Emotional"],
-    ranges: ["Low", "Moderate", "High"],
-    myLinks: [
-      { id: "l1", productName: "Calm Mind Session", productType: "session", price: 85, range: "Moderate", displayType: "card", ctaText: "Book Session", clicks: 34, conversions: 8 },
-      { id: "l2", productName: "Anxiety Management Package", productType: "session", price: 450, range: "High", displayType: "cta_button", ctaText: "Get Started", clicks: 22, conversions: 5 },
-    ],
-  },
-  {
-    id: "pq2", title: "Burnout Risk Check", type: "Assessment", duration: "10 min",
-    dimensions: ["Occupational", "Mental"],
-    ranges: ["Low Risk", "Moderate Risk", "High Risk", "Critical"],
-    myLinks: [
-      { id: "l3", productName: "Recovery Wellness Package", productType: "session", price: 200, range: "High Risk", displayType: "card", ctaText: "Book Now", clicks: 12, conversions: 3 },
-    ],
-  },
-  {
-    id: "pq3", title: "Emotional Wellness Check", type: "Assessment", duration: "7 min",
-    dimensions: ["Emotional", "Social"],
-    ranges: ["Thriving", "Stable", "Struggling"],
-    myLinks: [],
-  },
-  {
-    id: "pq4", title: "Physical Activity Readiness", type: "Simple", duration: "3 min",
-    dimensions: ["Physical"],
-    ranges: ["Ready", "Moderate", "Consult First"],
-    myLinks: [],
-  },
-];
-
-const MY_QUESTS: PlatformQuest[] = [
-  {
-    id: "mq1", title: "Anxiety Pre-Screen", type: "Assessment", duration: "5 min",
-    dimensions: ["Mental", "Emotional"],
-    ranges: ["Low", "Moderate", "High"],
-    myLinks: [
-      { id: "ml1", productName: "Intro Therapy Session", productType: "session", price: 85, range: "Moderate", displayType: "card", ctaText: "Book Session", clicks: 18, conversions: 6 },
-      { id: "ml2", productName: "Anxiety Management (6 sessions)", productType: "session", price: 450, range: "High", displayType: "cta_button", ctaText: "Start Recovery", clicks: 29, conversions: 11 },
-    ],
-  },
-];
-
-const VENDOR_CATALOG = [
-  { id: "vc1", name: "Calm Mind Session", type: "session" as const, price: 85 },
-  { id: "vc2", name: "Anxiety Management Package", type: "session" as const, price: 450 },
-  { id: "vc3", name: "Recovery Wellness Package", type: "session" as const, price: 200 },
-  { id: "vc4", name: "Intro Therapy Session", type: "session" as const, price: 85 },
-  { id: "vc5", name: "Relaxation Kit", type: "product" as const, price: 35 },
-  { id: "vc6", name: "Meditation Candle Bundle", type: "product" as const, price: 55 },
-];
-
 /* ================================================================ */
 /* PAGE                                                             */
 /* ================================================================ */
@@ -131,6 +79,31 @@ export default function ProductLinkingPage() {
   const [linkCta, setLinkCta] = useState("Book a Session");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  const [platformQuests, setPlatformQuests] = useState<PlatformQuest[]>([]);
+  const [myQuests, setMyQuests] = useState<PlatformQuest[]>([]);
+  const [catalog, setCatalog] = useState<{id: string; name: string; type: "product"|"session"; price: number}[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLinking();
+  }, []);
+
+  async function fetchLinking() {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/quests/linking", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (json.platformQuests) setPlatformQuests(json.platformQuests);
+      if (json.myQuests) setMyQuests(json.myQuests);
+      if (json.catalog) setCatalog(json.catalog);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }
+
   function showToast(message: string, type: "success" | "error" = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
@@ -145,13 +118,49 @@ export default function ProductLinkingPage() {
     setShowLinkModal(true);
   }
 
-  const filteredPlatform = PLATFORM_QUESTS.filter((q) => {
+  async function handleLinkProduct() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !linkQuest || !linkProduct) return;
+    const res = await fetch("/api/quests/linking", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        questId: linkQuest.id,
+        rangeLabel: linkRange,
+        productId: linkProduct,
+        displayType: linkDisplay,
+        ctaText: linkCta,
+      }),
+    });
+    if (res.ok) {
+      showToast("Product linked!");
+      fetchLinking();
+    } else {
+      showToast("Failed to link product", "error");
+    }
+    setShowLinkModal(false);
+  }
+
+  async function handleRemoveLink(rangeId: string, productId: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch(`/api/quests/linking/${rangeId}?productId=${productId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) {
+      showToast("Product link removed");
+      fetchLinking();
+    }
+  }
+
+  const filteredPlatform = platformQuests.filter((q) => {
     if (dimFilter !== "all" && !q.dimensions.includes(dimFilter)) return false;
     if (search && !q.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  if (shellLoading) return <div className="flex h-full w-full items-center justify-center">
+  if (shellLoading || loading) return <div className="flex h-full w-full items-center justify-center">
     <ClipLoader size={55} color="#6B46C1" cssOverride={{ animationDuration: "3s" }} />
   </div>;
 
@@ -182,7 +191,7 @@ export default function ProductLinkingPage() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Platform Quests</h2>
           <div className="space-y-3">
             {filteredPlatform.map((quest) => (
-              <QuestLinkCard key={quest.id} quest={quest} onLink={() => openLinkModal(quest)} onRemove={(linkId) => showToast("Product link removed")} />
+              <QuestLinkCard key={quest.id} quest={quest} onLink={() => openLinkModal(quest)} onRemove={(linkId) => handleRemoveLink(linkId, linkId)} />
             ))}
             {filteredPlatform.length === 0 && (
               <p className="text-sm text-gray-400 py-8 text-center">No platform quests match your filters</p>
@@ -194,8 +203,8 @@ export default function ProductLinkingPage() {
         <div>
           <h2 className="text-sm font-bold text-gray-900 mb-3">My Quests</h2>
           <div className="space-y-3">
-            {MY_QUESTS.map((quest) => (
-              <QuestLinkCard key={quest.id} quest={quest} isMine onLink={() => openLinkModal(quest)} onRemove={(linkId) => showToast("Product link removed")}
+            {myQuests.map((quest) => (
+              <QuestLinkCard key={quest.id} quest={quest} isMine onLink={() => openLinkModal(quest)} onRemove={(linkId) => handleRemoveLink(linkId, linkId)}
                 onEditInBuilder={() => router.push(`/pages/quests/builder?id=${quest.id}`)} />
             ))}
           </div>
@@ -231,7 +240,7 @@ export default function ProductLinkingPage() {
                 <select value={linkProduct} onChange={(e) => setLinkProduct(e.target.value)}
                   className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-purple-300">
                   <option value="">Select...</option>
-                  {VENDOR_CATALOG.map((p) => <option key={p.id} value={p.id}>{p.name} — ${p.price}</option>)}
+                  {catalog.map((p) => <option key={p.id} value={p.id}>{p.name} — ${p.price}</option>)}
                 </select>
               </div>
               <div>
@@ -255,7 +264,7 @@ export default function ProductLinkingPage() {
             </div>
             <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
               <button onClick={() => setShowLinkModal(false)} className="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50">Cancel</button>
-              <button onClick={() => { setShowLinkModal(false); showToast("Product linked!"); }}
+              <button onClick={handleLinkProduct}
                 disabled={!linkProduct}
                 className="flex items-center gap-1.5 rounded-xl bg-[#1B1529] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#2D1F5E] disabled:opacity-40">
                 <Link2 className="h-3.5 w-3.5" /> Link Product

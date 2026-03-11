@@ -1,7 +1,7 @@
 // app/pages/quests/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 import {
@@ -39,12 +39,13 @@ import {
 import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useVendorProfile } from "../../../context/VendorShellContext";
+import { supabase } from "../../../lib/supabase/client";
 
 /* ================================================================ */
 /* Types                                                            */
 /* ================================================================ */
 
-type QuestStatus = "draft" | "pending_approval" | "approved" | "rejected" | "revision_requested" | "deactivation_requested";
+type QuestStatus = "draft" | "pending_approval" | "approved" | "published" | "rejected" | "revision_requested" | "deactivation_requested";
 type QuestType = "assessment" | "deep_dive" | "personality" | "simple" | "feedback";
 type ScoringMode = "none" | "simple" | "dimension" | "weighted";
 
@@ -77,6 +78,7 @@ const STATUS_LABELS: Record<QuestStatus, string> = {
   draft: "Draft",
   pending_approval: "Pending Approval",
   approved: "Approved",
+  published: "Published",
   rejected: "Rejected",
   revision_requested: "Revision Requested",
   deactivation_requested: "Deactivation Requested",
@@ -86,6 +88,7 @@ const STATUS_PILL: Record<QuestStatus, string> = {
   draft: "bg-gray-100 text-gray-500",
   pending_approval: "bg-amber-50 text-amber-600",
   approved: "bg-emerald-50 text-emerald-600",
+  published: "bg-emerald-50 text-emerald-600",
   rejected: "bg-red-50 text-red-500",
   revision_requested: "bg-orange-50 text-orange-600",
   deactivation_requested: "bg-purple-50 text-purple-600",
@@ -118,118 +121,6 @@ const DIMENSION_ICONS: Record<string, typeof Brain> = {
   Intellectual: Smile,
 };
 
-/* ================================================================ */
-/* Mock data                                                        */
-/* ================================================================ */
-
-const MOCK_QUESTS: Quest[] = [
-  {
-    id: "q1",
-    title: "Anxiety Pre-Screen",
-    type: "assessment",
-    status: "approved",
-    questionCount: 7,
-    duration: "5 min",
-    scoringMode: "simple",
-    xp: 50,
-    dimensions: ["Mental", "Emotional"],
-    completions: 234,
-    productClicks: 47,
-    resultRanges: ["Low", "Moderate", "High"],
-    createdAt: "2026-01-15",
-    updatedAt: "2026-02-01",
-    adminNote: null,
-    imageUrl: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=400&h=300&fit=crop",
-  },
-  {
-    id: "q2",
-    title: "Post-Session Feedback",
-    type: "feedback",
-    status: "approved",
-    questionCount: 5,
-    duration: "2 min",
-    scoringMode: "none",
-    xp: 20,
-    dimensions: ["Emotional"],
-    completions: 89,
-    productClicks: 12,
-    resultRanges: [],
-    createdAt: "2026-01-20",
-    updatedAt: "2026-01-20",
-    adminNote: null,
-  },
-  {
-    id: "q3",
-    title: "Wellness Style Quiz",
-    type: "personality",
-    status: "draft",
-    questionCount: 8,
-    duration: "4 min",
-    scoringMode: "dimension",
-    xp: 40,
-    dimensions: ["Mental", "Physical", "Spiritual"],
-    completions: 0,
-    productClicks: 0,
-    resultRanges: ["Explorer", "Nurturer", "Achiever", "Zen Master"],
-    createdAt: "2026-02-28",
-    updatedAt: "2026-03-01",
-    adminNote: null,
-    imageUrl: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&h=300&fit=crop",
-  },
-  {
-    id: "q4",
-    title: "Burnout Risk Assessment",
-    type: "assessment",
-    status: "pending_approval",
-    questionCount: 12,
-    duration: "8 min",
-    scoringMode: "weighted",
-    xp: 60,
-    dimensions: ["Occupational", "Mental", "Emotional"],
-    completions: 0,
-    productClicks: 0,
-    resultRanges: ["Low Risk", "Moderate Risk", "High Risk", "Critical"],
-    createdAt: "2026-02-25",
-    updatedAt: "2026-03-02",
-    adminNote: null,
-  },
-  {
-    id: "q5",
-    title: "Client Intake Form",
-    type: "simple",
-    status: "rejected",
-    questionCount: 15,
-    duration: "10 min",
-    scoringMode: "none",
-    xp: 30,
-    dimensions: ["Mental", "Physical"],
-    completions: 0,
-    productClicks: 0,
-    resultRanges: [],
-    createdAt: "2026-02-10",
-    updatedAt: "2026-02-15",
-    adminNote: "Please remove questions 8-10 as they collect sensitive medical data not covered by our data handling agreement. Also add a consent question at the start.",
-  },
-  {
-    id: "q6",
-    title: "Sleep Quality Tracker",
-    type: "deep_dive",
-    status: "revision_requested",
-    questionCount: 10,
-    duration: "6 min",
-    scoringMode: "simple",
-    xp: 50,
-    dimensions: ["Physical", "Mental"],
-    completions: 0,
-    productClicks: 0,
-    resultRanges: ["Good", "Fair", "Poor"],
-    createdAt: "2026-02-20",
-    updatedAt: "2026-02-28",
-    adminNote: "Great concept! Please add branching logic for question 4 based on sleep hours. Also update the 'Poor' result message — it's too clinical. Make it encouraging.",
-    imageUrl: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&h=300&fit=crop",
-  },
-];
-
 const TEMPLATES = [
   { id: "t1", title: "Post-Session Feedback", type: "simple" as QuestType, questions: 5, desc: "\"How was your session?\" — rating + text" },
   { id: "t2", title: "Client Intake Form", type: "assessment" as QuestType, questions: 15, desc: "New client onboarding with 3 sections" },
@@ -246,7 +137,8 @@ const TEMPLATES = [
 export default function MyQuestsPage() {
   const router = useRouter();
   const { loading: shellLoading } = useVendorProfile();
-  const [quests, setQuests] = useState<Quest[]>(MOCK_QUESTS);
+  const [quests, setQuests] = useState<Quest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
@@ -258,6 +150,27 @@ export default function MyQuestsPage() {
   function showToast(message: string, type: "success" | "error" = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
+  }
+
+  useEffect(() => {
+    fetchQuests();
+  }, []);
+
+  async function fetchQuests() {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/quests", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (json.quests) setQuests(json.quests);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const filtered = useMemo(() => {
@@ -277,24 +190,58 @@ export default function MyQuestsPage() {
     return c;
   }, [quests]);
 
-  function doSubmit(id: string) {
-    setQuests((p) => p.map((q) => q.id === id ? { ...q, status: "pending_approval" as QuestStatus, updatedAt: new Date().toISOString().slice(0, 10) } : q));
-    showToast("Quest submitted for approval!");
+  async function doSubmit(id: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch(`/api/quests/${id}/submit`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) {
+      showToast("Quest submitted for approval!");
+      fetchQuests();
+    } else {
+      showToast("Failed to submit", "error");
+    }
     setMenuOpen(null);
   }
-  function doDuplicate(q: Quest) {
-    setQuests((p) => [{ ...q, id: `q-${Date.now()}`, title: `${q.title} (Copy)`, status: "draft" as QuestStatus, completions: 0, productClicks: 0, adminNote: null, createdAt: new Date().toISOString().slice(0, 10), updatedAt: new Date().toISOString().slice(0, 10) }, ...p]);
-    showToast("Duplicated as draft");
+  async function doDuplicate(q: Quest) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch(`/api/quests/${q.id}/duplicate`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) {
+      showToast("Duplicated as draft");
+      fetchQuests();
+    } else {
+      showToast("Failed to duplicate", "error");
+    }
     setMenuOpen(null);
   }
-  function doRequestDeactivation(id: string) {
+  async function doRequestDeactivation(id: string) {
     if (!confirm("Request admin to deactivate this quest?")) return;
-    setQuests((p) => p.map((q) => q.id === id ? { ...q, status: "deactivation_requested" as QuestStatus } : q));
-    showToast("Deactivation requested");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch(`/api/quests/${id}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status: "deactivation_requested" }),
+    });
+    if (res.ok) {
+      showToast("Deactivation requested");
+      fetchQuests();
+    } else {
+      showToast("Failed to request deactivation", "error");
+    }
     setMenuOpen(null);
   }
 
-  if (shellLoading) return <div className="flex h-full w-full items-center justify-center">
+  if (shellLoading || loading) return <div className="flex h-full w-full items-center justify-center">
     <ClipLoader size={55} color="#6B46C1" cssOverride={{ animationDuration: "3s" }} />
   </div>;
 
@@ -332,7 +279,7 @@ export default function MyQuestsPage() {
                 className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2 text-sm outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100" />
             </div>
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-              {(["all", "draft", "pending_approval", "approved", "rejected", "revision_requested"] as StatusFilter[]).map((f) => (
+              {(["all", "draft", "pending_approval", "approved", "published", "rejected", "revision_requested"] as StatusFilter[]).map((f) => (
                 <button key={f} onClick={() => setFilter(f)}
                   className={clsx("shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all",
                     filter === f ? "bg-[#1B1529] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
@@ -367,9 +314,9 @@ export default function MyQuestsPage() {
             {filtered.map((quest) => {
               const TypeIcon = DIMENSION_ICONS[quest.dimensions[0]] || Brain;
               return (
-                <div key={quest.id} className="relative rounded-2xl bg-white shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                <div key={quest.id} className="relative rounded-2xl bg-white shadow-sm flex flex-col hover:shadow-md transition-shadow">
                   {/* Image or gradient header */}
-                  <div className="relative h-28 w-full bg-gradient-to-br from-purple-100 via-violet-50 to-pink-50">
+                  <div className="relative h-28 w-full rounded-t-2xl overflow-hidden bg-gradient-to-br from-purple-100 via-violet-50 to-pink-50">
                     {quest.imageUrl && <Image src={quest.imageUrl} alt={quest.title} fill className="object-cover opacity-60" />}
                     <div className="absolute inset-0 p-3 flex items-start justify-between">
                       <span className={clsx("rounded-full px-2.5 py-1 text-[10px] font-bold uppercase", TYPE_COLORS[quest.type])}>{TYPE_LABELS[quest.type]}</span>
@@ -401,7 +348,7 @@ export default function MyQuestsPage() {
                       <p className="text-[10px] text-gray-400 mt-2">Result: {quest.resultRanges.join(" / ")}</p>
                     )}
 
-                    {quest.status === "approved" && (
+                    {(quest.status === "approved" || quest.status === "published") && (
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         <div className="rounded-lg bg-gray-50 px-2.5 py-2 text-center">
                           <p className="text-sm font-bold text-gray-900">{quest.completions}</p>
@@ -432,7 +379,7 @@ export default function MyQuestsPage() {
                         className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-gray-200 py-2 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
                         <Eye className="h-3 w-3" /> Preview
                       </button>
-                      {(quest.status === "draft" || quest.status === "revision_requested") && (
+                      {(quest.status === "draft" || quest.status === "revision_requested" || quest.status === "rejected") && (
                         <button onClick={() => router.push(`/pages/quests/builder?id=${quest.id}`)}
                           className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-gray-200 py-2 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
                           <Pencil className="h-3 w-3" /> Edit
@@ -447,11 +394,11 @@ export default function MyQuestsPage() {
                           <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-xl bg-white border border-gray-200 shadow-xl py-1.5">
                             <MenuBtn icon={Copy} label="Duplicate" onClick={() => doDuplicate(quest)} />
                             {quest.status === "draft" && <MenuBtn icon={Send} label="Submit for Approval" onClick={() => doSubmit(quest.id)} />}
-                            {quest.status === "revision_requested" && <MenuBtn icon={RotateCcw} label="Resubmit" onClick={() => doSubmit(quest.id)} />}
+                            {(quest.status === "revision_requested" || quest.status === "rejected") && <MenuBtn icon={RotateCcw} label="Resubmit" onClick={() => doSubmit(quest.id)} />}
                             {(quest.status === "rejected" || quest.status === "revision_requested") && (
                               <MenuBtn icon={MessageSquare} label="View Feedback" onClick={() => { setSelQuest(quest); setShowDetail(true); setMenuOpen(null); }} />
                             )}
-                            {quest.status === "approved" && (
+                            {(quest.status === "approved" || quest.status === "published") && (
                               <>
                                 <MenuBtn icon={BarChart3} label="View Analytics" onClick={() => { router.push("/pages/quests/analytics"); setMenuOpen(null); }} />
                                 <MenuBtn icon={PauseCircle} label="Request Deactivation" onClick={() => doRequestDeactivation(quest.id)} danger />
@@ -544,7 +491,7 @@ export default function MyQuestsPage() {
                 <div className="flex justify-between text-xs"><span className="text-gray-400">Updated</span><span className="font-medium text-gray-700">{selQuest.updatedAt}</span></div>
               </div>
 
-              {selQuest.status === "approved" && (
+              {(selQuest.status === "approved" || selQuest.status === "published") && (
                 <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
                   <p className="text-[10px] font-semibold uppercase text-emerald-600 mb-3">Performance</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -590,7 +537,7 @@ export default function MyQuestsPage() {
                     <RotateCcw className="h-3.5 w-3.5" /> Edit & Resubmit
                   </button>
                 )}
-                {selQuest.status === "approved" && (
+                {(selQuest.status === "approved" || selQuest.status === "published") && (
                   <button onClick={() => { router.push("/pages/quests/analytics"); setShowDetail(false); }}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-purple-200 py-3 text-sm font-medium text-purple-600 hover:bg-purple-50">
                     <BarChart3 className="h-3.5 w-3.5" /> View Analytics

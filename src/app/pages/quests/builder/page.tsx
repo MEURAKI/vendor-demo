@@ -1,7 +1,7 @@
 // app/pages/quests/builder/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import clsx from "clsx";
 import {
   Plus,
@@ -47,6 +47,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useVendorProfile } from "../../../../context/VendorShellContext";
+import { supabase } from "../../../../lib/supabase/client";
 
 /* ================================================================ */
 /* Types                                                            */
@@ -102,7 +103,9 @@ const DIMENSIONS = [
 export default function QuestBuilderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loading: shellLoading } = useVendorProfile();
+  const { loading: shellLoading, profile } = useVendorProfile();
+  const questId = searchParams.get("id");
+  const [saving, setSaving] = useState(false);
 
   const [tab, setTab] = useState<BuilderTab>("questions");
   const [title, setTitle] = useState("");
@@ -120,6 +123,9 @@ export default function QuestBuilderPage() {
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [selDimensions, setSelDimensions] = useState<string[]>(["Mental"]);
 
+  // Preview
+  const [showPreview, setShowPreview] = useState(false);
+
   // Results
   const [ranges, setRanges] = useState([
     { label: "Low", min: 0, max: 10, message: "You're doing well! Keep up the healthy habits.", color: "bg-emerald-100 text-emerald-700" },
@@ -130,6 +136,107 @@ export default function QuestBuilderPage() {
   function showToastMsg(message: string, type: "success" | "error" = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
+  }
+
+  useEffect(() => {
+    if (questId) loadQuest(questId);
+  }, [questId]);
+
+  async function loadQuest(id: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch(`/api/quests/${id}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const json = await res.json();
+    if (json.quest) {
+      setTitle(json.quest.title);
+      setDescription(json.quest.description || "");
+      setQuestType(json.quest.type);
+      setScoringMode(json.quest.scoringMode);
+      setXp(String(json.quest.xpReward));
+      setDuration(json.quest.duration);
+      setIsAnonymous(json.quest.isAnonymous);
+      setSelDimensions(json.quest.dimensions || ["Mental"]);
+      if (json.quest.questions) {
+        setQuestions(json.quest.questions.map((q: any) => ({
+          id: q.id,
+          type: q.type,
+          text: q.text,
+          required: q.required,
+          options: q.options?.map((o: any) => o.text) || [],
+          points: q.points || 0,
+          branchTo: null,
+        })));
+      }
+      if (json.quest.resultRanges) {
+        setRanges(json.quest.resultRanges.map((r: any) => ({
+          label: r.label, min: r.minScore, max: r.maxScore, message: r.summary || r.headline || "", color: r.color || "bg-gray-100 text-gray-700",
+        })));
+      }
+    }
+  }
+
+  async function saveQuest(submitAfterSave = false) {
+    if (!title) { showToastMsg("Add a title", "error"); return; }
+    if (questions.length === 0 && submitAfterSave) { showToastMsg("Add at least 1 question", "error"); return; }
+
+    setSaving(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !profile) { setSaving(false); return; }
+
+    const body = {
+      vendorId: profile.id,
+      title,
+      description,
+      type: questType,
+      scoringMode,
+      xpReward: parseInt(xp) || 50,
+      estimatedMinutes: parseInt(duration) || 5,
+      isAnonymous,
+      dimensionIds: selDimensions.map(name => {
+        const map: Record<string, number> = { Physical: 1, Emotional: 2, Mental: 3, Occupational: 4, Financial: 5, Environmental: 6, Social: 7, Spiritual: 8 };
+        return map[name] || 3;
+      }),
+      questions: questions.map((q, idx) => ({
+        type: q.type,
+        text: q.text,
+        required: q.required,
+        orderIndex: idx,
+        options: q.options.map((opt, oi) => ({ text: opt, points: q.type === "single_choice" || q.type === "multiple_choice" ? q.points : 0, orderIndex: oi })),
+        points: q.points,
+      })),
+      resultRanges: scoringMode !== "none" ? ranges.map((r, idx) => ({
+        label: r.label,
+        minScore: r.min,
+        maxScore: r.max,
+        headline: r.label,
+        summary: r.message,
+        color: r.color,
+        orderIndex: idx,
+      })) : [],
+      status: submitAfterSave ? "pending_approval" : "draft",
+    };
+
+    const url = questId ? `/api/quests/${questId}` : "/api/quests";
+    const method = questId ? "PUT" : "POST";
+
+    const res = await fetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    setSaving(false);
+    if (res.ok) {
+      const json = await res.json();
+      showToastMsg(submitAfterSave ? "Quest submitted for approval!" : "Draft saved!");
+      if (!questId && json.questId) {
+        router.replace(`/pages/quests/builder?id=${json.questId}`);
+      }
+    } else {
+      showToastMsg("Save failed", "error");
+    }
   }
 
   function addQuestion(type: QuestionType) {
@@ -189,18 +296,14 @@ export default function QuestBuilderPage() {
             className="text-base sm:text-lg font-bold text-gray-900 outline-none border-none bg-transparent placeholder:text-gray-300 w-64 sm:w-80" />
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => showToastMsg("Draft saved!")} className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">
-            <Save className="h-3.5 w-3.5" /> Save Draft
+          <button onClick={() => saveQuest(false)} disabled={saving} className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            <Save className="h-3.5 w-3.5" /> {saving ? "Saving..." : "Save Draft"}
           </button>
-          <button className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+          <button onClick={() => setShowPreview(true)} className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">
             <Eye className="h-3.5 w-3.5" /> Preview
           </button>
-          <button onClick={() => {
-            if (questions.length === 0) { showToastMsg("Add at least 1 question", "error"); return; }
-            if (!title) { showToastMsg("Add a title", "error"); return; }
-            showToastMsg("Quest submitted for approval!");
-          }} className="flex items-center gap-1.5 rounded-xl bg-[#1B1529] px-4 py-2 text-xs font-semibold text-white hover:bg-[#2D1F5E]">
-            <Send className="h-3.5 w-3.5" /> Submit for Approval
+          <button onClick={() => saveQuest(true)} disabled={saving} className="flex items-center gap-1.5 rounded-xl bg-[#1B1529] px-4 py-2 text-xs font-semibold text-white hover:bg-[#2D1F5E] disabled:opacity-50">
+            <Send className="h-3.5 w-3.5" /> {saving ? "Submitting..." : "Submit for Approval"}
           </button>
         </div>
       </div>
@@ -464,6 +567,138 @@ export default function QuestBuilderPage() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======== PREVIEW MODAL ======== */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowPreview(false); }}>
+          <div className="w-full max-w-lg max-h-[85vh] overflow-auto rounded-2xl bg-white shadow-2xl">
+            {/* Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
+              <div className="flex items-center gap-2">
+                <Eye className="h-4 w-4 text-purple-500" />
+                <h2 className="text-base font-bold text-gray-900">Quest Preview</h2>
+              </div>
+              <button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+
+            {/* Quest info */}
+            <div className="px-6 pt-5 pb-3">
+              <h3 className="text-lg font-bold text-gray-900">{title || "Untitled Quest"}</h3>
+              {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-bold text-purple-600 uppercase">{questType}</span>
+                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-500">{duration}</span>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-600">{xp} XP</span>
+                {selDimensions.map((d) => (
+                  <span key={d} className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-600">{d}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Questions preview */}
+            <div className="px-6 py-4 space-y-4">
+              {questions.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-6">No questions added yet</p>
+              ) : (
+                questions.map((q, idx) => {
+                  const typeInfo = QUESTION_TYPES.find((t) => t.value === q.type);
+                  return (
+                    <div key={q.id} className="rounded-xl border border-gray-200 p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-100 text-[11px] font-bold text-purple-600">{idx + 1}</span>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">
+                            {q.text || "Untitled question"}
+                            {q.required && <span className="ml-1 text-red-400">*</span>}
+                          </p>
+                          <div className="mt-2.5">
+                            {(q.type === "single_choice") && q.options.map((opt, oi) => (
+                              <label key={oi} className="flex items-center gap-2.5 py-1.5 cursor-pointer">
+                                <span className="h-4 w-4 rounded-full border-2 border-gray-300" />
+                                <span className="text-sm text-gray-600">{opt}</span>
+                              </label>
+                            ))}
+                            {(q.type === "multiple_choice") && q.options.map((opt, oi) => (
+                              <label key={oi} className="flex items-center gap-2.5 py-1.5 cursor-pointer">
+                                <span className="h-4 w-4 rounded border-2 border-gray-300" />
+                                <span className="text-sm text-gray-600">{opt}</span>
+                              </label>
+                            ))}
+                            {q.type === "short_text" && (
+                              <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-300">Type your answer...</div>
+                            )}
+                            {q.type === "long_text" && (
+                              <div className="rounded-lg border border-gray-200 px-3 py-6 text-sm text-gray-300">Type your answer...</div>
+                            )}
+                            {q.type === "yes_no" && (
+                              <div className="flex gap-3">
+                                <span className="rounded-lg border border-gray-200 px-6 py-2 text-sm text-gray-500">Yes</span>
+                                <span className="rounded-lg border border-gray-200 px-6 py-2 text-sm text-gray-500">No</span>
+                              </div>
+                            )}
+                            {q.type === "rating" && (
+                              <div className="flex gap-1.5">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <Star key={s} className="h-6 w-6 text-gray-300" />
+                                ))}
+                              </div>
+                            )}
+                            {q.type === "scale" && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400">1</span>
+                                <div className="flex-1 h-2 rounded-full bg-gray-200" />
+                                <span className="text-xs text-gray-400">10</span>
+                              </div>
+                            )}
+                            {q.type === "number" && (
+                              <div className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-300">0</div>
+                            )}
+                            {q.type === "date" && (
+                              <div className="w-40 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-300">Select date...</div>
+                            )}
+                            {q.type === "ranking" && q.options.map((opt, oi) => (
+                              <div key={oi} className="flex items-center gap-2.5 py-1.5">
+                                <span className="text-xs font-bold text-gray-400">{oi + 1}.</span>
+                                <span className="text-sm text-gray-600">{opt}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Result ranges preview */}
+            {scoringMode !== "none" && ranges.length > 0 && (
+              <div className="border-t border-gray-100 px-6 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3">Result Ranges</p>
+                <div className="space-y-2">
+                  {ranges.map((r, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2">
+                      <span className={clsx("rounded-full px-2.5 py-0.5 text-[10px] font-bold", r.color)}>{r.label}</span>
+                      <span className="text-xs text-gray-400">{r.min}–{r.max} pts</span>
+                      <span className="flex-1 truncate text-xs text-gray-500">{r.message}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-100 bg-white px-6 py-3">
+              <button onClick={() => setShowPreview(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                Close
+              </button>
+              <button onClick={() => { setShowPreview(false); saveQuest(true); }} className="rounded-xl bg-[#1B1529] px-4 py-2 text-xs font-semibold text-white hover:bg-[#2D1F5E]">
+                <Send className="mr-1.5 inline h-3.5 w-3.5" /> Submit for Approval
+              </button>
             </div>
           </div>
         </div>
